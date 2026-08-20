@@ -1160,8 +1160,11 @@ public class MainActivity extends AppCompatActivity {
             miniplayerWebView.destroy();
             miniplayerWebView = null;
         }
-        webView.stopLoading();
-        webView.destroy();
+        if (webView != null) {
+            webView.stopLoading();
+            webView.destroy();
+            webView = null;
+        }
         super.onDestroy();
     }
 
