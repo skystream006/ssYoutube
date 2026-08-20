@@ -872,46 +872,6 @@ public class MainActivity extends AppCompatActivity {
                     + "})()";
 
     /**
-     * Extends how far ahead of the viewport lazy-loaded content is fetched, so roughly the
-     * next two screens of search/feed results are preloaded before the user scrolls to them.
-     */
-    static final String RESULTS_PRELOAD_SCRIPT =
-            "(function(){"
-                    + "if(window.__ssyoutubeResultsPreloadInstalled){return;}"
-                    + "window.__ssyoutubeResultsPreloadInstalled=true;"
-                    + "var PRELOAD_SCREENS=2;"
-                    + "var NativeIntersectionObserver=window.IntersectionObserver;"
-                    + "if(!NativeIntersectionObserver){return;}"
-                    + "function expandBottomMargin(rootMargin){"
-                    + "var extra=Math.round((window.innerHeight||800)*PRELOAD_SCREENS);"
-                    + "var parts=(rootMargin||'0px').trim().split(/\\s+/);"
-                    + "if(parts.length===1){parts=[parts[0],parts[0],parts[0],parts[0]];}"
-                    + "else if(parts.length===2){parts=[parts[0],parts[1],parts[0],parts[1]];}"
-                    + "else if(parts.length===3){parts=[parts[0],parts[1],parts[2],parts[1]];}"
-                    + "var bottom=parseFloat(parts[2])||0;"
-                    + "var unit=/[a-z%]+$/i.exec(parts[2]||'0px');"
-                    + "unit=unit?unit[0]:'px';"
-                    + "if(unit!=='px'){return parts.join(' ');}"
-                    + "parts[2]=(bottom+extra)+'px';"
-                    + "return parts.join(' ');"
-                    + "}"
-                    + "function PatchedIntersectionObserver(callback,options){"
-                    + "options=options||{};"
-                    + "var patched={};"
-                    + "for(var key in options){"
-                    + "if(Object.prototype.hasOwnProperty.call(options,key)){patched[key]=options[key];}"
-                    + "}"
-                    + "patched.rootMargin=expandBottomMargin(options.rootMargin);"
-                    + "return Reflect.construct(NativeIntersectionObserver,[callback,patched],"
-                    + "new.target||PatchedIntersectionObserver);"
-                    + "}"
-                    + "PatchedIntersectionObserver.prototype=Object.create("
-                    + "NativeIntersectionObserver.prototype,"
-                    + "{constructor:{value:PatchedIntersectionObserver,writable:true,configurable:true}});"
-                    + "window.IntersectionObserver=PatchedIntersectionObserver;"
-                    + "})()";
-
-    /**
      * Same-origin path the WebView requests for the bundled app logo. Requests to it never
      * reach the network, they are answered from the app resources by
      * {@link YouTubeWebViewClient#shouldInterceptRequest}.
@@ -1200,6 +1160,11 @@ public class MainActivity extends AppCompatActivity {
             miniplayerWebView.destroy();
             miniplayerWebView = null;
         }
+        if (webView != null) {
+            webView.stopLoading();
+            webView.destroy();
+            webView = null;
+        }
         super.onDestroy();
     }
 
@@ -1274,7 +1239,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowContentAccess(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            view.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+            view.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_BOUND, true);
         }
 
         // Persist the session cookies so the user only has to sign in once.
@@ -1832,7 +1797,6 @@ public class MainActivity extends AppCompatActivity {
             view.evaluateJavascript(SUBSCRIBER_COUNT_SCRIPT, null);
             view.evaluateJavascript(FULLSCREEN_GESTURE_SCRIPT, null);
             injectMiniplayerGesture(view);
-            view.evaluateJavascript(RESULTS_PRELOAD_SCRIPT, null);
             view.evaluateJavascript(APP_LOGO_SCRIPT, null);
             reapplyMiniplayerView(view);
             reapplyResultsPlaybackBlock(view);
@@ -1851,7 +1815,6 @@ public class MainActivity extends AppCompatActivity {
             view.evaluateJavascript(SUBSCRIBER_COUNT_SCRIPT, null);
             view.evaluateJavascript(FULLSCREEN_GESTURE_SCRIPT, null);
             injectMiniplayerGesture(view);
-            view.evaluateJavascript(RESULTS_PRELOAD_SCRIPT, null);
             view.evaluateJavascript(APP_LOGO_SCRIPT, null);
             reapplyMiniplayerView(view);
             reapplyResultsPlaybackBlock(view);

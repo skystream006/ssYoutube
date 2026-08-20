@@ -245,17 +245,6 @@ public class MainActivityAdScriptTest {
     }
 
     @Test
-    public void preloadsUpcomingResultsAheadOfScroll() {
-        String script = MainActivity.RESULTS_PRELOAD_SCRIPT;
-        assertTrue(script.startsWith("(function"));
-        assertTrue(script.contains("ResultsPreloadInstalled"));
-        assertTrue(script.contains("PRELOAD_SCREENS=2"));
-        assertTrue(script.contains("window.IntersectionObserver"));
-        assertTrue(script.contains("rootMargin"));
-        assertTrue(script.contains("expandBottomMargin"));
-    }
-
-    @Test
     public void replacesYouTubeLogosWithTheAppLogo() {
         String script = MainActivity.APP_LOGO_SCRIPT;
         assertTrue(script.startsWith("(function"));
