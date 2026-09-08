@@ -54,6 +54,30 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREFS_NAME = "ssyoutube_prefs";
     private static final String KEY_THEME = "theme";
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
+    private static final String KEY_RELATED_HIDDEN = "related_hidden";
+
+    /**
+     * Hides or restores the desktop watch page's related-videos sidebar. The sidebar is
+     * rendered (and re-rendered while navigating between videos) well after the page is
+     * loaded, so the choice is remembered in the page and re-applied on a short interval
+     * instead of only once.
+     *
+     * @param hidden true to hide {@code #related}, false to restore it
+     * @return the script to evaluate in the page
+     */
+    static String relatedVisibilityScript(boolean hidden) {
+        return "(function(){"
+                + "window.__ssyoutubeRelatedHidden=" + (hidden ? "true" : "false") + ";"
+                + "function apply(){"
+                + "var related=document.querySelector('#related');"
+                + "if(related){related.style.display=window.__ssyoutubeRelatedHidden?'none':'';}"
+                + "}"
+                + "apply();"
+                + "if(!window.__ssyoutubeRelatedWatcher){"
+                + "window.__ssyoutubeRelatedWatcher=setInterval(apply,1000);"
+                + "}"
+                + "})()";
+    }
 
     /** Hides ad containers that are rendered inline by the page itself. */
     static final String AD_HIDING_SCRIPT =
@@ -1086,8 +1110,10 @@ public class MainActivity extends AppCompatActivity {
     private boolean miniplayerKeepPlaying;
     private ViewGroup rootContainer;
     private ImageButton settingsButton;
+    private ImageButton relatedButton;
     private SharedPreferences prefs;
     private boolean desktopMode;
+    private boolean relatedHidden;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenViewCallback;
     private int originalSystemUiVisibility;
@@ -1097,6 +1123,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
+        relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
         applyTheme(prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM));
 
         super.onCreate(savedInstanceState);
@@ -1109,6 +1136,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 showPreferences();
+            }
+        });
+
+        relatedButton = findViewById(R.id.related_button);
+        relatedButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleRelated();
             }
         });
 
@@ -1203,6 +1238,7 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         webView.setVisibility(View.GONE);
         settingsButton.setVisibility(View.GONE);
+        relatedButton.setVisibility(View.GONE);
     }
 
     private void hideFullscreenView() {
@@ -1500,6 +1536,38 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateSettingsButton(String url) {
         settingsButton.setVisibility(Preferences.isHomePage(url) ? View.VISIBLE : View.GONE);
+        updateRelatedButton(url);
+    }
+
+    /**
+     * The related-videos toggle only applies to the desktop watch page, which is the only
+     * page carrying the {@code #related} sidebar.
+     */
+    private void updateRelatedButton(String url) {
+        boolean show = desktopMode && fullscreenView == null && Preferences.isVideoPage(url);
+        relatedButton.setVisibility(show ? View.VISIBLE : View.GONE);
+        relatedButton.setContentDescription(
+                getString(relatedHidden ? R.string.show_related : R.string.hide_related));
+        relatedButton.setAlpha(relatedHidden ? 0.5f : 1f);
+        if (show) {
+            relatedButton.bringToFront();
+        }
+    }
+
+    /** Hides or restores the related-videos sidebar on the page shown in the primary WebView. */
+    private void toggleRelated() {
+        relatedHidden = !relatedHidden;
+        prefs.edit().putBoolean(KEY_RELATED_HIDDEN, relatedHidden).apply();
+        applyRelatedVisibility(webView);
+        updateRelatedButton(webView.getUrl());
+    }
+
+    /** Applies the current related-sidebar choice to {@code view}. */
+    private void applyRelatedVisibility(WebView view) {
+        if (view == null) {
+            return;
+        }
+        view.evaluateJavascript(relatedVisibilityScript(relatedHidden), null);
     }
 
     private void openPreferencePanel(AlertDialog dialog) {
@@ -1788,6 +1856,7 @@ public class MainActivity extends AppCompatActivity {
             super.onPageStarted(view, url, favicon);
             logoInjectionHandler.removeCallbacksAndMessages(null);
             updateSettingsButton(url);
+            applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
             view.evaluateJavascript(AD_HIDING_SCRIPT, null);
             view.evaluateJavascript(BUY_NOW_CLEANUP_SCRIPT, null);
@@ -1806,6 +1875,7 @@ public class MainActivity extends AppCompatActivity {
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
             updateSettingsButton(url);
+            applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
             view.evaluateJavascript(AD_HIDING_SCRIPT, null);
             view.evaluateJavascript(BUY_NOW_CLEANUP_SCRIPT, null);

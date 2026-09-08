@@ -57,4 +57,19 @@ public class PreferencesTest {
         assertFalse(Preferences.isHomePage("https://accounts.google.com/"));
         assertFalse(Preferences.isHomePage(null));
     }
+
+    @Test
+    public void watchPagesAreVideoPages() {
+        assertTrue(Preferences.isVideoPage("https://www.youtube.com/watch?v=abc"));
+        assertTrue(Preferences.isVideoPage("https://m.youtube.com/watch?v=abc&list=def"));
+        assertTrue(Preferences.isVideoPage("https://WWW.YOUTUBE.COM/watch?v=abc#t=10"));
+    }
+
+    @Test
+    public void otherPagesAreNotVideoPages() {
+        assertFalse(Preferences.isVideoPage("https://www.youtube.com/"));
+        assertFalse(Preferences.isVideoPage("https://www.youtube.com/feed/subscriptions"));
+        assertFalse(Preferences.isVideoPage("https://example.com/watch?v=abc"));
+        assertFalse(Preferences.isVideoPage(null));
+    }
 }
