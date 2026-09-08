@@ -308,4 +308,15 @@ public class MainActivityAdScriptTest {
                 "https://m.youtube.com/other" + MainActivity.APP_LOGO_PATH));
         assertFalse(MainActivity.isAppLogoRequest(null));
     }
+
+    @Test
+    public void relatedVisibilityScriptTogglesRelatedSidebar() {
+        String hide = MainActivity.relatedVisibilityScript(true);
+        assertTrue(hide.contains("window.__ssyoutubeRelatedHidden=true"));
+        assertTrue(hide.contains("document.querySelector('#related')"));
+        assertTrue(hide.contains("style.display=window.__ssyoutubeRelatedHidden?'none':''"));
+
+        String show = MainActivity.relatedVisibilityScript(false);
+        assertTrue(show.contains("window.__ssyoutubeRelatedHidden=false"));
+    }
 }

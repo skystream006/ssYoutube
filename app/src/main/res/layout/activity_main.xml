@@ -11,6 +11,20 @@
         android:layout_height="match_parent" />
 
     <ImageButton
+        android:id="@+id/related_button"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginLeft="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_settings_button"
+        android:contentDescription="@string/hide_related"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_related"
+        android:visibility="gone" />
+
+    <ImageButton
         android:id="@+id/settings_button"
         android:layout_width="48dp"
         android:layout_height="48dp"

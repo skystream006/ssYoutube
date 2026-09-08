@@ -96,13 +96,35 @@ public final class Preferences {
      * @return true when the settings button should be visible
      */
     public static boolean isHomePage(String url) {
+        String path = youTubePath(url);
+        return path != null && (path.isEmpty() || path.equals("/"));
+    }
+
+    /**
+     * The related-videos toggle is only useful on a video page, i.e. the watch page that
+     * carries the {@code #related} sidebar on the desktop site.
+     *
+     * @param url the currently loaded URL
+     * @return true when the URL is a YouTube watch page
+     */
+    public static boolean isVideoPage(String url) {
+        String path = youTubePath(url);
+        return path != null && (path.equals("/watch") || path.startsWith("/watch/"));
+    }
+
+    /**
+     * @param url the currently loaded URL
+     * @return the lower-cased path of {@code url} without its query or fragment, or null
+     *         when the URL is not a youtube.com page
+     */
+    private static String youTubePath(String url) {
         if (url == null) {
-            return false;
+            return null;
         }
         String lower = url.toLowerCase(Locale.US);
         int scheme = lower.indexOf("://");
         if (scheme < 0) {
-            return false;
+            return null;
         }
         int pathStart = scheme + 3;
         while (pathStart < lower.length()) {
@@ -114,7 +136,7 @@ public final class Preferences {
         }
         String host = lower.substring(scheme + 3, pathStart);
         if (!host.equals("youtube.com") && !host.endsWith(".youtube.com")) {
-            return false;
+            return null;
         }
         String rest = lower.substring(pathStart);
         int cut = rest.length();
@@ -125,7 +147,6 @@ public final class Preferences {
                 break;
             }
         }
-        String path = rest.substring(0, cut);
-        return path.isEmpty() || path.equals("/");
+        return rest.substring(0, cut);
     }
 }
