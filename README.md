@@ -16,7 +16,8 @@ keeps you signed in, and blocks advertising/tracking requests.
 - **Preferences** – a floating settings button appears on the YouTube home page (the page
   with the bottom navigation bar). It opens a preferences dialog with icon buttons for
   back/forward/reload/home navigation, plus the theme (system/light/dark) and the site mode
-  (mobile or desktop, `Preferences`), mirroring a browser's "desktop site" toggle.
+  (mobile or desktop, `Preferences`), mirroring a browser's "desktop site" toggle. On
+  desktop video pages, the panel also includes a related-videos toggle.
   Back and forward behave like a browser's buttons: repeated history entries for the same
   page (created by the YouTube single page app) are skipped so every press changes page
   (`NavigationHistory`).
