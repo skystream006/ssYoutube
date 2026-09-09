@@ -14,8 +14,8 @@ android {
         applicationId "com.skystream.ssyoutube"
         minSdk 21
         targetSdk 34
-        versionCode 56
-        versionName "0.01.56"
+        versionCode 57
+        versionName "0.01.57"
     }
 
     signingConfigs {
@@ -45,5 +45,6 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.11.0'
     testImplementation 'junit:junit:4.13.2'
 }
