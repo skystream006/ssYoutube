@@ -23,7 +23,10 @@ keeps you signed in, and blocks advertising/tracking requests.
   (`NavigationHistory`).
 - **Ad blocking** – requests to known ad/tracking hosts and ad endpoints are intercepted
   and answered with an empty response (`AdBlocker`), and a stylesheet is injected on every
-  page load to hide inline promoted/ad renderers. Shopping and "Buy Now" call-to-action elements are hidden by CSS and removed
+  page load to hide inline promoted/ad renderers. The ad-hiding stylesheet and the JSON
+  ad-pruning hook are registered as document start scripts (androidx.webkit), so they run
+  before the page's own scripts on every load and refresh instead of racing them.
+  Shopping and "Buy Now" call-to-action elements are hidden by CSS and removed
   as they appear.
 - **No Playables** – the "Playables" shelves and navigation entries are removed from pages
   as they appear.

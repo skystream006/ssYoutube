@@ -36,15 +36,21 @@ import android.view.ViewGroup;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Hosts a single WebView that shows the YouTube mobile site, keeps the sign-in session
@@ -80,14 +86,17 @@ public class MainActivity extends AppCompatActivity {
                 + "})()";
     }
 
-    /** Hides ad containers that are rendered inline by the page itself. */
+    /**
+     * Hides ad containers that are rendered inline by the page itself.
+     *
+     * <p>The script is also injected at document start (see {@link #installAdBlockingScripts}),
+     * i.e. before {@code <head>} exists, so it retries until there is an element it can attach
+     * the stylesheet to instead of silently doing nothing.
+     */
     static final String AD_HIDING_SCRIPT =
             "(function(){"
                     + "var id='ssyoutube-adblock';"
-                    + "if(document.getElementById(id)){return;}"
-                    + "var s=document.createElement('style');"
-                    + "s.id=id;"
-                    + "s.textContent='ytm-promoted-video-renderer,"
+                    + "var css='ytm-promoted-video-renderer,"
                     + "ytm-promoted-sparkles-web-renderer,"
                     + "ytm-companion-slot,"
                     + "ytm-player-ad-slot,"
@@ -111,7 +120,22 @@ public class MainActivity extends AppCompatActivity {
                     + ".ytp-ad-overlay-container,"
                     + ".ytp-ad-text,"
                     + ".ytp-ad-player-overlay{display:none !important;}';"
-                    + "(document.head||document.documentElement).appendChild(s);"
+                    + "function apply(){"
+                    + "if(document.getElementById(id)){return true;}"
+                    + "var parent=document.head||document.documentElement;"
+                    + "if(!parent){return false;}"
+                    + "var s=document.createElement('style');"
+                    + "s.id=id;"
+                    + "s.textContent=css;"
+                    + "parent.appendChild(s);"
+                    + "return true;"
+                    + "}"
+                    + "if(!apply()){"
+                    + "var timer=setInterval(function(){if(apply()){clearInterval(timer);}},50);"
+                    + "document.addEventListener('DOMContentLoaded',function(){"
+                    + "if(apply()){clearInterval(timer);}"
+                    + "});"
+                    + "}"
                     + "})()";
 
     /**
@@ -1277,6 +1301,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         view.addJavascriptInterface(new PipBridge(view), JS_INTERFACE_NAME);
+        installAdBlockingScripts(view);
         view.setWebViewClient(new YouTubeWebViewClient());
         view.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -1289,6 +1314,39 @@ public class MainActivity extends AppCompatActivity {
                 hideFullscreenView();
             }
         });
+    }
+
+    /**
+     * Origins whose documents get the ad-blocking scripts injected at document start.
+     * Both the mobile ({@code m.youtube.com}) and desktop ({@code www.youtube.com}) hosts are
+     * covered by the wildcard rule; the bare host is listed separately because a wildcard rule
+     * does not match it.
+     */
+    static final List<String> AD_SCRIPT_ORIGIN_RULES = Collections.unmodifiableList(
+            Arrays.asList("https://*.youtube.com", "https://youtube.com"));
+
+    /**
+     * Registers the ad-blocking scripts so that they run at document start, i.e. before any of
+     * the page's own scripts. The {@code onPageStarted}/{@code onPageFinished} injections in
+     * {@link YouTubeWebViewClient} race with the page: on a refresh the page's scripts can read
+     * {@code ytInitialPlayerResponse} (and schedule the ad breaks) before the injection lands,
+     * which made ad blocking work only some of the time. Document start injection removes that
+     * race and is re-applied automatically on every load, reload and history navigation.
+     *
+     * <p>The client-side injections are kept as a fallback for WebView versions that do not
+     * support {@link WebViewFeature#DOCUMENT_START_SCRIPT}; every script is idempotent.
+     */
+    private void installAdBlockingScripts(WebView view) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            return;
+        }
+        Set<String> origins = new HashSet<>(AD_SCRIPT_ORIGIN_RULES);
+        try {
+            WebViewCompat.addDocumentStartJavaScript(view, AD_JSON_PRUNE_SCRIPT, origins);
+            WebViewCompat.addDocumentStartJavaScript(view, AD_HIDING_SCRIPT, origins);
+        } catch (IllegalArgumentException | UnsupportedOperationException e) {
+            // Fall back to the injections done by YouTubeWebViewClient.
+        }
     }
 
     /**

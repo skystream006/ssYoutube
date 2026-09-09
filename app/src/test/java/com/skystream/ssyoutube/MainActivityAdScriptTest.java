@@ -50,6 +50,21 @@ public class MainActivityAdScriptTest {
     }
 
     @Test
+    public void adHidingScriptRetriesUntilItCanAttachTheStylesheet() {
+        String script = MainActivity.AD_HIDING_SCRIPT;
+        assertTrue(script.contains("document.head||document.documentElement"));
+        assertTrue(script.contains("if(!parent){return false;}"));
+        assertTrue(script.contains("setInterval"));
+        assertTrue(script.contains("DOMContentLoaded"));
+    }
+
+    @Test
+    public void documentStartOriginRulesCoverYouTubeHosts() {
+        assertTrue(MainActivity.AD_SCRIPT_ORIGIN_RULES.contains("https://*.youtube.com"));
+        assertTrue(MainActivity.AD_SCRIPT_ORIGIN_RULES.contains("https://youtube.com"));
+    }
+
+    @Test
     public void hidesShoppingRenderersWithCss() {
         String script = MainActivity.AD_HIDING_SCRIPT;
         assertTrue(script.contains("ytm-product-card-renderer"));
