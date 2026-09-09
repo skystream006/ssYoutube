@@ -73,6 +73,21 @@ public class MainActivityAdScriptTest {
     }
 
     @Test
+    public void removesAdSlotRenderersAfterLoadAndScroll() {
+        String script = MainActivity.AD_SLOT_CLEANUP_SCRIPT;
+        assertTrue(script.contains("AdSlotCleanupInstalled"));
+        assertTrue(script.contains("querySelectorAll('ad-slot-renderer')"));
+        assertTrue(script.contains("closest('ytm-rich-item-renderer')"));
+        assertTrue(script.contains("querySelectorAll('ytd-ad-slot-renderer')"));
+        assertTrue(script.contains("closest('ytd-rich-item-renderer')"));
+        assertTrue(script.contains("parent.remove()"));
+        assertTrue(script.contains("MutationObserver"));
+        assertTrue(script.contains("addEventListener('scroll'"));
+        assertTrue(script.contains("setTimeout(cleanup,250)"));
+        assertTrue(script.contains("setInterval(cleanup,2000)"));
+    }
+
+    @Test
     public void removesPlayablesSections() {
         String script = MainActivity.PLAYABLES_CLEANUP_SCRIPT;
         assertTrue(script.contains("PlayablesCleanupInstalled"));
