@@ -33,8 +33,6 @@ public final class AdBlocker {
             "/ptracking",
             "/api/stats/ads",
             "/api/stats/qoe",
-            "/api/stats/watchtime",
-            "/api/stats/playback",
             "/get_midroll_",
             "/pcs/activeview",
             "/generate_ad",

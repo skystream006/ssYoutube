@@ -37,6 +37,8 @@ public class AdBlockerTest {
         assertFalse(AdBlocker.isAd("https://i.ytimg.com/vi/abc/hq.jpg"));
         assertFalse(AdBlocker.isAd("https://accounts.google.com/ServiceLogin"));
         assertFalse(AdBlocker.isAd("https://m.youtube.com/watch?ad_formats=available"));
+        assertFalse(AdBlocker.isAd("https://m.youtube.com/api/stats/playback?docid=abc"));
+        assertFalse(AdBlocker.isAd("https://m.youtube.com/api/stats/watchtime?docid=abc&cmt=42"));
     }
 
     @Test
