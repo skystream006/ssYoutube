@@ -29,6 +29,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.RadioGroup;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.view.ViewGroup;
 
@@ -1110,7 +1111,6 @@ public class MainActivity extends AppCompatActivity {
     private boolean miniplayerKeepPlaying;
     private ViewGroup rootContainer;
     private ImageButton settingsButton;
-    private ImageButton relatedButton;
     private SharedPreferences prefs;
     private boolean desktopMode;
     private boolean relatedHidden;
@@ -1136,14 +1136,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 showPreferences();
-            }
-        });
-
-        relatedButton = findViewById(R.id.related_button);
-        relatedButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                toggleRelated();
             }
         });
 
@@ -1238,7 +1230,6 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         webView.setVisibility(View.GONE);
         settingsButton.setVisibility(View.GONE);
-        relatedButton.setVisibility(View.GONE);
     }
 
     private void hideFullscreenView() {
@@ -1535,31 +1526,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateSettingsButton(String url) {
-        settingsButton.setVisibility(Preferences.isHomePage(url) ? View.VISIBLE : View.GONE);
-        updateRelatedButton(url);
-    }
-
-    /**
-     * The related-videos toggle only applies to the desktop watch page, which is the only
-     * page carrying the {@code #related} sidebar.
-     */
-    private void updateRelatedButton(String url) {
-        boolean show = desktopMode && fullscreenView == null && Preferences.isVideoPage(url);
-        relatedButton.setVisibility(show ? View.VISIBLE : View.GONE);
-        relatedButton.setContentDescription(
-                getString(relatedHidden ? R.string.show_related : R.string.hide_related));
-        relatedButton.setAlpha(relatedHidden ? 0.5f : 1f);
-        if (show) {
-            relatedButton.bringToFront();
-        }
-    }
-
-    /** Hides or restores the related-videos sidebar on the page shown in the primary WebView. */
-    private void toggleRelated() {
-        relatedHidden = !relatedHidden;
-        prefs.edit().putBoolean(KEY_RELATED_HIDDEN, relatedHidden).apply();
-        applyRelatedVisibility(webView);
-        updateRelatedButton(webView.getUrl());
+        boolean show = fullscreenView == null && (Preferences.isHomePage(url)
+                || (desktopMode && Preferences.isVideoPage(url)));
+        settingsButton.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     /** Applies the current related-sidebar choice to {@code view}. */
@@ -1605,6 +1574,8 @@ public class MainActivity extends AppCompatActivity {
         versionView.setText(getString(R.string.app_version_format, BuildConfig.VERSION_NAME));
         RadioGroup themeGroup = content.findViewById(R.id.theme_group);
         RadioGroup siteModeGroup = content.findViewById(R.id.site_mode_group);
+        View relatedVideosLabel = content.findViewById(R.id.related_videos_label);
+        Switch relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
 
         int theme = prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM);
         if (theme == Preferences.THEME_LIGHT) {
@@ -1615,6 +1586,10 @@ public class MainActivity extends AppCompatActivity {
             themeGroup.check(R.id.theme_system);
         }
         siteModeGroup.check(desktopMode ? R.id.site_mode_desktop : R.id.site_mode_mobile);
+        boolean relatedVideosAvailable = desktopMode && Preferences.isVideoPage(webView.getUrl());
+        relatedVideosLabel.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
+        relatedVideosToggle.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
+        relatedVideosToggle.setChecked(relatedHidden);
 
         themeGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
@@ -1654,6 +1629,20 @@ public class MainActivity extends AppCompatActivity {
                 webSettings.setDisplayZoomControls(false);
                 webView.clearHistory();
                 webView.loadUrl(Preferences.siteModeUrl(webView.getUrl(), wantsDesktop));
+            }
+        });
+
+        relatedVideosToggle.setOnCheckedChangeListener(new android.widget.CompoundButton
+                .OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(android.widget.CompoundButton buttonView,
+                    boolean isChecked) {
+                if (isChecked == relatedHidden) {
+                    return;
+                }
+                relatedHidden = isChecked;
+                prefs.edit().putBoolean(KEY_RELATED_HIDDEN, relatedHidden).apply();
+                applyRelatedVisibility(webView);
             }
         });
 

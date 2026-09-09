@@ -18,6 +18,6 @@
     <string name="refresh">Refresh</string>
     <string name="home">Home</string>
     <string name="close_miniplayer">Close miniplayer</string>
+    <string name="related_videos">Related videos</string>
     <string name="hide_related">Hide related videos</string>
-    <string name="show_related">Show related videos</string>
 </resources>
