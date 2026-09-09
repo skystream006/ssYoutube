@@ -139,6 +139,40 @@ public class MainActivity extends AppCompatActivity {
                     + "})()";
 
     /**
+     * Removes ad-slot renderers after initial load and when additional feed content is appended.
+     */
+    static final String AD_SLOT_CLEANUP_SCRIPT =
+            "(function(){"
+                    + "if(window.__ssyoutubeAdSlotCleanupInstalled){return;}"
+                    + "window.__ssyoutubeAdSlotCleanupInstalled=true;"
+                    + "function cleanup(){"
+                    + "var mobileAds=document.querySelectorAll('ad-slot-renderer');"
+                    + "for(var i=0;i<mobileAds.length;i++){"
+                    + "var mobileItem=mobileAds[i].closest('ytm-rich-item-renderer');"
+                    + "if(mobileItem){mobileItem.remove();}"
+                    + "}"
+                    + "var desktopAds=document.querySelectorAll('ytd-ad-slot-renderer');"
+                    + "for(var j=0;j<desktopAds.length;j++){"
+                    + "var desktopItem=desktopAds[j].closest('ytd-rich-item-renderer');"
+                    + "if(desktopItem){desktopItem.remove();}"
+                    + "var parent=desktopAds[j].parentNode;"
+                    + "if(parent){parent.remove();}"
+                    + "}"
+                    + "}"
+                    + "var pending;"
+                    + "function scheduleCleanup(){"
+                    + "if(pending){clearTimeout(pending);}"
+                    + "pending=setTimeout(cleanup,250);"
+                    + "}"
+                    + "cleanup();"
+                    + "new MutationObserver(scheduleCleanup)"
+                    + ".observe(document.documentElement,{childList:true,subtree:true});"
+                    + "window.addEventListener('scroll',scheduleCleanup,{passive:true});"
+                    + "window.addEventListener('yt-navigate-finish',cleanup,true);"
+                    + "setInterval(cleanup,2000);"
+                    + "})()";
+
+    /**
      * Removes ad-signaling keys (e.g. {@code playerAds}, {@code adPlacements}) from JSON
      * data before the page's own scripts can read them. Mirrors uBlock Origin's
      * {@code json-prune} scriptlet: since YouTube serves ad media from the same CDN as
@@ -1906,6 +1940,7 @@ public class MainActivity extends AppCompatActivity {
             applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
             view.evaluateJavascript(AD_HIDING_SCRIPT, null);
+            view.evaluateJavascript(AD_SLOT_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(BUY_NOW_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(POSTS_CLEANUP_SCRIPT, null);
@@ -1925,6 +1960,7 @@ public class MainActivity extends AppCompatActivity {
             applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
             view.evaluateJavascript(AD_HIDING_SCRIPT, null);
+            view.evaluateJavascript(AD_SLOT_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(BUY_NOW_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(POSTS_CLEANUP_SCRIPT, null);
