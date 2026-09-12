@@ -1966,6 +1966,9 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, message, throwable);
     }
 
+    /**
+     * Records a URL-bearing activity after stripping query and fragment values from the URL.
+     */
     private void logActivityUrl(String prefix, String url) {
         if (!loggingEnabled) {
             return;
@@ -1975,10 +1978,11 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * Keeps debug logs useful without recording potentially sensitive query or fragment values.
+     * Null URLs are rendered explicitly for readability.
      */
     private String sanitizeUrlForLog(String url) {
         if (url == null) {
-            return null;
+            return "(null)";
         }
         int query = url.indexOf('?');
         int fragment = url.indexOf('#');
@@ -2025,14 +2029,13 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-            logActivityUrl("shouldOverrideUrlLoading ", request.getUrl().toString());
-            return handleUrl(view, request.getUrl().toString());
+            String url = request.getUrl().toString();
+            return handleUrl(view, url);
         }
 
         @SuppressWarnings("deprecation")
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            logActivityUrl("shouldOverrideUrlLoading ", url);
             return handleUrl(view, url);
         }
 
