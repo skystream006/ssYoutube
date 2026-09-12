@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -58,10 +59,12 @@ import java.util.Set;
  */
 public class MainActivity extends AppCompatActivity {
 
+    private static final String TAG = "ssYouTube";
     private static final String PREFS_NAME = "ssyoutube_prefs";
     private static final String KEY_THEME = "theme";
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
+    private static final String KEY_LOGGING_ENABLED = "logging_enabled";
 
     /**
      * Hides or restores the desktop watch page's related-videos sidebar. The sidebar is
@@ -1172,6 +1175,7 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences prefs;
     private boolean desktopMode;
     private boolean relatedHidden;
+    private boolean loggingEnabled;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenViewCallback;
     private int originalSystemUiVisibility;
@@ -1182,6 +1186,8 @@ public class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
+        loggingEnabled = prefs.getBoolean(KEY_LOGGING_ENABLED, false);
+        logActivity("onCreate");
         applyTheme(prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM));
 
         super.onCreate(savedInstanceState);
@@ -1193,6 +1199,7 @@ public class MainActivity extends AppCompatActivity {
         settingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                logActivity("Settings button clicked");
                 showPreferences();
             }
         });
@@ -1209,6 +1216,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        logActivity("onNewIntent action=" + (intent == null ? null : intent.getAction()));
         setIntent(intent);
         webView.loadUrl(startUrl(intent));
     }
@@ -1216,12 +1224,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
+        logActivity("onSaveInstanceState");
         webView.saveState(outState);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        logActivity("onPause");
         webView.onPause();
         if (miniplayerWebView != null) {
             miniplayerWebView.onPause();
@@ -1232,6 +1242,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        logActivity("onResume");
         webView.onResume();
         if (miniplayerWebView != null) {
             miniplayerWebView.onResume();
@@ -1240,6 +1251,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        logActivity("onDestroy");
         logoInjectionHandler.removeCallbacksAndMessages(null);
         if (miniplayerWebView != null) {
             miniplayerWebView.destroy();
@@ -1255,6 +1267,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        logActivity("onKeyDown keyCode=" + keyCode);
         if (keyCode == KeyEvent.KEYCODE_BACK && fullscreenView != null) {
             hideFullscreenView();
             return true;
@@ -1270,6 +1283,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showFullscreenView(View view, WebChromeClient.CustomViewCallback callback) {
+        logActivity("showFullscreenView");
         if (fullscreenView != null) {
             callback.onCustomViewHidden();
             return;
@@ -1291,6 +1305,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void hideFullscreenView() {
+        logActivity("hideFullscreenView");
         if (fullscreenView == null) {
             return;
         }
@@ -1308,6 +1323,7 @@ public class MainActivity extends AppCompatActivity {
     /** Applies the shared WebView configuration used by both the primary and miniplayer views. */
     @SuppressLint("SetJavaScriptEnabled")
     private void configureWebView(WebView view) {
+        logActivity("configureWebView");
         WebSettings settings = view.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -1371,7 +1387,9 @@ public class MainActivity extends AppCompatActivity {
      * support {@link WebViewFeature#DOCUMENT_START_SCRIPT}; every script is idempotent.
      */
     private void installAdBlockingScripts(WebView view) {
+        logActivity("installAdBlockingScripts");
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            logActivity("Document start scripts unsupported");
             return;
         }
         Set<String> origins = new HashSet<>(AD_SCRIPT_ORIGIN_RULES);
@@ -1379,6 +1397,7 @@ public class MainActivity extends AppCompatActivity {
             WebViewCompat.addDocumentStartJavaScript(view, AD_JSON_PRUNE_SCRIPT, origins);
             WebViewCompat.addDocumentStartJavaScript(view, AD_HIDING_SCRIPT, origins);
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
+            logActivity("Document start script installation failed", e);
             // Fall back to the injections done by YouTubeWebViewClient.
         }
     }
@@ -1420,6 +1439,7 @@ public class MainActivity extends AppCompatActivity {
      * the cached results page (the page the user was on before opening the video) underneath.
      */
     private void enterMiniplayer(String resultsUrl, boolean resumePlayback) {
+        logActivity("enterMiniplayer resultsUrl=" + resultsUrl + " resumePlayback=" + resumePlayback);
         if (desktopMode) {
             return;
         }
@@ -1496,6 +1516,7 @@ public class MainActivity extends AppCompatActivity {
      * site mode the gesture is not installed at all.
      */
     private void injectMiniplayerGesture(WebView view) {
+        logActivity("injectMiniplayerGesture");
         if (desktopMode) {
             return;
         }
@@ -1504,6 +1525,7 @@ public class MainActivity extends AppCompatActivity {
 
     /** Re-applies the video-only miniplayer styling if {@code view} is the miniplayer WebView. */
     private void reapplyMiniplayerView(WebView view) {
+        logActivity("reapplyMiniplayerView");
         if (miniplayerWebView != null && view == miniplayerWebView) {
             view.evaluateJavascript(MINIPLAYER_VIEW_SCRIPT, null);
             if (miniplayerKeepPlaying) {
@@ -1518,6 +1540,7 @@ public class MainActivity extends AppCompatActivity {
      * pause) the miniplayer video.
      */
     private void reapplyResultsPlaybackBlock(WebView view) {
+        logActivity("reapplyResultsPlaybackBlock");
         if (miniplayerWebView != null && view == webView) {
             view.evaluateJavascript(RESULTS_AUTOPLAY_BLOCK_SCRIPT, null);
         }
@@ -1525,6 +1548,7 @@ public class MainActivity extends AppCompatActivity {
 
     /** Restores the miniplayer video to fullscreen, discarding the temporary results page. */
     private void expandMiniplayer() {
+        logActivity("expandMiniplayer");
         if (miniplayerWebView == null) {
             return;
         }
@@ -1552,6 +1576,7 @@ public class MainActivity extends AppCompatActivity {
 
     /** Dismisses the miniplayer video entirely, keeping the results page as the primary view. */
     private void closeMiniplayer() {
+        logActivity("closeMiniplayer");
         if (miniplayerWebView == null) {
             return;
         }
@@ -1572,10 +1597,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean goBack() {
+        logActivity("goBack");
         return navigate(backSteps());
     }
 
     private boolean goForward() {
+        logActivity("goForward");
         return navigate(forwardSteps());
     }
 
@@ -1590,6 +1617,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean navigate(int steps) {
+        logActivity("navigate steps=" + steps);
         if (steps == 0 || !webView.canGoBackOrForward(steps)) {
             return false;
         }
@@ -1606,6 +1634,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void applyTheme(int theme) {
+        logActivity("applyTheme theme=" + theme);
         int mode;
         if (theme == Preferences.THEME_LIGHT) {
             mode = AppCompatDelegate.MODE_NIGHT_NO;
@@ -1618,6 +1647,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateSettingsButton(String url) {
+        logActivity("updateSettingsButton url=" + url);
         boolean show = fullscreenView == null && (Preferences.isHomePage(url)
                 || (desktopMode && Preferences.isVideoPage(url)));
         settingsButton.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -1625,6 +1655,7 @@ public class MainActivity extends AppCompatActivity {
 
     /** Applies the current related-sidebar choice to {@code view}. */
     private void applyRelatedVisibility(WebView view) {
+        logActivity("applyRelatedVisibility hidden=" + relatedHidden);
         if (view == null) {
             return;
         }
@@ -1632,6 +1663,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openPreferencePanel(AlertDialog dialog) {
+        logActivity("openPreferencePanel");
         settingsButton.setImageResource(R.drawable.ic_close);
         settingsButton.setContentDescription(getString(R.string.close));
         settingsButton.setOnClickListener(new View.OnClickListener() {
@@ -1643,6 +1675,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void closePreferencePanel() {
+        logActivity("closePreferencePanel");
         settingsButton.animate().translationY(0f).setDuration(
                 getResources().getInteger(android.R.integer.config_shortAnimTime))
                 .withEndAction(new Runnable() {
@@ -1655,12 +1688,14 @@ public class MainActivity extends AppCompatActivity {
         settingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                logActivity("Settings button clicked");
                 showPreferences();
             }
         });
     }
 
     private void showPreferences() {
+        logActivity("showPreferences");
         View content = getLayoutInflater().inflate(R.layout.dialog_preferences, null);
         TextView versionView = content.findViewById(R.id.app_version);
         versionView.setText(getString(R.string.app_version_format, BuildConfig.VERSION_NAME));
@@ -1668,6 +1703,7 @@ public class MainActivity extends AppCompatActivity {
         RadioGroup siteModeGroup = content.findViewById(R.id.site_mode_group);
         View relatedVideosLabel = content.findViewById(R.id.related_videos_label);
         Switch relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
+        Switch loggingToggle = content.findViewById(R.id.logging_toggle);
 
         int theme = prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM);
         if (theme == Preferences.THEME_LIGHT) {
@@ -1682,6 +1718,7 @@ public class MainActivity extends AppCompatActivity {
         relatedVideosLabel.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
         relatedVideosToggle.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
         relatedVideosToggle.setChecked(relatedHidden);
+        loggingToggle.setChecked(loggingEnabled);
 
         themeGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
@@ -1695,6 +1732,7 @@ public class MainActivity extends AppCompatActivity {
                 if (selected == prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM)) {
                     return;
                 }
+                logActivity("Theme preference changed to " + selected);
                 prefs.edit().putInt(KEY_THEME, selected).apply();
                 applyTheme(selected);
             }
@@ -1707,6 +1745,7 @@ public class MainActivity extends AppCompatActivity {
                 if (wantsDesktop == desktopMode) {
                     return;
                 }
+                logActivity("Site mode preference changed desktop=" + wantsDesktop);
                 desktopMode = wantsDesktop;
                 prefs.edit().putBoolean(KEY_DESKTOP_MODE, wantsDesktop).apply();
                 if (wantsDesktop) {
@@ -1732,9 +1771,29 @@ public class MainActivity extends AppCompatActivity {
                 if (isChecked == relatedHidden) {
                     return;
                 }
+                logActivity("Related videos preference changed hidden=" + isChecked);
                 relatedHidden = isChecked;
                 prefs.edit().putBoolean(KEY_RELATED_HIDDEN, relatedHidden).apply();
                 applyRelatedVisibility(webView);
+            }
+        });
+
+        loggingToggle.setOnCheckedChangeListener(new android.widget.CompoundButton
+                .OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(android.widget.CompoundButton buttonView,
+                    boolean isChecked) {
+                if (isChecked == loggingEnabled) {
+                    return;
+                }
+                if (!isChecked) {
+                    logActivity("Debug logging disabled");
+                }
+                loggingEnabled = isChecked;
+                prefs.edit().putBoolean(KEY_LOGGING_ENABLED, loggingEnabled).apply();
+                if (isChecked) {
+                    logActivity("Debug logging enabled");
+                }
             }
         });
 
@@ -1761,6 +1820,7 @@ public class MainActivity extends AppCompatActivity {
         backButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                logActivity("Back navigation clicked");
                 if (goBack()) {
                     dialog.dismiss();
                 }
@@ -1769,6 +1829,7 @@ public class MainActivity extends AppCompatActivity {
         forwardButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                logActivity("Forward navigation clicked");
                 if (goForward()) {
                     dialog.dismiss();
                 }
@@ -1777,6 +1838,7 @@ public class MainActivity extends AppCompatActivity {
         content.findViewById(R.id.refresh_button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                logActivity("Refresh clicked");
                 webView.reload();
                 dialog.dismiss();
             }
@@ -1784,6 +1846,7 @@ public class MainActivity extends AppCompatActivity {
         content.findViewById(R.id.home_button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                logActivity("Home clicked");
                 webView.loadUrl(Preferences.homeUrl(desktopMode));
                 dialog.dismiss();
             }
@@ -1792,6 +1855,7 @@ public class MainActivity extends AppCompatActivity {
         dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
             @Override
             public void onDismiss(DialogInterface dialogInterface) {
+                logActivity("Preferences dismissed");
                 closePreferencePanel();
             }
         });
@@ -1815,6 +1879,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String startUrl(Intent intent) {
+        logActivity("startUrl");
         if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction())
                 && intent.getDataString() != null) {
             String inAppUrl = SiteScope.normalizeInAppUrl(intent.getDataString());
@@ -1833,6 +1898,7 @@ public class MainActivity extends AppCompatActivity {
      * @return the encoded PNG bytes of the downscaled logo
      */
     private synchronized byte[] appLogoBytes(int resource) {
+        logActivity("appLogoBytes resource=" + resource);
         byte[] cached = appLogoCache.get(resource);
         if (cached != null) {
             return cached;
@@ -1883,15 +1949,28 @@ public class MainActivity extends AppCompatActivity {
         return lower.substring(pathStart, pathEnd).equals(APP_LOGO_PATH);
     }
 
+    private void logActivity(String message) {
+        logActivity(message, new Throwable("Stack trace"));
+    }
+
+    private void logActivity(String message, Throwable throwable) {
+        if (!loggingEnabled) {
+            return;
+        }
+        Log.d(TAG, message, throwable);
+    }
+
     private class YouTubeWebViewClient extends WebViewClient {
 
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();
             if (isAppLogoRequest(url)) {
+                logActivity("Serving app logo " + url);
                 return appLogoResponse();
             }
             if (AdBlocker.isAd(url)) {
+                logActivity("Blocked ad request " + url);
                 return emptyResponse();
             }
             return super.shouldInterceptRequest(view, request);
@@ -1901,9 +1980,11 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
             if (isAppLogoRequest(url)) {
+                logActivity("Serving app logo " + url);
                 return appLogoResponse();
             }
             if (AdBlocker.isAd(url)) {
+                logActivity("Blocked ad request " + url);
                 return emptyResponse();
             }
             return super.shouldInterceptRequest(view, url);
@@ -1911,21 +1992,26 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            logActivity("shouldOverrideUrlLoading " + request.getUrl());
             return handleUrl(view, request.getUrl().toString());
         }
 
         @SuppressWarnings("deprecation")
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            logActivity("shouldOverrideUrlLoading " + url);
             return handleUrl(view, url);
         }
 
         private boolean handleUrl(WebView view, String url) {
+            logActivity("handleUrl " + url);
             String inAppUrl = SiteScope.normalizeInAppUrl(url);
             if (inAppUrl == null) {
+                logActivity("Blocked out-of-scope URL " + url);
                 return true;
             }
             if (!inAppUrl.equals(url)) {
+                logActivity("Normalized URL to " + inAppUrl);
                 view.loadUrl(inAppUrl);
                 return true;
             }
@@ -1935,6 +2021,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             super.onPageStarted(view, url, favicon);
+            logActivity("onPageStarted " + url);
             logoInjectionHandler.removeCallbacksAndMessages(null);
             updateSettingsButton(url);
             applyRelatedVisibility(view);
@@ -1956,6 +2043,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
+            logActivity("onPageFinished " + url);
             updateSettingsButton(url);
             applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
@@ -1981,11 +2069,13 @@ public class MainActivity extends AppCompatActivity {
          * single injection at {@code onPageFinished} is not always enough on the mobile site.
          */
         private void scheduleAppLogoReinjection(WebView view) {
+            logActivity("scheduleAppLogoReinjection");
             WeakReference<WebView> viewRef = new WeakReference<>(view);
             for (long delayMs : APP_LOGO_REINJECT_DELAYS_MS) {
                 logoInjectionHandler.postDelayed(() -> {
                     WebView target = viewRef.get();
                     if (target != null && target.isAttachedToWindow()) {
+                        logActivity("Reinject app logo after " + delayMs + "ms");
                         target.evaluateJavascript(APP_LOGO_SCRIPT, null);
                     }
                 }, delayMs);
@@ -1993,6 +2083,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private WebResourceResponse appLogoResponse() {
+            logActivity("appLogoResponse");
             Map<String, String> headers = new HashMap<>();
             headers.put("Cache-Control", "no-cache");
             headers.put("Access-Control-Allow-Origin", "*");
@@ -2001,6 +2092,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private int appLogoResource() {
+            logActivity("appLogoResource");
             int nightMode = getResources().getConfiguration().uiMode
                     & Configuration.UI_MODE_NIGHT_MASK;
             return nightMode == Configuration.UI_MODE_NIGHT_YES
@@ -2008,6 +2100,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private WebResourceResponse emptyResponse() {
+            logActivity("emptyResponse");
             return new WebResourceResponse("text/plain", "utf-8",
                     new ByteArrayInputStream(new byte[0]));
         }
