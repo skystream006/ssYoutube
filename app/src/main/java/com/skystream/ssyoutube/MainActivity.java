@@ -1440,7 +1440,7 @@ public class MainActivity extends AppCompatActivity {
      * the cached results page (the page the user was on before opening the video) underneath.
      */
     private void enterMiniplayer(String resultsUrl, boolean resumePlayback) {
-        logActivity("enterMiniplayer resultsUrl=" + loggingUrl(resultsUrl)
+        logActivity("enterMiniplayer resultsUrl=" + sanitizeUrlForLog(resultsUrl)
                 + " resumePlayback=" + resumePlayback);
         if (desktopMode) {
             return;
@@ -1649,7 +1649,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateSettingsButton(String url) {
-        logActivity("updateSettingsButton url=" + loggingUrl(url));
+        logActivityUrl("updateSettingsButton url=", url);
         boolean show = fullscreenView == null && (Preferences.isHomePage(url)
                 || (desktopMode && Preferences.isVideoPage(url)));
         settingsButton.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -1896,7 +1896,6 @@ public class MainActivity extends AppCompatActivity {
      * @return the encoded PNG bytes of the downscaled logo
      */
     private synchronized byte[] appLogoBytes(int resource) {
-        logActivity("appLogoBytes resource=" + resource);
         byte[] cached = appLogoCache.get(resource);
         if (cached != null) {
             return cached;
@@ -1947,6 +1946,9 @@ public class MainActivity extends AppCompatActivity {
         return lower.substring(pathStart, pathEnd).equals(APP_LOGO_PATH);
     }
 
+    /**
+     * Records an app activity with a synthetic stack trace when the user enables debug logging.
+     */
     private void logActivity(String message) {
         if (!loggingEnabled) {
             return;
@@ -1954,6 +1956,9 @@ public class MainActivity extends AppCompatActivity {
         logActivity(message, new Throwable("Stack trace"));
     }
 
+    /**
+     * Records an app activity with the provided stack trace only when debug logging is enabled.
+     */
     private void logActivity(String message, Throwable throwable) {
         if (!loggingEnabled) {
             return;
@@ -1961,10 +1966,17 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, message, throwable);
     }
 
+    private void logActivityUrl(String prefix, String url) {
+        if (!loggingEnabled) {
+            return;
+        }
+        logActivity(prefix + sanitizeUrlForLog(url));
+    }
+
     /**
      * Keeps debug logs useful without recording potentially sensitive query or fragment values.
      */
-    private String loggingUrl(String url) {
+    private String sanitizeUrlForLog(String url) {
         if (url == null) {
             return null;
         }
@@ -1987,11 +1999,11 @@ public class MainActivity extends AppCompatActivity {
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();
             if (isAppLogoRequest(url)) {
-                logActivity("Serving app logo " + loggingUrl(url));
+                logActivityUrl("Serving app logo ", url);
                 return appLogoResponse();
             }
             if (AdBlocker.isAd(url)) {
-                logActivity("Blocked ad request " + loggingUrl(url));
+                logActivityUrl("Blocked ad request ", url);
                 return emptyResponse();
             }
             return super.shouldInterceptRequest(view, request);
@@ -2001,11 +2013,11 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
             if (isAppLogoRequest(url)) {
-                logActivity("Serving app logo " + loggingUrl(url));
+                logActivityUrl("Serving app logo ", url);
                 return appLogoResponse();
             }
             if (AdBlocker.isAd(url)) {
-                logActivity("Blocked ad request " + loggingUrl(url));
+                logActivityUrl("Blocked ad request ", url);
                 return emptyResponse();
             }
             return super.shouldInterceptRequest(view, url);
@@ -2013,26 +2025,26 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-            logActivity("shouldOverrideUrlLoading " + loggingUrl(request.getUrl().toString()));
+            logActivityUrl("shouldOverrideUrlLoading ", request.getUrl().toString());
             return handleUrl(view, request.getUrl().toString());
         }
 
         @SuppressWarnings("deprecation")
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            logActivity("shouldOverrideUrlLoading " + loggingUrl(url));
+            logActivityUrl("shouldOverrideUrlLoading ", url);
             return handleUrl(view, url);
         }
 
         private boolean handleUrl(WebView view, String url) {
-            logActivity("handleUrl " + loggingUrl(url));
+            logActivityUrl("handleUrl ", url);
             String inAppUrl = SiteScope.normalizeInAppUrl(url);
             if (inAppUrl == null) {
-                logActivity("Blocked out-of-scope URL " + loggingUrl(url));
+                logActivityUrl("Blocked out-of-scope URL ", url);
                 return true;
             }
             if (!inAppUrl.equals(url)) {
-                logActivity("Normalized URL to " + loggingUrl(inAppUrl));
+                logActivityUrl("Normalized URL to ", inAppUrl);
                 view.loadUrl(inAppUrl);
                 return true;
             }
@@ -2042,7 +2054,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             super.onPageStarted(view, url, favicon);
-            logActivity("onPageStarted " + loggingUrl(url));
+            logActivityUrl("onPageStarted ", url);
             logoInjectionHandler.removeCallbacksAndMessages(null);
             updateSettingsButton(url);
             applyRelatedVisibility(view);
@@ -2064,7 +2076,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
-            logActivity("onPageFinished " + loggingUrl(url));
+            logActivityUrl("onPageFinished ", url);
             updateSettingsButton(url);
             applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
@@ -2104,7 +2116,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private WebResourceResponse appLogoResponse() {
-            logActivity("appLogoResponse");
             Map<String, String> headers = new HashMap<>();
             headers.put("Cache-Control", "no-cache");
             headers.put("Access-Control-Allow-Origin", "*");
@@ -2113,7 +2124,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private int appLogoResource() {
-            logActivity("appLogoResource");
             int nightMode = getResources().getConfiguration().uiMode
                     & Configuration.UI_MODE_NIGHT_MASK;
             return nightMode == Configuration.UI_MODE_NIGHT_YES
@@ -2121,7 +2131,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private WebResourceResponse emptyResponse() {
-            logActivity("emptyResponse");
             return new WebResourceResponse("text/plain", "utf-8",
                     new ByteArrayInputStream(new byte[0]));
         }
