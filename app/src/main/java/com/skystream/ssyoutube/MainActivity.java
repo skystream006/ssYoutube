@@ -1439,7 +1439,8 @@ public class MainActivity extends AppCompatActivity {
      * the cached results page (the page the user was on before opening the video) underneath.
      */
     private void enterMiniplayer(String resultsUrl, boolean resumePlayback) {
-        logActivity("enterMiniplayer resultsUrl=" + resultsUrl + " resumePlayback=" + resumePlayback);
+        logActivity("enterMiniplayer resultsUrl=" + loggingUrl(resultsUrl)
+                + " resumePlayback=" + resumePlayback);
         if (desktopMode) {
             return;
         }
@@ -1647,7 +1648,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateSettingsButton(String url) {
-        logActivity("updateSettingsButton url=" + url);
+        logActivity("updateSettingsButton url=" + loggingUrl(url));
         boolean show = fullscreenView == null && (Preferences.isHomePage(url)
                 || (desktopMode && Preferences.isVideoPage(url)));
         settingsButton.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -1960,17 +1961,34 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, message, throwable);
     }
 
+    private String loggingUrl(String url) {
+        if (url == null) {
+            return null;
+        }
+        int query = url.indexOf('?');
+        int fragment = url.indexOf('#');
+        int cut = -1;
+        if (query >= 0 && fragment >= 0) {
+            cut = Math.min(query, fragment);
+        } else if (query >= 0) {
+            cut = query;
+        } else if (fragment >= 0) {
+            cut = fragment;
+        }
+        return cut < 0 ? url : url.substring(0, cut) + "...";
+    }
+
     private class YouTubeWebViewClient extends WebViewClient {
 
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             String url = request.getUrl().toString();
             if (isAppLogoRequest(url)) {
-                logActivity("Serving app logo " + url);
+                logActivity("Serving app logo " + loggingUrl(url));
                 return appLogoResponse();
             }
             if (AdBlocker.isAd(url)) {
-                logActivity("Blocked ad request " + url);
+                logActivity("Blocked ad request " + loggingUrl(url));
                 return emptyResponse();
             }
             return super.shouldInterceptRequest(view, request);
@@ -1980,11 +1998,11 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
             if (isAppLogoRequest(url)) {
-                logActivity("Serving app logo " + url);
+                logActivity("Serving app logo " + loggingUrl(url));
                 return appLogoResponse();
             }
             if (AdBlocker.isAd(url)) {
-                logActivity("Blocked ad request " + url);
+                logActivity("Blocked ad request " + loggingUrl(url));
                 return emptyResponse();
             }
             return super.shouldInterceptRequest(view, url);
@@ -1992,26 +2010,26 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-            logActivity("shouldOverrideUrlLoading " + request.getUrl());
+            logActivity("shouldOverrideUrlLoading " + loggingUrl(request.getUrl().toString()));
             return handleUrl(view, request.getUrl().toString());
         }
 
         @SuppressWarnings("deprecation")
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            logActivity("shouldOverrideUrlLoading " + url);
+            logActivity("shouldOverrideUrlLoading " + loggingUrl(url));
             return handleUrl(view, url);
         }
 
         private boolean handleUrl(WebView view, String url) {
-            logActivity("handleUrl " + url);
+            logActivity("handleUrl " + loggingUrl(url));
             String inAppUrl = SiteScope.normalizeInAppUrl(url);
             if (inAppUrl == null) {
-                logActivity("Blocked out-of-scope URL " + url);
+                logActivity("Blocked out-of-scope URL " + loggingUrl(url));
                 return true;
             }
             if (!inAppUrl.equals(url)) {
-                logActivity("Normalized URL to " + inAppUrl);
+                logActivity("Normalized URL to " + loggingUrl(inAppUrl));
                 view.loadUrl(inAppUrl);
                 return true;
             }
@@ -2021,7 +2039,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             super.onPageStarted(view, url, favicon);
-            logActivity("onPageStarted " + url);
+            logActivity("onPageStarted " + loggingUrl(url));
             logoInjectionHandler.removeCallbacksAndMessages(null);
             updateSettingsButton(url);
             applyRelatedVisibility(view);
@@ -2043,7 +2061,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
-            logActivity("onPageFinished " + url);
+            logActivity("onPageFinished " + loggingUrl(url));
             updateSettingsButton(url);
             applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
