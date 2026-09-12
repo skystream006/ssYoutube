@@ -20,4 +20,6 @@
     <string name="close_miniplayer">Close miniplayer</string>
     <string name="related_videos">Related videos</string>
     <string name="hide_related">Hide related videos</string>
+    <string name="debugging">Debugging</string>
+    <string name="enable_logging">Enable logging with stack traces</string>
 </resources>
