@@ -29,6 +29,7 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.CompoundButton;
 import android.widget.RadioGroup;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -1175,7 +1176,7 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences prefs;
     private boolean desktopMode;
     private boolean relatedHidden;
-    private boolean loggingEnabled;
+    private volatile boolean loggingEnabled;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenViewCallback;
     private int originalSystemUiVisibility;
@@ -1764,11 +1765,9 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        relatedVideosToggle.setOnCheckedChangeListener(new android.widget.CompoundButton
-                .OnCheckedChangeListener() {
+        relatedVideosToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
-            public void onCheckedChanged(android.widget.CompoundButton buttonView,
-                    boolean isChecked) {
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (isChecked == relatedHidden) {
                     return;
                 }
@@ -1779,11 +1778,9 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        loggingToggle.setOnCheckedChangeListener(new android.widget.CompoundButton
-                .OnCheckedChangeListener() {
+        loggingToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
-            public void onCheckedChanged(android.widget.CompoundButton buttonView,
-                    boolean isChecked) {
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (isChecked == loggingEnabled) {
                     return;
                 }
@@ -1951,6 +1948,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void logActivity(String message) {
+        if (!loggingEnabled) {
+            return;
+        }
         logActivity(message, new Throwable("Stack trace"));
     }
 
@@ -1961,6 +1961,9 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, message, throwable);
     }
 
+    /**
+     * Keeps debug logs useful without recording potentially sensitive query or fragment values.
+     */
     private String loggingUrl(String url) {
         if (url == null) {
             return null;
