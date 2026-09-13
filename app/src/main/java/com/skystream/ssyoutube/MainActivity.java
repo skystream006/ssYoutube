@@ -9,8 +9,13 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.StatFs;
+import android.os.TrafficStats;
+import android.os.Environment;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -66,6 +71,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
     private static final String KEY_LOGGING_ENABLED = "logging_enabled";
+    private static final String KEY_STATS_FOR_NERDS_ENABLED = "stats_for_nerds_enabled";
+    private static final long STATS_UPDATE_INTERVAL_MS = 1000L;
 
     /**
      * Hides or restores the desktop watch page's related-videos sidebar. The sidebar is
@@ -1173,13 +1180,25 @@ public class MainActivity extends AppCompatActivity {
     private boolean miniplayerKeepPlaying;
     private ViewGroup rootContainer;
     private ImageButton settingsButton;
+    private TextView statsOverlay;
     private SharedPreferences prefs;
     private boolean desktopMode;
     private boolean relatedHidden;
     private volatile boolean loggingEnabled;
+    private boolean statsForNerdsEnabled;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenViewCallback;
     private int originalSystemUiVisibility;
+    private final Handler statsHandler = new Handler(Looper.getMainLooper());
+    private final Runnable statsUpdater = new Runnable() {
+        @Override
+        public void run() {
+            updateStatsOverlay();
+            if (statsForNerdsEnabled) {
+                statsHandler.postDelayed(this, STATS_UPDATE_INTERVAL_MS);
+            }
+        }
+    };
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -1188,6 +1207,7 @@ public class MainActivity extends AppCompatActivity {
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
         loggingEnabled = prefs.getBoolean(KEY_LOGGING_ENABLED, false);
+        statsForNerdsEnabled = prefs.getBoolean(KEY_STATS_FOR_NERDS_ENABLED, false);
         logActivity("onCreate");
         applyTheme(prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM));
 
@@ -1197,6 +1217,7 @@ public class MainActivity extends AppCompatActivity {
         webView = findViewById(R.id.webview);
         rootContainer = findViewById(R.id.root_container);
         settingsButton = findViewById(R.id.settings_button);
+        statsOverlay = findViewById(R.id.stats_overlay);
         settingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -1206,6 +1227,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         configureWebView(webView);
+        setStatsForNerdsEnabled(statsForNerdsEnabled);
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
@@ -1233,6 +1255,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         logActivity("onPause");
+        statsHandler.removeCallbacks(statsUpdater);
         webView.onPause();
         if (miniplayerWebView != null) {
             miniplayerWebView.onPause();
@@ -1248,11 +1271,15 @@ public class MainActivity extends AppCompatActivity {
         if (miniplayerWebView != null) {
             miniplayerWebView.onResume();
         }
+        if (statsForNerdsEnabled) {
+            startStatsUpdates();
+        }
     }
 
     @Override
     protected void onDestroy() {
         logActivity("onDestroy");
+        statsHandler.removeCallbacks(statsUpdater);
         logoInjectionHandler.removeCallbacksAndMessages(null);
         if (miniplayerWebView != null) {
             miniplayerWebView.destroy();
@@ -1508,6 +1535,7 @@ public class MainActivity extends AppCompatActivity {
         if (resumePlayback) {
             videoView.evaluateJavascript(MINIPLAYER_PLAYBACK_RESUME_SCRIPT, null);
         }
+        statsOverlay.bringToFront();
         settingsButton.bringToFront();
         updateSettingsButton(resultsView.getUrl());
     }
@@ -1572,6 +1600,7 @@ public class MainActivity extends AppCompatActivity {
         webView = videoView;
         rootContainer.addView(videoView, 0, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        statsOverlay.bringToFront();
         settingsButton.bringToFront();
         updateSettingsButton(videoView.getUrl());
     }
@@ -1594,6 +1623,7 @@ public class MainActivity extends AppCompatActivity {
         // The results page is the primary view again, so it may play media itself.
         webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
         webView.evaluateJavascript(RESULTS_AUTOPLAY_BLOCK_RESET_SCRIPT, null);
+        statsOverlay.bringToFront();
         settingsButton.bringToFront();
         updateSettingsButton(webView.getUrl());
     }
@@ -1655,6 +1685,48 @@ public class MainActivity extends AppCompatActivity {
         settingsButton.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
+    private void setStatsForNerdsEnabled(boolean enabled) {
+        statsForNerdsEnabled = enabled;
+        statsOverlay.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        if (enabled) {
+            updateStatsOverlay();
+            startStatsUpdates();
+        } else {
+            statsHandler.removeCallbacks(statsUpdater);
+        }
+    }
+
+    private void startStatsUpdates() {
+        statsHandler.removeCallbacks(statsUpdater);
+        statsHandler.postDelayed(statsUpdater, STATS_UPDATE_INTERVAL_MS);
+    }
+
+    private void updateStatsOverlay() {
+        if (!statsForNerdsEnabled || statsOverlay == null) {
+            return;
+        }
+        Debug.MemoryInfo memoryInfo = new Debug.MemoryInfo();
+        Debug.getMemoryInfo(memoryInfo);
+        long receivedBytes = TrafficStats.getUidRxBytes(android.os.Process.myUid());
+        long transmittedBytes = TrafficStats.getUidTxBytes(android.os.Process.myUid());
+        StatFs dataStorage = new StatFs(Environment.getDataDirectory().getPath());
+        long totalStorage = dataStorage.getBlockCountLong() * dataStorage.getBlockSizeLong();
+        long usedStorage = totalStorage
+                - (dataStorage.getAvailableBlocksLong() * dataStorage.getBlockSizeLong());
+        statsOverlay.setText(getString(R.string.stats_overlay_format,
+                Formatter.formatFileSize(this, memoryInfo.getTotalPss() * 1024L),
+                formatNetworkBytes(receivedBytes),
+                formatNetworkBytes(transmittedBytes),
+                Formatter.formatFileSize(this, usedStorage),
+                Formatter.formatFileSize(this, totalStorage)));
+    }
+
+    private String formatNetworkBytes(long bytes) {
+        return bytes == TrafficStats.UNSUPPORTED
+                ? getString(R.string.stats_unavailable)
+                : Formatter.formatFileSize(this, bytes);
+    }
+
     /** Applies the current related-sidebar choice to {@code view}. */
     private void applyRelatedVisibility(WebView view) {
         logActivity("applyRelatedVisibility hidden=" + relatedHidden);
@@ -1706,6 +1778,7 @@ public class MainActivity extends AppCompatActivity {
         View relatedVideosLabel = content.findViewById(R.id.related_videos_label);
         Switch relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
         Switch loggingToggle = content.findViewById(R.id.logging_toggle);
+        Switch statsForNerdsToggle = content.findViewById(R.id.stats_for_nerds_toggle);
 
         int theme = prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM);
         if (theme == Preferences.THEME_LIGHT) {
@@ -1721,6 +1794,7 @@ public class MainActivity extends AppCompatActivity {
         relatedVideosToggle.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
         relatedVideosToggle.setChecked(relatedHidden);
         loggingToggle.setChecked(loggingEnabled);
+        statsForNerdsToggle.setChecked(statsForNerdsEnabled);
 
         themeGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
@@ -1792,6 +1866,18 @@ public class MainActivity extends AppCompatActivity {
                 if (isChecked) {
                     logActivity("Debug logging enabled");
                 }
+            }
+        });
+
+        statsForNerdsToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked == statsForNerdsEnabled) {
+                    return;
+                }
+                logActivity("Stats for nerds preference changed enabled=" + isChecked);
+                prefs.edit().putBoolean(KEY_STATS_FOR_NERDS_ENABLED, isChecked).apply();
+                setStatsForNerdsEnabled(isChecked);
             }
         });
 
