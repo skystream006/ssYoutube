@@ -109,17 +109,3 @@ jobs:
           git add app/build.gradle
           git diff --staged --quiet || git commit -m "Bump version to ${{ steps.version.outputs.version_name }}"
           git push
-
-      - name: Publish APK release for in-app updates
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version_name }}
-          APK_NAME: ${{ steps.apk_name.outputs.apk_name }}
-        run: |
-          gh release create "v${VERSION}" "${APK_NAME}.apk" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --target "$(git rev-parse HEAD)" \
-            --title "ssYouTube v${VERSION}" \
-            --notes "Install the attached APK, or use Check for updates in the app settings." \
-            --latest

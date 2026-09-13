@@ -33,7 +33,8 @@ keeps you signed in, and blocks advertising/tracking requests.
   return to the app to continue. Installation always requires Android's confirmation.
   Downloads are checked for the expected version, a higher Android version code, matching
   package name and signing certificate. Network/release failures can be retried in Preferences.
-  Main-branch builds publish APKs as GitHub Releases; pull-request artifacts are not updates.
+  Only **Manual APK Release** publishes GitHub Releases for in-app updates;
+  automatic main-branch and pull-request builds upload workflow artifacts, not releases.
 - **Ad blocking** – requests to known ad/tracking hosts and ad endpoints are intercepted
   and answered with an empty response (`AdBlocker`), and a stylesheet is injected on every
   page load to hide inline promoted/ad renderers. The ad-hiding stylesheet and the JSON
@@ -106,7 +107,8 @@ gradle assembleDebug   # build the APK
 gradle test            # run the JVM unit tests
 ```
 
-To build manually, open **Actions → Manual APK Release → Run workflow** and select
+Merging a pull request does not publish a GitHub Release. To publish manually,
+open **Actions → Manual APK Release → Run workflow** and select
 **main**. This separate, manual-only workflow builds the latest `main` commit using
 the existing `versionCode` and `versionName` without bumping or committing them.
 It runs the tests, builds with the same signing key as the normal APK workflow,
