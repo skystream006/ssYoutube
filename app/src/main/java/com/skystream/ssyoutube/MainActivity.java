@@ -44,6 +44,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.FileProvider;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
@@ -1215,6 +1216,8 @@ public class MainActivity extends AppCompatActivity {
     private volatile boolean loggingEnabled;
     private volatile boolean statsForNerdsEnabled;
     private StatsMonitor statsMonitor;
+    private AppUpdater appUpdater;
+    private boolean updatesResumed;
     private Logger logger;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenViewCallback;
@@ -1241,6 +1244,13 @@ public class MainActivity extends AppCompatActivity {
         settingsButton = findViewById(R.id.settings_button);
         statsOverlay = findViewById(R.id.stats_overlay);
         statsMonitor = new StatsMonitor(this, statsOverlay);
+        appUpdater = new ViewModelProvider(this).get(AppUpdater.class);
+        appUpdater.events().observe(this, event -> {
+            if (updatesResumed) {
+                appUpdater.dispatch(this);
+            }
+        });
+        appUpdater.checkOnStartup(savedInstanceState);
         settingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -1272,10 +1282,12 @@ public class MainActivity extends AppCompatActivity {
         super.onSaveInstanceState(outState);
         logActivity("onSaveInstanceState");
         webView.saveState(outState);
+        appUpdater.saveState(outState);
     }
 
     @Override
     protected void onPause() {
+        updatesResumed = false;
         super.onPause();
         logActivity("onPause");
         webView.onPause();
@@ -1292,6 +1304,16 @@ public class MainActivity extends AppCompatActivity {
         webView.onResume();
         if (miniplayerWebView != null) {
             miniplayerWebView.onResume();
+        }
+        updatesResumed = true;
+        appUpdater.dispatch(this);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == AppUpdater.INSTALL_PERMISSION_REQUEST) {
+            appUpdater.onInstallPermissionResult();
         }
     }
 
@@ -1786,6 +1808,8 @@ public class MainActivity extends AppCompatActivity {
         View content = getLayoutInflater().inflate(R.layout.dialog_preferences, null);
         TextView versionView = content.findViewById(R.id.app_version);
         versionView.setText(getString(R.string.app_version_format, BuildConfig.VERSION_NAME));
+        content.findViewById(R.id.check_updates_button).setOnClickListener(v ->
+                appUpdater.check(true));
         RadioGroup themeGroup = content.findViewById(R.id.theme_group);
         RadioGroup siteModeGroup = content.findViewById(R.id.site_mode_group);
         View relatedVideosLabel = content.findViewById(R.id.related_videos_label);

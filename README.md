@@ -26,6 +26,14 @@ keeps you signed in, and blocks advertising/tracking requests.
   Back and forward behave like a browser's buttons: repeated history entries for the same
   page (created by the YouTube single page app) are skipped so every press changes page
   (`NavigationHistory`).
+- **In-app updates** – on launch, checks this repository's latest GitHub Release and
+  announces newer versions without downloading. In Preferences, **Check for updates**
+  reports when the app is current, or downloads a newer APK to app-private cache and opens
+  Android's installer. Android 8+ may first ask you to allow installs from ssYouTube;
+  return to the app to continue. Installation always requires Android's confirmation.
+  Downloads are checked for the expected version, a higher Android version code, matching
+  package name and signing certificate. Network/release failures can be retried in Preferences.
+  Main-branch builds publish APKs as GitHub Releases; pull-request artifacts are not updates.
 - **Ad blocking** – requests to known ad/tracking hosts and ad endpoints are intercepted
   and answered with an empty response (`AdBlocker`), and a stylesheet is injected on every
   page load to hide inline promoted/ad renderers. The ad-hiding stylesheet and the JSON
