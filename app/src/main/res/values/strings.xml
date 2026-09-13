@@ -21,9 +21,22 @@
     <string name="theme_system">System default</string>
     <string name="theme_light">Light mode</string>
     <string name="theme_dark">Dark mode</string>
+    <string-array name="theme_options">
+        <item>@string/theme_system</item>
+        <item>@string/theme_light</item>
+        <item>@string/theme_dark</item>
+    </string-array>
     <string name="site_mode">Site mode</string>
     <string name="site_mode_mobile">Mobile site</string>
     <string name="site_mode_desktop">Desktop site</string>
+    <string-array name="site_mode_options">
+        <item>@string/site_mode_mobile</item>
+        <item>@string/site_mode_desktop</item>
+    </string-array>
+    <string name="advanced_collapsed">Advanced ▸</string>
+    <string name="advanced_expanded">Advanced ▾</string>
+    <string name="expand_advanced">Expand Advanced settings</string>
+    <string name="collapse_advanced">Collapse Advanced settings</string>
     <string name="supported_links">Supported links</string>
     <string name="supported_links_action">Set as default for YouTube links</string>
     <string name="supported_links_summary">Android requires you to confirm this in system settings. Enable “Open supported links” and select the YouTube addresses if shown. On older devices, look for “Open by default” in app info. If links still open in another app, clear that app’s link defaults first.</string>
