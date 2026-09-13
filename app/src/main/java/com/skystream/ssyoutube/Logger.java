@@ -18,6 +18,10 @@ final class Logger {
         void complete(File file, boolean success);
     }
 
+    interface ReadCallback {
+        void complete(String text, boolean success);
+    }
+
     private static Logger instance;
     private final LogStore store;
     private final File exportDirectory;
@@ -87,6 +91,17 @@ final class Logger {
                 // Logging is best effort and must not interrupt playback.
             }
         }, null);
+    }
+
+    void read(ReadCallback callback) {
+        submit(() -> {
+            try {
+                String text = store.read();
+                main.post(() -> callback.complete(text, true));
+            } catch (IOException | SecurityException error) {
+                main.post(() -> callback.complete(null, false));
+            }
+        }, (file, success) -> callback.complete(null, false));
     }
 
     void share(Callback callback) {

@@ -43,7 +43,7 @@ public class PreferencesLayoutTest {
         assertEquals("@string/expand_advanced",
                 byId(layout, "advanced_toggle").getAttributeNS(ANDROID, "contentDescription"));
         for (String id : new String[] {"supported_links_button", "logging_toggle",
-                "share_log_button", "clear_log_button", "stats_for_nerds_toggle"}) {
+                "view_logs_button", "share_log_button", "clear_log_button", "stats_for_nerds_toggle"}) {
             assertTrue(id + " must be inside Advanced", isInside(byId(layout, id), advanced));
         }
         for (String id : new String[] {"theme_spinner", "site_mode_spinner",
