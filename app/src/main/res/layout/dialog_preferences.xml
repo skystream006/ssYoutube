@@ -30,6 +30,12 @@
             android:paddingEnd="24dp"
             android:paddingBottom="8dp">
 
+            <Button
+               android:id="@+id/check_updates_button"
+               android:layout_width="match_parent"
+               android:layout_height="wrap_content"
+               android:text="@string/check_updates" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
