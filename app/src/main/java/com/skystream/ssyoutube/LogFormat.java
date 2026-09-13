@@ -4,12 +4,9 @@ import java.net.URI;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /** Formats diagnostics without persisting URL credentials or browsing identifiers. */
 final class LogFormat {
-    private static final Pattern URL = Pattern.compile("(?i)\\b[a-z][a-z0-9+.-]*://\\S+");
     private static final int MAX_MESSAGE = 4000;
 
     private LogFormat() { }
@@ -36,13 +33,30 @@ final class LogFormat {
         if (message == null) {
             return "";
         }
-        Matcher matcher = URL.matcher(message);
-        StringBuffer result = new StringBuffer();
-        while (matcher.find()) {
-            matcher.appendReplacement(result, Matcher.quoteReplacement(safeUrl(matcher.group())));
+        StringBuilder result = new StringBuilder();
+        int start = 0;
+        while (start < message.length() && result.length() <= MAX_MESSAGE) {
+            char character = message.charAt(start);
+            if (Character.isWhitespace(character) || Character.isISOControl(character)) {
+                if (result.length() == 0 || result.charAt(result.length() - 1) != ' ') {
+                    result.append(' ');
+                }
+                start++;
+                continue;
+            }
+            int end = start + 1;
+            while (end < message.length() && !Character.isWhitespace(message.charAt(end))
+                    && !Character.isISOControl(message.charAt(end))) {
+                end++;
+            }
+            // Scan tokens once instead of regex backtracking over untrusted URL-like text.
+            String token = message.substring(start, end);
+            String clean = token.contains("://") ? safeUrl(token) : token;
+            int remaining = MAX_MESSAGE + 1 - result.length();
+            result.append(clean, 0, Math.min(clean.length(), remaining));
+            start = end;
         }
-        matcher.appendTail(result);
-        String clean = result.toString().replaceAll("[\\r\\n\\t\\p{Cntrl}]+", " ");
+        String clean = result.toString();
         return clean.length() <= MAX_MESSAGE ? clean : clean.substring(0, MAX_MESSAGE) + "…";
     }
 

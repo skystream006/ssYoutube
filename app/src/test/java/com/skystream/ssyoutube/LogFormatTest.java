@@ -24,6 +24,14 @@ public class LogFormatTest {
         assertEquals(4001, LogFormat.sanitize(new String(new char[5000]).replace('\0', 'x')).length());
     }
 
+    @Test(timeout = 2000)
+    public void longUrlLikeInputsCannotTriggerBacktracking() {
+        String text = new String(new char[100000]).replace("\0", "ba");
+        assertEquals(4001, LogFormat.sanitize(text).length());
+        assertEquals("(redacted URL)", LogFormat.sanitize(text + "://private"));
+        assertEquals("(redacted URL)", LogFormat.sanitize("url=https://[invalid?private"));
+    }
+
     @Test
     public void routineEventsIncludeCallerButNoFullTrace() {
         String entry = LogFormat.entry("D", "onResume", null, new StackTraceElement[] {
