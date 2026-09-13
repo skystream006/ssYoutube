@@ -14,12 +14,29 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/check_updates_button"
+        <TextView
+            android:id="@+id/preferences_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/check_updates" />
+            android:layout_marginEnd="8dp"
+            android:gravity="start"
+            android:text="@string/preferences"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/check_updates_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="@string/check_updates"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
 
         <TextView
             android:id="@+id/app_version"

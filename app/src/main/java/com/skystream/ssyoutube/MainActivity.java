@@ -1945,12 +1945,12 @@ public class MainActivity extends AppCompatActivity {
         });
 
         final AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.preferences)
                 .setView(content)
                 .create();
 
         Window dialogWindow = dialog.getWindow();
         if (dialogWindow != null) {
+            dialogWindow.setTitle(getString(R.string.preferences));
             dialogWindow.setBackgroundDrawableResource(R.drawable.bg_preference_panel);
             dialogWindow.setGravity(Gravity.BOTTOM);
             dialogWindow.setLayout(WindowManager.LayoutParams.MATCH_PARENT,
