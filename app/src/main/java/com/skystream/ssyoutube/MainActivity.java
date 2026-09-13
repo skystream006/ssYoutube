@@ -18,7 +18,6 @@ import android.provider.Settings;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
-import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
@@ -34,7 +33,8 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.CompoundButton;
-import android.widget.RadioGroup;
+import android.widget.AdapterView;
+import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -1810,8 +1810,18 @@ public class MainActivity extends AppCompatActivity {
         versionView.setText(getString(R.string.app_version_format, BuildConfig.VERSION_NAME));
         content.findViewById(R.id.check_updates_button).setOnClickListener(v ->
                 appUpdater.check(true));
-        RadioGroup themeGroup = content.findViewById(R.id.theme_group);
-        RadioGroup siteModeGroup = content.findViewById(R.id.site_mode_group);
+        Spinner themeSpinner = content.findViewById(R.id.theme_spinner);
+        Spinner siteModeSpinner = content.findViewById(R.id.site_mode_spinner);
+        TextView advancedToggle = content.findViewById(R.id.advanced_toggle);
+        View advancedSettings = content.findViewById(R.id.advanced_settings);
+        advancedToggle.setOnClickListener(v -> {
+            boolean expanded = advancedSettings.getVisibility() != View.VISIBLE;
+            advancedSettings.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            advancedToggle.setText(expanded ? R.string.advanced_expanded
+                    : R.string.advanced_collapsed);
+            advancedToggle.setContentDescription(getString(expanded ? R.string.collapse_advanced
+                    : R.string.expand_advanced));
+        });
         View relatedVideosLabel = content.findViewById(R.id.related_videos_label);
         Switch relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
         Switch loggingToggle = content.findViewById(R.id.logging_toggle);
@@ -1819,13 +1829,13 @@ public class MainActivity extends AppCompatActivity {
 
         int theme = prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM);
         if (theme == Preferences.THEME_LIGHT) {
-            themeGroup.check(R.id.theme_light);
+            themeSpinner.setSelection(1);
         } else if (theme == Preferences.THEME_DARK) {
-            themeGroup.check(R.id.theme_dark);
+            themeSpinner.setSelection(2);
         } else {
-            themeGroup.check(R.id.theme_system);
+            themeSpinner.setSelection(0);
         }
-        siteModeGroup.check(desktopMode ? R.id.site_mode_desktop : R.id.site_mode_mobile);
+        siteModeSpinner.setSelection(desktopMode ? 1 : 0);
         boolean relatedVideosAvailable = desktopMode && Preferences.isVideoPage(webView.getUrl());
         relatedVideosLabel.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
         relatedVideosToggle.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
@@ -1833,13 +1843,13 @@ public class MainActivity extends AppCompatActivity {
         loggingToggle.setChecked(loggingEnabled);
         statsForNerdsToggle.setChecked(statsForNerdsEnabled);
 
-        themeGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+        themeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
-            public void onCheckedChanged(RadioGroup group, int checkedId) {
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 int selected = Preferences.THEME_SYSTEM;
-                if (checkedId == R.id.theme_light) {
+                if (position == 1) {
                     selected = Preferences.THEME_LIGHT;
-                } else if (checkedId == R.id.theme_dark) {
+                } else if (position == 2) {
                     selected = Preferences.THEME_DARK;
                 }
                 if (selected == prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM)) {
@@ -1849,12 +1859,16 @@ public class MainActivity extends AppCompatActivity {
                 prefs.edit().putInt(KEY_THEME, selected).apply();
                 applyTheme(selected);
             }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
         });
 
-        siteModeGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+        siteModeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
-            public void onCheckedChanged(RadioGroup group, int checkedId) {
-                boolean wantsDesktop = checkedId == R.id.site_mode_desktop;
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                boolean wantsDesktop = position == 1;
                 if (wantsDesktop == desktopMode) {
                     return;
                 }
@@ -1873,6 +1887,10 @@ public class MainActivity extends AppCompatActivity {
                 webSettings.setDisplayZoomControls(false);
                 webView.clearHistory();
                 webView.loadUrl(Preferences.siteModeUrl(webView.getUrl(), wantsDesktop));
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
             }
         });
 
@@ -1989,19 +2007,14 @@ public class MainActivity extends AppCompatActivity {
         openPreferencePanel(dialog);
         dialog.show();
 
-        content.getViewTreeObserver().addOnGlobalLayoutListener(
-                new ViewTreeObserver.OnGlobalLayoutListener() {
-                    @Override
-                    public void onGlobalLayout() {
-                        int panelHeight = content.getHeight();
-                        if (panelHeight <= 0) {
-                            return;
-                        }
-                        content.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                        settingsButton.animate().translationY(-panelHeight).setDuration(
-                                getResources().getInteger(android.R.integer.config_shortAnimTime));
-                    }
-                });
+        content.addOnLayoutChangeListener((v, left, top, right, bottom,
+                oldLeft, oldTop, oldRight, oldBottom) -> {
+            int panelHeight = bottom - top;
+            if (panelHeight > 0 && panelHeight != oldBottom - oldTop) {
+                settingsButton.animate().translationY(-panelHeight).setDuration(
+                        getResources().getInteger(android.R.integer.config_shortAnimTime));
+            }
+        });
     }
 
     private String startUrl(Intent intent) {
