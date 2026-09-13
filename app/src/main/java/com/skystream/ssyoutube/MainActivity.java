@@ -1259,6 +1259,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         logActivity("onPause");
+        statsUpdatesActive = false;
         stopStatsUpdates();
         webView.onPause();
         if (miniplayerWebView != null) {
@@ -1284,6 +1285,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         logActivity("onDestroy");
+        statsUpdatesActive = false;
         stopStatsUpdates();
         statsExecutor.shutdownNow();
         logoInjectionHandler.removeCallbacksAndMessages(null);
@@ -1695,7 +1697,6 @@ public class MainActivity extends AppCompatActivity {
         statsForNerdsEnabled = enabled;
         statsOverlay.setVisibility(enabled ? View.VISIBLE : View.GONE);
         if (enabled && statsUpdatesActive) {
-            updateStatsOverlay();
             startStatsUpdates();
         } else {
             stopStatsUpdates();
@@ -1704,11 +1705,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void startStatsUpdates() {
         statsHandler.removeCallbacks(statsUpdater);
+        updateStatsOverlay();
         statsHandler.postDelayed(statsUpdater, STATS_UPDATE_INTERVAL_MS);
     }
 
     private void stopStatsUpdates() {
-        statsUpdatesActive = false;
         statsHandler.removeCallbacks(statsUpdater);
     }
 
