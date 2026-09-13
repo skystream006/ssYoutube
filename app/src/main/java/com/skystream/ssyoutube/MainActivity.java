@@ -1036,7 +1036,7 @@ public class MainActivity extends AppCompatActivity {
                     + "var CLASS='ssyoutube-app-logo';"
                     + "var OVERLAY_CLASS='ssyoutube-app-logo-overlay';"
                     + "var CONTAINERS='ytm-mobile-topbar-renderer .topbar-logo,"
-                    + "ytm-topbar-logo-renderer,ytm-youtube-logo,.mobile-topbar-header-logo,"
+                    + "ytm-topbar-logo-renderer,ytm-youtube-logo,.mobile-topbar-header-logo,.mobile-topbar-logo,"
                     + "ytm-logo,ytd-topbar-logo-renderer,ytd-logo,a#logo,#logo-icon,"
                     + "yt-icon#logo-icon,yt-icon.logo-icon,.ytp-watermark,.ytm-watermark,"
                     + ".branding-img-container';"
