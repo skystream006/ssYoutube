@@ -10,6 +10,11 @@ keeps you signed in, and blocks advertising/tracking requests.
   YouTube and the Google sign-in domains stay in-app.
 - **YouTube link handling** – the app can be selected as the default handler for
   YouTube web links and opens incoming YouTube links directly in the WebView.
+  In Preferences, tap **Set as default for YouTube links** to open Android's supported-link
+  settings for ssYouTube (or app info on older devices). Enable **Open supported links**
+  and select the YouTube addresses if shown. Android requires user confirmation; the app
+  cannot change these defaults itself. If another app still opens the links, clear its
+  link defaults first.
 - **Persistent sign-in** – cookies are accepted (including third-party cookies needed by
   the Google account flow) and flushed to disk on pause, and DOM storage is enabled, so
   the session survives app restarts.

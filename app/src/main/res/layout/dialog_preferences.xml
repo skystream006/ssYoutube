@@ -89,6 +89,25 @@
             </RadioGroup>
 
             <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/supported_links"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/supported_links_summary"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/supported_links_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/supported_links_action" />
+
+            <TextView
                 android:id="@+id/related_videos_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
