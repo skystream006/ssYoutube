@@ -26,6 +26,6 @@
     <string name="show_stats_overlay">Show app resource usage</string>
     <string name="stats_unavailable">Unavailable</string>
     <string name="stats_overlay_format">Memory: %1$s
-Network: ↓ %2$s  ↑ %3$s
-Storage: %4$s / %5$s</string>
+Network since boot: ↓ %2$s  ↑ %3$s
+Data storage: %4$s / %5$s</string>
 </resources>

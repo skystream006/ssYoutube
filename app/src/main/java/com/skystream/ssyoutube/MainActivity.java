@@ -58,6 +58,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Hosts a single WebView that shows the YouTube mobile site, keeps the sign-in session
@@ -1185,11 +1187,13 @@ public class MainActivity extends AppCompatActivity {
     private boolean desktopMode;
     private boolean relatedHidden;
     private volatile boolean loggingEnabled;
-    private boolean statsForNerdsEnabled;
+    private volatile boolean statsForNerdsEnabled;
+    private volatile boolean statsUpdatesActive;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenViewCallback;
     private int originalSystemUiVisibility;
     private final Handler statsHandler = new Handler(Looper.getMainLooper());
+    private final ExecutorService statsExecutor = Executors.newSingleThreadExecutor();
     private final Runnable statsUpdater = new Runnable() {
         @Override
         public void run() {
@@ -1255,7 +1259,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         logActivity("onPause");
-        statsHandler.removeCallbacks(statsUpdater);
+        stopStatsUpdates();
         webView.onPause();
         if (miniplayerWebView != null) {
             miniplayerWebView.onPause();
@@ -1271,6 +1275,7 @@ public class MainActivity extends AppCompatActivity {
         if (miniplayerWebView != null) {
             miniplayerWebView.onResume();
         }
+        statsUpdatesActive = true;
         if (statsForNerdsEnabled) {
             startStatsUpdates();
         }
@@ -1279,7 +1284,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         logActivity("onDestroy");
-        statsHandler.removeCallbacks(statsUpdater);
+        stopStatsUpdates();
+        statsExecutor.shutdownNow();
         logoInjectionHandler.removeCallbacksAndMessages(null);
         if (miniplayerWebView != null) {
             miniplayerWebView.destroy();
@@ -1688,11 +1694,11 @@ public class MainActivity extends AppCompatActivity {
     private void setStatsForNerdsEnabled(boolean enabled) {
         statsForNerdsEnabled = enabled;
         statsOverlay.setVisibility(enabled ? View.VISIBLE : View.GONE);
-        if (enabled) {
+        if (enabled && statsUpdatesActive) {
             updateStatsOverlay();
             startStatsUpdates();
         } else {
-            statsHandler.removeCallbacks(statsUpdater);
+            stopStatsUpdates();
         }
     }
 
@@ -1701,24 +1707,42 @@ public class MainActivity extends AppCompatActivity {
         statsHandler.postDelayed(statsUpdater, STATS_UPDATE_INTERVAL_MS);
     }
 
+    private void stopStatsUpdates() {
+        statsUpdatesActive = false;
+        statsHandler.removeCallbacks(statsUpdater);
+    }
+
     private void updateStatsOverlay() {
-        if (!statsForNerdsEnabled || statsOverlay == null) {
+        if (!statsForNerdsEnabled || !statsUpdatesActive || statsOverlay == null) {
             return;
         }
-        Debug.MemoryInfo memoryInfo = new Debug.MemoryInfo();
-        Debug.getMemoryInfo(memoryInfo);
-        long receivedBytes = TrafficStats.getUidRxBytes(android.os.Process.myUid());
-        long transmittedBytes = TrafficStats.getUidTxBytes(android.os.Process.myUid());
-        StatFs dataStorage = new StatFs(Environment.getDataDirectory().getPath());
-        long totalStorage = dataStorage.getBlockCountLong() * dataStorage.getBlockSizeLong();
-        long usedStorage = totalStorage
-                - (dataStorage.getAvailableBlocksLong() * dataStorage.getBlockSizeLong());
-        statsOverlay.setText(getString(R.string.stats_overlay_format,
-                Formatter.formatFileSize(this, memoryInfo.getTotalPss() * 1024L),
-                formatNetworkBytes(receivedBytes),
-                formatNetworkBytes(transmittedBytes),
-                Formatter.formatFileSize(this, usedStorage),
-                Formatter.formatFileSize(this, totalStorage)));
+        statsExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                Debug.MemoryInfo memoryInfo = new Debug.MemoryInfo();
+                Debug.getMemoryInfo(memoryInfo);
+                long receivedBytes = TrafficStats.getUidRxBytes(android.os.Process.myUid());
+                long transmittedBytes = TrafficStats.getUidTxBytes(android.os.Process.myUid());
+                StatFs dataStorage = new StatFs(Environment.getDataDirectory().getPath());
+                long totalStorage = dataStorage.getBlockCountLong() * dataStorage.getBlockSizeLong();
+                long usedStorage = totalStorage
+                        - (dataStorage.getAvailableBlocksLong() * dataStorage.getBlockSizeLong());
+                final String statsText = getString(R.string.stats_overlay_format,
+                        Formatter.formatFileSize(MainActivity.this, memoryInfo.getTotalPss() * 1024L),
+                        formatNetworkBytes(receivedBytes),
+                        formatNetworkBytes(transmittedBytes),
+                        Formatter.formatFileSize(MainActivity.this, usedStorage),
+                        Formatter.formatFileSize(MainActivity.this, totalStorage));
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (statsForNerdsEnabled && statsUpdatesActive && statsOverlay != null) {
+                            statsOverlay.setText(statsText);
+                        }
+                    }
+                });
+            }
+        });
     }
 
     private String formatNetworkBytes(long bytes) {
