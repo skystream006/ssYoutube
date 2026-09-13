@@ -34,6 +34,8 @@ keeps you signed in, and blocks advertising/tracking requests.
 - **Subscriber counts** – a page injection loads each video card channel's public subscriber
   count and displays it beside the channel avatar. Comment authors are skipped and the
   lookups are queued a few at a time so they never crowd out the page's own requests.
+- **Stats for nerds** – an optional overlay shows memory, downloaded data, uploaded data and
+  app storage as separate rows.
 - **Video swipe gestures** – swiping up on a playing video enters fullscreen, swiping down
   exits it, and swiping down on a watch page shrinks the video into a miniplayer (mobile
   site mode only – the miniplayer styling targets the mobile player, so switching to the
