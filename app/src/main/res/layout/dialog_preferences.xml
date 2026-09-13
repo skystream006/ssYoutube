@@ -5,17 +5,32 @@
     android:layout_height="wrap_content"
     android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/app_version"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="end"
         android:layout_marginTop="24dp"
+        android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
-        android:textColor="?android:attr/textColorSecondary"
-        android:textSize="12sp"
-        tools:ignore="HardcodedText"
-        tools:text="v1.0.0" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/check_updates_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/check_updates" />
+
+        <TextView
+            android:id="@+id/app_version"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="12sp"
+            tools:ignore="HardcodedText"
+            tools:text="v1.0.0" />
+    </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
@@ -30,42 +45,54 @@
             android:paddingEnd="24dp"
             android:paddingBottom="8dp">
 
-            <Button
-               android:id="@+id/check_updates_button"
-               android:layout_width="match_parent"
-               android:layout_height="wrap_content"
-               android:text="@string/check_updates" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:labelFor="@+id/theme_spinner"
-                android:text="@string/appearance"
-                android:textStyle="bold" />
-
-            <Spinner
-                android:id="@id/theme_spinner"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="48dp"
-                android:entries="@array/theme_options"
-                android:spinnerMode="dropdown" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <TextView
-                android:layout_width="wrap_content"
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:labelFor="@+id/theme_spinner"
+                    android:text="@string/appearance"
+                    android:textStyle="bold" />
+
+                <Spinner
+                    android:id="@id/theme_spinner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:minHeight="48dp"
+                    android:entries="@array/theme_options"
+                    android:spinnerMode="dropdown" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:labelFor="@+id/site_mode_spinner"
-                android:text="@string/site_mode"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <Spinner
-                android:id="@id/site_mode_spinner"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="48dp"
-                android:entries="@array/site_mode_options"
-                android:spinnerMode="dropdown" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:labelFor="@+id/site_mode_spinner"
+                    android:text="@string/site_mode"
+                    android:textStyle="bold" />
+
+                <Spinner
+                    android:id="@id/site_mode_spinner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:minHeight="48dp"
+                    android:entries="@array/site_mode_options"
+                    android:spinnerMode="dropdown" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/related_videos_label"
@@ -181,15 +208,6 @@
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="24dp"
-        android:layout_marginEnd="24dp"
-        android:layout_marginTop="8dp"
-        android:text="@string/navigation"
-        android:textStyle="bold" />
 
     <LinearLayout
         android:id="@+id/navigation_bar"

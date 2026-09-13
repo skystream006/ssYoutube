@@ -35,6 +35,27 @@ public class PreferencesLayoutTest {
     }
 
     @Test
+    public void updateButtonIsBesideVersion() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        assertHorizontalRow(byId(layout, "check_updates_button"), byId(layout, "app_version"));
+    }
+
+    @Test
+    public void navigationKeepsButtonsWithoutHeading() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        NodeList labels = layout.getElementsByTagName("TextView");
+        for (int i = 0; i < labels.getLength(); i++) {
+            Element label = (Element) labels.item(i);
+            assertFalse("@string/navigation".equals(label.getAttributeNS(ANDROID, "text")));
+        }
+        Element navigation = byId(layout, "navigation_bar");
+        for (String id : new String[] {"back_button", "forward_button", "refresh_button",
+                "home_button"}) {
+            assertTrue(isInside(byId(layout, id), navigation));
+        }
+    }
+
+    @Test
     public void advancedSettingsStartCollapsedAndContainOnlyAdvancedControls() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         Element advanced = byId(layout, "advanced_settings");
@@ -93,6 +114,17 @@ public class PreferencesLayoutTest {
             }
         }
         assertNotNull("Missing dropdown label: " + id, label);
+        assertHorizontalRow(label, spinner);
+        assertEquals("48dp", spinner.getAttributeNS(ANDROID, "minHeight"));
+    }
+
+    private static void assertHorizontalRow(Element left, Element right) {
+        Element row = (Element) left.getParentNode();
+        assertEquals(row, right.getParentNode());
+        assertEquals("LinearLayout", row.getTagName());
+        assertEquals("horizontal", row.getAttributeNS(ANDROID, "orientation"));
+        assertEquals("center_vertical", row.getAttributeNS(ANDROID, "gravity"));
+        assertTrue((left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
     }
 
     private static void assertOptions(Document strings, String name, String... expected) {
