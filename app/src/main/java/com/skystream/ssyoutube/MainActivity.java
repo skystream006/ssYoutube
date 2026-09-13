@@ -2,19 +2,17 @@ package com.skystream.ssyoutube;
 
 import android.annotation.SuppressLint;
 import android.content.DialogInterface;
+import android.content.ClipData;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.net.TrafficStats;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.format.Formatter;
-import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -25,6 +23,7 @@ import android.webkit.CookieManager;
 import android.webkit.WebBackForwardList;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -36,17 +35,18 @@ import android.widget.CompoundButton;
 import android.widget.RadioGroup;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.view.ViewGroup;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,8 +57,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Hosts a single WebView that shows the YouTube mobile site, keeps the sign-in session
@@ -66,14 +64,12 @@ import java.util.concurrent.Executors;
  */
 public class MainActivity extends AppCompatActivity {
 
-    private static final String TAG = "ssYouTube";
     private static final String PREFS_NAME = "ssyoutube_prefs";
     private static final String KEY_THEME = "theme";
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
     private static final String KEY_LOGGING_ENABLED = "logging_enabled";
     private static final String KEY_STATS_FOR_NERDS_ENABLED = "stats_for_nerds_enabled";
-    private static final long STATS_UPDATE_INTERVAL_MS = 5000L;
 
     /**
      * Hides or restores the desktop watch page's related-videos sidebar. The sidebar is
@@ -1216,21 +1212,11 @@ public class MainActivity extends AppCompatActivity {
     private boolean relatedHidden;
     private volatile boolean loggingEnabled;
     private volatile boolean statsForNerdsEnabled;
-    private volatile boolean statsUpdatesActive;
+    private StatsMonitor statsMonitor;
+    private Logger logger;
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenViewCallback;
     private int originalSystemUiVisibility;
-    private final Handler statsHandler = new Handler(Looper.getMainLooper());
-    private final ExecutorService statsExecutor = Executors.newSingleThreadExecutor();
-    private final Runnable statsUpdater = new Runnable() {
-        @Override
-        public void run() {
-            updateStatsOverlay();
-            if (statsForNerdsEnabled && statsUpdatesActive) {
-                statsHandler.postDelayed(this, STATS_UPDATE_INTERVAL_MS);
-            }
-        }
-    };
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -1239,6 +1225,8 @@ public class MainActivity extends AppCompatActivity {
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
         loggingEnabled = prefs.getBoolean(KEY_LOGGING_ENABLED, false);
+        logger = Logger.get(this);
+        logger.setEnabled(loggingEnabled);
         statsForNerdsEnabled = prefs.getBoolean(KEY_STATS_FOR_NERDS_ENABLED, false);
         logActivity("onCreate");
         applyTheme(prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM));
@@ -1250,6 +1238,7 @@ public class MainActivity extends AppCompatActivity {
         rootContainer = findViewById(R.id.root_container);
         settingsButton = findViewById(R.id.settings_button);
         statsOverlay = findViewById(R.id.stats_overlay);
+        statsMonitor = new StatsMonitor(this, statsOverlay);
         settingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -1271,7 +1260,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        logActivity("onNewIntent action=" + (intent == null ? null : intent.getAction()));
+        logActivity("onNewIntent");
         setIntent(intent);
         webView.loadUrl(startUrl(intent));
     }
@@ -1287,8 +1276,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         logActivity("onPause");
-        statsUpdatesActive = false;
-        stopStatsUpdates();
         webView.onPause();
         if (miniplayerWebView != null) {
             miniplayerWebView.onPause();
@@ -1304,18 +1291,24 @@ public class MainActivity extends AppCompatActivity {
         if (miniplayerWebView != null) {
             miniplayerWebView.onResume();
         }
-        statsUpdatesActive = true;
-        if (statsForNerdsEnabled) {
-            startStatsUpdates();
-        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        statsMonitor.onStart();
+    }
+
+    @Override
+    protected void onStop() {
+        statsMonitor.onStop();
+        super.onStop();
     }
 
     @Override
     protected void onDestroy() {
         logActivity("onDestroy");
-        statsUpdatesActive = false;
-        stopStatsUpdates();
-        statsExecutor.shutdownNow();
+        statsMonitor.onDestroy();
         logoInjectionHandler.removeCallbacksAndMessages(null);
         if (miniplayerWebView != null) {
             miniplayerWebView.destroy();
@@ -1364,6 +1357,7 @@ public class MainActivity extends AppCompatActivity {
                         | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         rootContainer.addView(view, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        statsOverlay.bringToFront();
         webView.setVisibility(View.GONE);
         settingsButton.setVisibility(View.GONE);
     }
@@ -1503,7 +1497,7 @@ public class MainActivity extends AppCompatActivity {
      * the cached results page (the page the user was on before opening the video) underneath.
      */
     private void enterMiniplayer(String resultsUrl, boolean resumePlayback) {
-        logActivity("enterMiniplayer resultsUrl=" + sanitizeUrlForLog(resultsUrl)
+        logActivity("enterMiniplayer resultsUrl=" + LogFormat.safeUrl(resultsUrl)
                 + " resumePlayback=" + resumePlayback);
         if (desktopMode) {
             return;
@@ -1724,68 +1718,7 @@ public class MainActivity extends AppCompatActivity {
     private void setStatsForNerdsEnabled(boolean enabled) {
         statsForNerdsEnabled = enabled;
         statsOverlay.setVisibility(enabled ? View.VISIBLE : View.GONE);
-        if (enabled && statsUpdatesActive) {
-            startStatsUpdates();
-        } else {
-            stopStatsUpdates();
-        }
-    }
-
-    private void startStatsUpdates() {
-        statsHandler.removeCallbacks(statsUpdater);
-        updateStatsOverlay();
-        statsHandler.postDelayed(statsUpdater, STATS_UPDATE_INTERVAL_MS);
-    }
-
-    private void stopStatsUpdates() {
-        statsHandler.removeCallbacks(statsUpdater);
-    }
-
-    private void updateStatsOverlay() {
-        if (!statsForNerdsEnabled || !statsUpdatesActive || statsOverlay == null) {
-            return;
-        }
-        statsExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                Debug.MemoryInfo memoryInfo = new Debug.MemoryInfo();
-                Debug.getMemoryInfo(memoryInfo);
-                long receivedBytes = TrafficStats.getUidRxBytes(android.os.Process.myUid());
-                long transmittedBytes = TrafficStats.getUidTxBytes(android.os.Process.myUid());
-                long usedStorage = directorySize(new File(getApplicationInfo().dataDir));
-                final String statsText = getString(R.string.stats_overlay_format,
-                        Formatter.formatFileSize(MainActivity.this, memoryInfo.getTotalPss() * 1024L),
-                        formatNetworkBytes(receivedBytes),
-                        formatNetworkBytes(transmittedBytes),
-                        Formatter.formatFileSize(MainActivity.this, usedStorage));
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (statsForNerdsEnabled && statsUpdatesActive && statsOverlay != null) {
-                            statsOverlay.setText(statsText);
-                        }
-                    }
-                });
-            }
-        });
-    }
-
-    private String formatNetworkBytes(long bytes) {
-        return bytes == TrafficStats.UNSUPPORTED
-                ? getString(R.string.stats_unavailable)
-                : Formatter.formatFileSize(this, bytes);
-    }
-
-    private long directorySize(File directory) {
-        long size = 0L;
-        File[] files = directory.listFiles();
-        if (files == null) {
-            return size;
-        }
-        for (File file : files) {
-            size += file.isDirectory() ? directorySize(file) : file.length();
-        }
-        return size;
+        statsMonitor.setEnabled(enabled);
     }
 
     /** Applies the current related-sidebar choice to {@code view}. */
@@ -1919,16 +1852,19 @@ public class MainActivity extends AppCompatActivity {
                 if (isChecked == loggingEnabled) {
                     return;
                 }
-                if (!isChecked) {
-                    logActivity("Debug logging disabled");
-                }
                 loggingEnabled = isChecked;
                 prefs.edit().putBoolean(KEY_LOGGING_ENABLED, loggingEnabled).apply();
-                if (isChecked) {
-                    logActivity("Debug logging enabled");
-                }
+                logger.setEnabled(isChecked);
             }
         });
+        content.findViewById(R.id.share_log_button).setOnClickListener(v -> shareLog());
+        content.findViewById(R.id.clear_log_button).setOnClickListener(v ->
+                logger.clear((file, success) -> {
+                    if (!isFinishing() && !isDestroyed()) {
+                        Toast.makeText(this, success ? R.string.log_cleared
+                                : R.string.log_operation_failed, Toast.LENGTH_SHORT).show();
+                    }
+                }));
 
         statsForNerdsToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -2093,14 +2029,37 @@ public class MainActivity extends AppCompatActivity {
         return lower.substring(pathStart, pathEnd).equals(APP_LOGO_PATH);
     }
 
-    /**
-     * Records an app activity with a synthetic stack trace when the user enables debug logging.
-     */
+    private void shareLog() {
+        logger.share((file, success) -> {
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            if (!success || file == null) {
+                Toast.makeText(this, success ? R.string.log_empty
+                        : R.string.log_operation_failed, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            try {
+                android.net.Uri uri = FileProvider.getUriForFile(this,
+                        getPackageName() + ".fileprovider", file);
+                Intent intent = new Intent(Intent.ACTION_SEND);
+                intent.setType("text/plain");
+                intent.putExtra(Intent.EXTRA_STREAM, uri);
+                intent.setClipData(ClipData.newRawUri(getString(R.string.share_log), uri));
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(intent, getString(R.string.share_log)));
+            } catch (ActivityNotFoundException | IllegalArgumentException error) {
+                Toast.makeText(this, R.string.log_operation_failed, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /** Records routine activities with a caller location, rather than a full stack trace. */
     private void logActivity(String message) {
         if (!loggingEnabled) {
             return;
         }
-        logActivity(message, new Throwable("Stack trace"));
+        logger.log("D", message, null);
     }
 
     /**
@@ -2110,41 +2069,52 @@ public class MainActivity extends AppCompatActivity {
         if (!loggingEnabled) {
             return;
         }
-        Log.d(TAG, message, throwable);
+        logger.log("E", message, throwable);
     }
 
     /**
-     * Records a URL-bearing activity after stripping query and fragment values from the URL.
+     * Records only the origin of a URL-bearing activity, omitting browsing identifiers.
      */
     private void logActivityUrl(String prefix, String url) {
         if (!loggingEnabled) {
             return;
         }
-        logActivity(prefix + sanitizeUrlForLog(url));
-    }
-
-    /**
-     * Keeps debug logs useful without recording potentially sensitive query or fragment values.
-     * Null URLs are rendered explicitly for readability.
-     */
-    private String sanitizeUrlForLog(String url) {
-        if (url == null) {
-            return "(null)";
-        }
-        int query = url.indexOf('?');
-        int fragment = url.indexOf('#');
-        int cut = -1;
-        if (query >= 0 && fragment >= 0) {
-            cut = Math.min(query, fragment);
-        } else if (query >= 0) {
-            cut = query;
-        } else if (fragment >= 0) {
-            cut = fragment;
-        }
-        return cut < 0 ? url : url.substring(0, cut) + "...";
+        logActivity(prefix + LogFormat.safeUrl(url));
     }
 
     private class YouTubeWebViewClient extends WebViewClient {
+
+        @Override
+        public void onReceivedError(WebView view, WebResourceRequest request,
+                                    WebResourceError error) {
+            super.onReceivedError(view, request, error);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && loggingEnabled) {
+                logger.log("E", "Web resource error code=" + error.getErrorCode()
+                        + " mainFrame=" + request.isForMainFrame() + " "
+                        + LogFormat.safeUrl(request.getUrl().toString()), new Throwable());
+            }
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void onReceivedError(WebView view, int code, String description, String url) {
+            super.onReceivedError(view, code, description, url);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M && loggingEnabled) {
+                logger.log("E", "Page load error code=" + code + " "
+                        + LogFormat.safeUrl(url), new Throwable());
+            }
+        }
+
+        @Override
+        public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                        WebResourceResponse response) {
+            super.onReceivedHttpError(view, request, response);
+            if (loggingEnabled) {
+                logger.log("E", "HTTP error status=" + response.getStatusCode()
+                        + " mainFrame=" + request.isForMainFrame() + " "
+                        + LogFormat.safeUrl(request.getUrl().toString()), new Throwable());
+            }
+        }
 
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
