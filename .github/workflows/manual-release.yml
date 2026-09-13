@@ -1,0 +1,82 @@
+name: Manual APK Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual-apk-release
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Read current APK version
+        id: version
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import re
+          from pathlib import Path
+
+          text = Path("app/build.gradle").read_text()
+          code_match = re.search(r"^\s*versionCode\s+(\d+)\s*$", text, re.MULTILINE)
+          name_match = re.search(r'^\s*versionName\s+"(\d+\.\d{2}\.\d{2})"\s*$', text, re.MULTILINE)
+          if not code_match or int(code_match.group(1)) < 1:
+              raise SystemExit("A positive versionCode is required in app/build.gradle")
+          if not name_match:
+              raise SystemExit("versionName must use xx.yy.zz format, for example 0.01.01")
+
+          version_name = name_match.group(1)
+          print(f"version_name={version_name}")
+          print(f"apk_name=ssYouTube-v{version_name}.apk")
+          PY
+
+      - name: Build and test APK
+        run: ./gradlew test assembleDebug
+
+      - name: Rename APK
+        env:
+          APK_NAME: ${{ steps.version.outputs.apk_name }}
+        run: cp app/build/outputs/apk/debug/app-debug.apk "$APK_NAME"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: ssYouTube-v${{ steps.version.outputs.version_name }}
+          path: ${{ steps.version.outputs.apk_name }}
+          if-no-files-found: error
+
+      - name: Publish missing APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version_name }}
+          APK_NAME: ${{ steps.version.outputs.apk_name }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving it unchanged. The rebuilt APK is available as a workflow artifact."
+          else
+            gh release create "$tag" "$APK_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$(git rev-parse HEAD)" \
+              --title "ssYouTube v${VERSION}" \
+              --notes "Install the attached APK, or use Check for updates in the app settings." \
+              --latest
+          fi

@@ -105,3 +105,11 @@ Requires JDK 17 and the Android SDK (compileSdk 34); minSdk is 21.
 gradle assembleDebug   # build the APK
 gradle test            # run the JVM unit tests
 ```
+
+To build manually, open **Actions → Manual APK Release → Run workflow** and select
+**main**. This separate, manual-only workflow builds the latest `main` commit using
+the existing `versionCode` and `versionName` without bumping or committing them.
+It runs the tests, builds with the same signing key as the normal APK workflow,
+and uploads the APK as a workflow artifact. If the version's GitHub Release does
+not exist, it publishes one as the latest release for in-app updates; existing
+releases and their assets are left unchanged. Runs on other branches are skipped.
