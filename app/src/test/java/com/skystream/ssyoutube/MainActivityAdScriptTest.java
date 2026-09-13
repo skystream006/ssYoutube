@@ -80,7 +80,8 @@ public class MainActivityAdScriptTest {
         assertTrue(script.contains("closest('ytm-rich-item-renderer')"));
         assertTrue(script.contains("querySelectorAll('ytd-ad-slot-renderer')"));
         assertTrue(script.contains("closest('ytd-rich-item-renderer')"));
-        assertTrue(script.contains("parent.remove()"));
+        assertTrue(script.contains("else{desktopAds[j].remove();}"));
+        assertFalse(script.contains("parent.remove()"));
         assertTrue(script.contains("MutationObserver"));
         assertTrue(script.contains("addEventListener('scroll'"));
         assertTrue(script.contains("setTimeout(cleanup,250)"));
