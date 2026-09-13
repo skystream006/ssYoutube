@@ -53,6 +53,8 @@
     <string name="enable_logging">Enable debug logging</string>
     <string name="logging_summary">Save diagnostics privately, with stack traces for errors. Logging is off by default. Review logs before sharing.</string>
     <string name="share_log">Share log</string>
+    <string name="view_logs">View logs</string>
+    <string name="logs_loading">Loading logs…</string>
     <string name="clear_log">Clear log</string>
     <string name="log_cleared">Logs cleared</string>
     <string name="log_empty">No logs yet. Enable logging and use the app first.</string>

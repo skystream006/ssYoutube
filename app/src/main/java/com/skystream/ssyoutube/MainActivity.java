@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -35,6 +36,7 @@ import android.widget.ImageView;
 import android.widget.CompoundButton;
 import android.widget.AdapterView;
 import android.widget.Spinner;
+import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -1918,6 +1920,7 @@ public class MainActivity extends AppCompatActivity {
                 logger.setEnabled(isChecked);
             }
         });
+        content.findViewById(R.id.view_logs_button).setOnClickListener(v -> showLogs());
         content.findViewById(R.id.share_log_button).setOnClickListener(v -> shareLog());
         content.findViewById(R.id.supported_links_button).setOnClickListener(v ->
                 openSupportedLinkSettings());
@@ -2085,6 +2088,35 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return lower.substring(pathStart, pathEnd).equals(APP_LOGO_PATH);
+    }
+
+    private void showLogs() {
+        TextView text = new TextView(this);
+        text.setTypeface(Typeface.MONOSPACE);
+        text.setTextSize(12);
+        text.setTextIsSelectable(true);
+        text.setText(R.string.logs_loading);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(text, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.view_logs)
+                .setView(scroll, padding, padding, padding, 0)
+                .setPositiveButton(R.string.close, null)
+                .show();
+        logger.read((logs, success) -> {
+            if (isFinishing() || isDestroyed() || !dialog.isShowing()) {
+                return;
+            }
+            if (!success) {
+                text.setText(R.string.log_operation_failed);
+            } else if (logs.isEmpty()) {
+                text.setText(R.string.log_empty);
+            } else {
+                text.setText(logs);
+            }
+        });
     }
 
     private void shareLog() {

@@ -1,9 +1,11 @@
 package com.skystream.ssyoutube;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 /** Bounded private log storage, serialized with crash writes and export operations. */
@@ -47,20 +49,31 @@ final class LogStore {
             throw new IOException("Cannot create export directory");
         }
         try (FileOutputStream output = new FileOutputStream(destination)) {
-            for (File source : new File[] {previous, active}) {
-                if (!source.exists()) {
-                    continue;
-                }
-                try (FileInputStream input = new FileInputStream(source)) {
-                    byte[] buffer = new byte[8192];
-                    int count;
-                    while ((count = input.read(buffer)) != -1) {
-                        output.write(buffer, 0, count);
-                    }
+            copyLogs(output);
+        }
+        return destination;
+    }
+
+    synchronized String read() throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        copyLogs(output);
+        return new String(output.toByteArray(), StandardCharsets.UTF_8);
+    }
+
+    private void copyLogs(OutputStream output) throws IOException {
+        for (String name : new String[] {"ssyoutube-previous.log", "ssyoutube.log"}) {
+            File source = new File(directory, name);
+            if (!source.exists()) {
+                continue;
+            }
+            try (FileInputStream input = new FileInputStream(source)) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, count);
                 }
             }
         }
-        return destination;
     }
 
     synchronized void clear() throws IOException {
