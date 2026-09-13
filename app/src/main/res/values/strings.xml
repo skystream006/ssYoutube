@@ -12,6 +12,10 @@
     <string name="site_mode">Site mode</string>
     <string name="site_mode_mobile">Mobile site</string>
     <string name="site_mode_desktop">Desktop site</string>
+    <string name="supported_links">Supported links</string>
+    <string name="supported_links_action">Set as default for YouTube links</string>
+    <string name="supported_links_summary">Android requires you to confirm this in system settings. Enable “Open supported links” and select the YouTube addresses if shown. On older devices, look for “Open by default” in app info. If links still open in another app, clear that app’s link defaults first.</string>
+    <string name="supported_links_unavailable">Could not open system settings. Open Android Settings → Apps → ssYouTube → Open by default.</string>
     <string name="navigation">Navigation</string>
     <string name="back">Back</string>
     <string name="forward">Forward</string>

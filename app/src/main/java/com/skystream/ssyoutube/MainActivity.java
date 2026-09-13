@@ -9,10 +9,12 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -1762,6 +1764,23 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void openSupportedLinkSettings() {
+        Uri packageUri = Uri.parse("package:" + getPackageName());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                startActivity(new Intent(Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS, packageUri));
+                return;
+            } catch (ActivityNotFoundException | SecurityException ignored) {
+                // Some devices do not expose the dedicated supported-links screen.
+            }
+        }
+        try {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri));
+        } catch (ActivityNotFoundException | SecurityException ignored) {
+            Toast.makeText(this, R.string.supported_links_unavailable, Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void showPreferences() {
         logActivity("showPreferences");
         View content = getLayoutInflater().inflate(R.layout.dialog_preferences, null);
@@ -1858,6 +1877,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         content.findViewById(R.id.share_log_button).setOnClickListener(v -> shareLog());
+        content.findViewById(R.id.supported_links_button).setOnClickListener(v ->
+                openSupportedLinkSettings());
         content.findViewById(R.id.clear_log_button).setOnClickListener(v ->
                 logger.clear((file, success) -> {
                     if (!isFinishing() && !isDestroyed()) {
