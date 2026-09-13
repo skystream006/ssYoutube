@@ -306,6 +306,16 @@ public class MainActivityAdScriptTest {
     }
 
     @Test
+    public void replacesMobileTopbarLogoRegardlessOfItsTag() {
+        String script = MainActivity.APP_LOGO_SCRIPT;
+        // The mobile masthead uses c3-icon.mobile-topbar-logo, not .topbar-logo.
+        assertTrue(script.contains(",.mobile-topbar-logo,"));
+        assertTrue(script.contains("root.querySelectorAll(CONTAINERS)"));
+        assertTrue(script.contains("root.matches(CONTAINERS)"));
+        assertTrue(script.contains("node.parentElement.closest(CONTAINERS)"));
+    }
+
+    @Test
     public void replacesThePlayerWatermarkLogo() {
         String script = MainActivity.APP_LOGO_SCRIPT;
         assertTrue(script.contains(".ytp-watermark"));
