@@ -143,9 +143,9 @@ public final class AppUpdater extends AndroidViewModel {
             Uri uri = FileProvider.getUriForFile(activity,
                     activity.getPackageName() + ".fileprovider", new File(directory, "update.apk"));
             Intent intent = new Intent(Intent.ACTION_VIEW)
-                    .setDataAndType(uri, "application/vnd.android.package-archive")
-                    .setClipData(ClipData.newRawUri("App update", uri))
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    .setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.setClipData(ClipData.newRawUri("App update", uri));
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             activity.startActivity(intent);
         } catch (ActivityNotFoundException | SecurityException | IllegalArgumentException e) {
             waitingForPermission = false;
