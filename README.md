@@ -34,8 +34,24 @@ keeps you signed in, and blocks advertising/tracking requests.
 - **Subscriber counts** – a page injection loads each video card channel's public subscriber
   count and displays it beside the channel avatar. Comment authors are skipped and the
   lookups are queued a few at a time so they never crowd out the page's own requests.
-- **Stats for nerds** – an optional overlay shows memory, downloaded data, uploaded data and
-  app storage as separate rows.
+- **Stats for nerds** – an optional, touch-through overlay in Preferences shows app-process
+  memory (PSS), app-UID download/upload rates per second, and app data plus cache storage,
+  matching ssMusic's diagnostics. Memory and network refresh about once a second while
+  the activity is visible; storage is scanned off the UI thread about every 30 seconds,
+  including internal, device-protected and external app directories without double counting.
+  Measurements start with “Measuring…” and unsupported values show “Unavailable.”
+  Separate WebView renderer memory/traffic may not be included. YouTube's own playback
+  statistics panel remains separate.
+- **Debug logging** – disabled by default and enabled in Preferences. Activity, navigation,
+  settings and WebView failures are recorded to logcat and app-private rotating files
+  (512 KiB each, one backup). Routine events include their caller; errors and crashes
+  include stack frames without exception messages. URLs retain only their web origin,
+  excluding credentials, paths, queries and fragments. Files are excluded from Android
+  backup. **Share log** exports the current and previous logs through a temporary read-only
+  FileProvider grant; **Clear log** deletes both logs and the export. Disabling stops new
+  logging but retains existing files and lets queued entries finish. Logging is best effort:
+  a bounded queue drops entries under heavy load. Review logs before sharing; copies
+  already shared with other apps cannot be recalled.
 - **Video swipe gestures** – swiping up on a playing video enters fullscreen, swiping down
   exits it, and swiping down on a watch page shrinks the video into a miniplayer (mobile
   site mode only – the miniplayer styling targets the mobile player, so switching to the
@@ -60,6 +76,11 @@ app/src/main/java/com/skystream/ssyoutube/
   SiteScope.java      Which URLs stay inside the app (pure Java, unit tested)
   Preferences.java    Theme/site-mode values, user agents, home URLs (pure Java, unit tested)
   NavigationHistory.java  Browser-like back/forward step calculation (pure Java, unit tested)
+  StatsMonitor.java  Lifecycle-aware background resource sampling
+  StatsValues.java   Network rates and safe storage traversal (pure Java, unit tested)
+  Logger.java        Opt-in asynchronous logging, sharing and clearing
+  LogFormat.java     Privacy-conscious diagnostic formatting (pure Java, unit tested)
+  LogStore.java      Bounded rotation and export snapshots (pure Java, unit tested)
 app/src/test/java/... JUnit tests for AdBlocker, SiteScope, Preferences and NavigationHistory
 ```
 

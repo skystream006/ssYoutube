@@ -21,12 +21,18 @@
     <string name="related_videos">Related videos</string>
     <string name="hide_related">Hide related videos</string>
     <string name="debugging">Debugging</string>
-    <string name="enable_logging">Enable logging with stack traces</string>
+    <string name="enable_logging">Enable debug logging</string>
+    <string name="logging_summary">Save diagnostics privately, with stack traces for errors. Logging is off by default. Review logs before sharing.</string>
+    <string name="share_log">Share log</string>
+    <string name="clear_log">Clear log</string>
+    <string name="log_cleared">Logs cleared</string>
+    <string name="log_empty">No logs yet. Enable logging and use the app first.</string>
+    <string name="log_operation_failed">Could not complete the log operation</string>
     <string name="stats_for_nerds">Stats for nerds</string>
     <string name="show_stats_overlay">Show app resource usage</string>
     <string name="stats_unavailable">Unavailable</string>
-    <string name="stats_overlay_format">Memory: %1$s
-Downloaded since boot: %2$s
-Uploaded since boot: %3$s
-App storage: %4$s</string>
+    <string name="stats_measuring">Measuring…</string>
+    <string name="stats_rate_format">%1$s/s</string>
+    <string name="stats_summary">Live app-process memory, app-UID network rates, and app data plus cache storage. Separate WebView renderer usage may not be included.</string>
+    <string name="stats_overlay_format">Stats for nerds\nMemory (app process PSS): %1$s\nNetwork (app UID) ↓: %2$s\nNetwork (app UID) ↑: %3$s\nStorage (data + cache): %4$s</string>
 </resources>
