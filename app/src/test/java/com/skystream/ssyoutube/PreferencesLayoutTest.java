@@ -91,6 +91,23 @@ public class PreferencesLayoutTest {
         }
     }
 
+    @Test
+    public void hideRelatedVideosIsVisibleWithoutHeading() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        Element toggle = byId(layout, "related_videos_toggle");
+        assertEquals("Switch", toggle.getTagName());
+        assertEquals("@string/hide_related", toggle.getAttributeNS(ANDROID, "text"));
+        for (Node node = toggle; node instanceof Element; node = node.getParentNode()) {
+            String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
+            assertTrue(visibility.isEmpty() || "visible".equals(visibility));
+        }
+        NodeList labels = layout.getElementsByTagName("TextView");
+        for (int i = 0; i < labels.getLength(); i++) {
+            Element label = (Element) labels.item(i);
+            assertFalse("@string/related_videos".equals(label.getAttributeNS(ANDROID, "text")));
+        }
+    }
+
     private static boolean isInside(Node node, Element parent) {
         for (; node != null; node = node.getParentNode()) {
             if (node == parent) {

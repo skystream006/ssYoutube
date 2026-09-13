@@ -1824,7 +1824,6 @@ public class MainActivity extends AppCompatActivity {
             advancedToggle.setContentDescription(getString(expanded ? R.string.collapse_advanced
                     : R.string.expand_advanced));
         });
-        View relatedVideosLabel = content.findViewById(R.id.related_videos_label);
         Switch relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
         Switch loggingToggle = content.findViewById(R.id.logging_toggle);
         Switch statsForNerdsToggle = content.findViewById(R.id.stats_for_nerds_toggle);
@@ -1838,9 +1837,6 @@ public class MainActivity extends AppCompatActivity {
             themeSpinner.setSelection(0);
         }
         siteModeSpinner.setSelection(desktopMode ? 1 : 0);
-        boolean relatedVideosAvailable = desktopMode && Preferences.isVideoPage(webView.getUrl());
-        relatedVideosLabel.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
-        relatedVideosToggle.setVisibility(relatedVideosAvailable ? View.VISIBLE : View.GONE);
         relatedVideosToggle.setChecked(relatedHidden);
         loggingToggle.setChecked(loggingEnabled);
         statsForNerdsToggle.setChecked(statsForNerdsEnabled);
