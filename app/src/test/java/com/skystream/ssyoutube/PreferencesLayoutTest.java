@@ -35,9 +35,27 @@ public class PreferencesLayoutTest {
     }
 
     @Test
-    public void updateButtonIsBesideVersion() throws Exception {
+    public void headerKeepsTitleLeftAndCompactUpdateControlsRight() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
-        assertHorizontalRow(byId(layout, "check_updates_button"), byId(layout, "app_version"));
+        Element title = byId(layout, "preferences_title");
+        Element button = byId(layout, "check_updates_button");
+        Element version = byId(layout, "app_version");
+        assertHorizontalRow(title, button);
+        assertHorizontalRow(button, version);
+        Element header = (Element) title.getParentNode();
+        assertEquals(layout.getDocumentElement(), header.getParentNode());
+        assertEquals("match_parent", header.getAttributeNS(ANDROID, "layout_width"));
+        assertEquals("@string/preferences", title.getAttributeNS(ANDROID, "text"));
+        assertEquals("start", title.getAttributeNS(ANDROID, "gravity"));
+        assertEquals("0dp", title.getAttributeNS(ANDROID, "layout_width"));
+        assertEquals("1", title.getAttributeNS(ANDROID, "layout_weight"));
+        assertEquals("wrap_content", button.getAttributeNS(ANDROID, "layout_width"));
+        assertFalse(button.hasAttributeNS(ANDROID, "layout_weight"));
+        assertEquals("0dp", button.getAttributeNS(ANDROID, "minWidth"));
+        assertEquals("48dp", button.getAttributeNS(ANDROID, "minHeight"));
+        assertEquals("false", button.getAttributeNS(ANDROID, "textAllCaps"));
+        assertEquals("wrap_content", version.getAttributeNS(ANDROID, "layout_width"));
+        assertFalse(version.hasAttributeNS(ANDROID, "layout_weight"));
     }
 
     @Test
