@@ -73,6 +73,19 @@ public class MainActivityAdScriptTest {
     }
 
     @Test
+    public void forcesStatsForNerdsRowsIntoAVerticalGrid() {
+        String script = MainActivity.STATS_FOR_NERDS_LAYOUT_SCRIPT;
+        assertTrue(script.contains("ssyoutube-stats-layout"));
+        assertTrue(script.contains(".html5-video-info-panel-content"));
+        assertTrue(script.contains("display:grid!important"));
+        assertTrue(script.contains("grid-template-columns:max-content minmax(0,1fr)!important"));
+        assertTrue(script.contains(".html5-video-info-panel-content>div"));
+        assertTrue(script.contains("white-space:normal!important"));
+        assertTrue(script.contains("setInterval"));
+        assertTrue(script.contains("DOMContentLoaded"));
+    }
+
+    @Test
     public void removesAdSlotRenderersAfterLoadAndScroll() {
         String script = MainActivity.AD_SLOT_CLEANUP_SCRIPT;
         assertTrue(script.contains("AdSlotCleanupInstalled"));

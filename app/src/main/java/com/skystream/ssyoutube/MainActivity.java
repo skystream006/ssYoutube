@@ -151,6 +151,36 @@ public class MainActivity extends AppCompatActivity {
                     + "})()";
 
     /**
+     * Keeps YouTube's "Stats for nerds" panel in a readable vertical grid when site updates
+     * temporarily render all entries in a single horizontal row.
+     */
+    static final String STATS_FOR_NERDS_LAYOUT_SCRIPT =
+            "(function(){"
+                    + "var id='ssyoutube-stats-layout';"
+                    + "var css='.html5-video-info-panel-content{display:grid!important;"
+                    + "grid-template-columns:max-content minmax(0,1fr)!important;"
+                    + "column-gap:8px!important;row-gap:2px!important;align-items:start!important;}"
+                    + ".html5-video-info-panel-content>div{display:block!important;"
+                    + "min-width:0!important;white-space:normal!important;}';"
+                    + "function apply(){"
+                    + "if(document.getElementById(id)){return true;}"
+                    + "var parent=document.head||document.documentElement;"
+                    + "if(!parent){return false;}"
+                    + "var s=document.createElement('style');"
+                    + "s.id=id;"
+                    + "s.textContent=css;"
+                    + "parent.appendChild(s);"
+                    + "return true;"
+                    + "}"
+                    + "if(!apply()){"
+                    + "var timer=setInterval(function(){if(apply()){clearInterval(timer);}},50);"
+                    + "document.addEventListener('DOMContentLoaded',function(){"
+                    + "if(apply()){clearInterval(timer);}"
+                    + "});"
+                    + "}"
+                    + "})()";
+
+    /**
      * Removes ad-slot renderers after initial load and when additional feed content is appended.
      */
     static final String AD_SLOT_CLEANUP_SCRIPT =
@@ -2180,6 +2210,7 @@ public class MainActivity extends AppCompatActivity {
             applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
             view.evaluateJavascript(AD_HIDING_SCRIPT, null);
+            view.evaluateJavascript(STATS_FOR_NERDS_LAYOUT_SCRIPT, null);
             view.evaluateJavascript(AD_SLOT_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(BUY_NOW_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
@@ -2201,6 +2232,7 @@ public class MainActivity extends AppCompatActivity {
             applyRelatedVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
             view.evaluateJavascript(AD_HIDING_SCRIPT, null);
+            view.evaluateJavascript(STATS_FOR_NERDS_LAYOUT_SCRIPT, null);
             view.evaluateJavascript(AD_SLOT_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(BUY_NOW_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
