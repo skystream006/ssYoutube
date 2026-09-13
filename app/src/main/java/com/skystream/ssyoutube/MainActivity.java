@@ -12,9 +12,7 @@ import android.os.Bundle;
 import android.os.Debug;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.StatFs;
 import android.os.TrafficStats;
-import android.os.Environment;
 import android.text.format.Formatter;
 import android.util.Log;
 import android.view.Gravity;
@@ -48,6 +46,7 @@ import androidx.webkit.WebViewFeature;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,7 +73,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
     private static final String KEY_LOGGING_ENABLED = "logging_enabled";
     private static final String KEY_STATS_FOR_NERDS_ENABLED = "stats_for_nerds_enabled";
-    private static final long STATS_UPDATE_INTERVAL_MS = 1000L;
+    private static final long STATS_UPDATE_INTERVAL_MS = 5000L;
 
     /**
      * Hides or restores the desktop watch page's related-videos sidebar. The sidebar is
@@ -1198,7 +1197,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             updateStatsOverlay();
-            if (statsForNerdsEnabled) {
+            if (statsForNerdsEnabled && statsUpdatesActive) {
                 statsHandler.postDelayed(this, STATS_UPDATE_INTERVAL_MS);
             }
         }
@@ -1724,16 +1723,12 @@ public class MainActivity extends AppCompatActivity {
                 Debug.getMemoryInfo(memoryInfo);
                 long receivedBytes = TrafficStats.getUidRxBytes(android.os.Process.myUid());
                 long transmittedBytes = TrafficStats.getUidTxBytes(android.os.Process.myUid());
-                StatFs dataStorage = new StatFs(Environment.getDataDirectory().getPath());
-                long totalStorage = dataStorage.getBlockCountLong() * dataStorage.getBlockSizeLong();
-                long usedStorage = totalStorage
-                        - (dataStorage.getAvailableBlocksLong() * dataStorage.getBlockSizeLong());
+                long usedStorage = directorySize(new File(getApplicationInfo().dataDir));
                 final String statsText = getString(R.string.stats_overlay_format,
                         Formatter.formatFileSize(MainActivity.this, memoryInfo.getTotalPss() * 1024L),
                         formatNetworkBytes(receivedBytes),
                         formatNetworkBytes(transmittedBytes),
-                        Formatter.formatFileSize(MainActivity.this, usedStorage),
-                        Formatter.formatFileSize(MainActivity.this, totalStorage));
+                        Formatter.formatFileSize(MainActivity.this, usedStorage));
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -1750,6 +1745,18 @@ public class MainActivity extends AppCompatActivity {
         return bytes == TrafficStats.UNSUPPORTED
                 ? getString(R.string.stats_unavailable)
                 : Formatter.formatFileSize(this, bytes);
+    }
+
+    private long directorySize(File directory) {
+        long size = 0L;
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return size;
+        }
+        for (File file : files) {
+            size += file.isDirectory() ? directorySize(file) : file.length();
+        }
+        return size;
     }
 
     /** Applies the current related-sidebar choice to {@code view}. */
