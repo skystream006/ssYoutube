@@ -114,6 +114,19 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/enable_logging" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/stats_for_nerds"
+                android:textStyle="bold" />
+
+            <Switch
+                android:id="@+id/stats_for_nerds_toggle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/show_stats_overlay" />
         </LinearLayout>
     </ScrollView>
 
