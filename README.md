@@ -24,8 +24,9 @@ keeps you signed in, and blocks advertising/tracking requests.
   (mobile or desktop, `Preferences`), mirroring a browser's "desktop site" toggle.
   **Hide related videos** and **Hide header** are independent button toggles on the same
   row, always available regardless of site mode or page. **Hide header** hides the desktop
-  masthead or mobile header bar. Both choices are saved and reapplied after navigation
-  or reloads; toggle them off to restore the hidden elements.
+  masthead or mobile header bar and collapses its reserved vertical space. Both choices
+  are saved and reapplied after navigation or reloads; toggle them off to restore the
+  hidden elements and their spacing.
   Back and forward behave like a browser's buttons: repeated history entries for the same
   page (created by the YouTube single page app) are skipped so every press changes page
   (`NavigationHistory`).
