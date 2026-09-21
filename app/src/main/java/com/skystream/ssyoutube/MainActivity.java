@@ -40,6 +40,7 @@ import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ToggleButton;
 import android.view.ViewGroup;
 
 import androidx.appcompat.app.AlertDialog;
@@ -73,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_THEME = "theme";
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
+    private static final String KEY_HEADER_HIDDEN = "header_hidden";
     private static final String KEY_LOGGING_ENABLED = "logging_enabled";
     private static final String KEY_STATS_FOR_NERDS_ENABLED = "stats_for_nerds_enabled";
 
@@ -95,6 +97,30 @@ public class MainActivity extends AppCompatActivity {
                 + "apply();"
                 + "if(!window.__ssyoutubeRelatedWatcher){"
                 + "window.__ssyoutubeRelatedWatcher=setInterval(apply,1000);"
+                + "}"
+                + "})()";
+    }
+
+    /** Uses a removable stylesheet so restoring the header preserves the site's own styles. */
+    static String headerVisibilityScript(boolean hidden, boolean desktopMode) {
+        String selector = desktopMode ? "#masthead-container" : "#header-bar";
+        return "(function(){"
+                + "window.__ssyoutubeHeaderHidden=" + (hidden ? "true" : "false") + ";"
+                + "window.__ssyoutubeHeaderSelector='" + selector + "';"
+                + "function apply(){"
+                + "var style=document.getElementById('ssyoutube-header-visibility');"
+                + "if(!window.__ssyoutubeHeaderHidden){"
+                + "if(style){style.remove();}return;}"
+                + "var parent=document.head||document.documentElement;"
+                + "if(!parent){return;}"
+                + "if(!style){style=document.createElement('style');"
+                + "style.id='ssyoutube-header-visibility';parent.appendChild(style);}"
+                + "var css=window.__ssyoutubeHeaderSelector+'{display:none!important;}';"
+                + "if(style.textContent!==css){style.textContent=css;}"
+                + "}"
+                + "apply();"
+                + "if(!window.__ssyoutubeHeaderWatcher){"
+                + "window.__ssyoutubeHeaderWatcher=setInterval(apply,1000);"
                 + "}"
                 + "})()";
     }
@@ -1215,6 +1241,7 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences prefs;
     private boolean desktopMode;
     private boolean relatedHidden;
+    private boolean headerHidden;
     private volatile boolean loggingEnabled;
     private volatile boolean statsForNerdsEnabled;
     private StatsMonitor statsMonitor;
@@ -1231,6 +1258,7 @@ public class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
+        headerHidden = prefs.getBoolean(KEY_HEADER_HIDDEN, false);
         loggingEnabled = prefs.getBoolean(KEY_LOGGING_ENABLED, false);
         logger = Logger.get(this);
         logger.setEnabled(loggingEnabled);
@@ -1756,6 +1784,13 @@ public class MainActivity extends AppCompatActivity {
         view.evaluateJavascript(relatedVisibilityScript(relatedHidden), null);
     }
 
+    private void applyHeaderVisibility(WebView view) {
+        if (view == null) {
+            return;
+        }
+        view.evaluateJavascript(headerVisibilityScript(headerHidden, desktopMode), null);
+    }
+
     private void openPreferencePanel(AlertDialog dialog) {
         logActivity("openPreferencePanel");
         settingsButton.setImageResource(R.drawable.ic_close);
@@ -1824,7 +1859,8 @@ public class MainActivity extends AppCompatActivity {
             advancedToggle.setContentDescription(getString(expanded ? R.string.collapse_advanced
                     : R.string.expand_advanced));
         });
-        Switch relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
+        ToggleButton relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
+        ToggleButton headerToggle = content.findViewById(R.id.header_toggle);
         Switch loggingToggle = content.findViewById(R.id.logging_toggle);
         Switch statsForNerdsToggle = content.findViewById(R.id.stats_for_nerds_toggle);
 
@@ -1838,6 +1874,7 @@ public class MainActivity extends AppCompatActivity {
         }
         siteModeSpinner.setSelection(desktopMode ? 1 : 0);
         relatedVideosToggle.setChecked(relatedHidden);
+        headerToggle.setChecked(headerHidden);
         loggingToggle.setChecked(loggingEnabled);
         statsForNerdsToggle.setChecked(statsForNerdsEnabled);
 
@@ -1902,6 +1939,19 @@ public class MainActivity extends AppCompatActivity {
                 relatedHidden = isChecked;
                 prefs.edit().putBoolean(KEY_RELATED_HIDDEN, relatedHidden).apply();
                 applyRelatedVisibility(webView);
+            }
+        });
+
+        headerToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked == headerHidden) {
+                    return;
+                }
+                headerHidden = isChecked;
+                prefs.edit().putBoolean(KEY_HEADER_HIDDEN, headerHidden).apply();
+                applyHeaderVisibility(webView);
+                applyHeaderVisibility(miniplayerWebView);
             }
         });
 
@@ -2264,6 +2314,7 @@ public class MainActivity extends AppCompatActivity {
             logoInjectionHandler.removeCallbacksAndMessages(null);
             updateSettingsButton(url);
             applyRelatedVisibility(view);
+            applyHeaderVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
             view.evaluateJavascript(AD_HIDING_SCRIPT, null);
             view.evaluateJavascript(STATS_FOR_NERDS_LAYOUT_SCRIPT, null);
@@ -2286,6 +2337,7 @@ public class MainActivity extends AppCompatActivity {
             logActivityUrl("onPageFinished ", url);
             updateSettingsButton(url);
             applyRelatedVisibility(view);
+            applyHeaderVisibility(view);
             view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
             view.evaluateJavascript(AD_HIDING_SCRIPT, null);
             view.evaluateJavascript(STATS_FOR_NERDS_LAYOUT_SCRIPT, null);

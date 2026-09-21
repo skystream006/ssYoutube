@@ -22,7 +22,10 @@ keeps you signed in, and blocks advertising/tracking requests.
   with the bottom navigation bar). It opens a preferences dialog with icon buttons for
   back/forward/reload/home navigation, plus the theme (system/light/dark) and the site mode
   (mobile or desktop, `Preferences`), mirroring a browser's "desktop site" toggle.
-  **Hide related videos** is always available in the panel, regardless of site mode or page.
+  **Hide related videos** and **Hide header** are independent button toggles on the same
+  row, always available regardless of site mode or page. **Hide header** hides the desktop
+  masthead or mobile header bar. Both choices are saved and reapplied after navigation
+  or reloads; toggle them off to restore the hidden elements.
   Back and forward behave like a browser's buttons: repeated history entries for the same
   page (created by the YouTube single page app) are skipped so every press changes page
   (`NavigationHistory`).
