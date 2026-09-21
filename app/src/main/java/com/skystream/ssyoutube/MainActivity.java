@@ -104,9 +104,15 @@ public class MainActivity extends AppCompatActivity {
     /** Uses a removable stylesheet so restoring the header preserves the site's own styles. */
     static String headerVisibilityScript(boolean hidden, boolean desktopMode) {
         String selector = desktopMode ? "#masthead-container" : "#header-bar";
+        String layoutCss = desktopMode
+                ? "ytd-app{--ytd-masthead-height:0px!important;}"
+                        + "ytd-page-manager{margin-top:0!important;}"
+                        + "ytd-watch-flexy{--ytd-watch-flexy-masthead-height:0px!important;}"
+                : "ytm-app{padding-top:0!important;}";
         return "(function(){"
                 + "window.__ssyoutubeHeaderHidden=" + (hidden ? "true" : "false") + ";"
                 + "window.__ssyoutubeHeaderSelector='" + selector + "';"
+                + "window.__ssyoutubeHeaderLayoutCss='" + layoutCss + "';"
                 + "function apply(){"
                 + "var style=document.getElementById('ssyoutube-header-visibility');"
                 + "if(!window.__ssyoutubeHeaderHidden){"
@@ -115,7 +121,8 @@ public class MainActivity extends AppCompatActivity {
                 + "if(!parent){return;}"
                 + "if(!style){style=document.createElement('style');"
                 + "style.id='ssyoutube-header-visibility';parent.appendChild(style);}"
-                + "var css=window.__ssyoutubeHeaderSelector+'{display:none!important;}';"
+                + "var css=window.__ssyoutubeHeaderSelector+'{display:none!important;}'"
+                + "+window.__ssyoutubeHeaderLayoutCss;"
                 + "if(style.textContent!==css){style.textContent=css;}"
                 + "}"
                 + "apply();"

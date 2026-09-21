@@ -388,6 +388,22 @@ public class MainActivityAdScriptTest {
     }
 
     @Test
+    public void hiddenHeaderCollapsesOnlyTheSelectedSiteModesSpacing() {
+        String desktop = MainActivity.headerVisibilityScript(true, true);
+        assertTrue(desktop.contains("ytd-app{--ytd-masthead-height:0px!important;}"));
+        assertTrue(desktop.contains("ytd-page-manager{margin-top:0!important;}"));
+        assertTrue(desktop.contains(
+                "ytd-watch-flexy{--ytd-watch-flexy-masthead-height:0px!important;}"));
+        assertFalse(desktop.contains("ytm-app{"));
+
+        String mobile = MainActivity.headerVisibilityScript(true, false);
+        assertTrue(mobile.contains("ytm-app{padding-top:0!important;}"));
+        assertFalse(mobile.contains("ytd-app{"));
+        assertFalse(mobile.contains("ytd-page-manager{"));
+        assertFalse(mobile.contains("ytd-watch-flexy{"));
+    }
+
+    @Test
     public void headerVisibilityRestoresStylesAndHandlesLateRendering() {
         for (boolean desktop : new boolean[] {false, true}) {
             String script = MainActivity.headerVisibilityScript(false, desktop);
@@ -398,6 +414,8 @@ public class MainActivityAdScriptTest {
             assertTrue(script.contains("if(!parent){return;}"));
             assertTrue(script.contains("document.createElement('style')"));
             assertTrue(script.contains("{display:none!important;}"));
+            assertTrue(script.contains("window.__ssyoutubeHeaderLayoutCss="));
+            assertTrue(script.contains("+window.__ssyoutubeHeaderLayoutCss;"));
             assertTrue(script.contains("if(!window.__ssyoutubeHeaderWatcher)"));
             assertTrue(script.contains("setInterval(apply,1000)"));
             assertFalse(script.contains(".style.display="));
