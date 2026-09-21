@@ -373,4 +373,34 @@ public class MainActivityAdScriptTest {
         String show = MainActivity.relatedVisibilityScript(false);
         assertTrue(show.contains("window.__ssyoutubeRelatedHidden=false"));
     }
+
+    @Test
+    public void headerVisibilityTargetsTheSelectedSiteMode() {
+        String desktop = MainActivity.headerVisibilityScript(true, true);
+        assertTrue(desktop.contains("window.__ssyoutubeHeaderHidden=true"));
+        assertTrue(desktop.contains("window.__ssyoutubeHeaderSelector='#masthead-container'"));
+        assertFalse(desktop.contains("#header-bar"));
+
+        String mobile = MainActivity.headerVisibilityScript(true, false);
+        assertTrue(mobile.contains("window.__ssyoutubeHeaderSelector='#header-bar'"));
+        assertFalse(mobile.contains("#masthead-container"));
+        assertFalse(mobile.contains("__ssyoutubeRelatedHidden"));
+    }
+
+    @Test
+    public void headerVisibilityRestoresStylesAndHandlesLateRendering() {
+        for (boolean desktop : new boolean[] {false, true}) {
+            String script = MainActivity.headerVisibilityScript(false, desktop);
+            assertTrue(script.contains("window.__ssyoutubeHeaderHidden=false"));
+            assertTrue(script.contains("getElementById('ssyoutube-header-visibility')"));
+            assertTrue(script.contains("if(style){style.remove();}return;"));
+            assertTrue(script.contains("document.head||document.documentElement"));
+            assertTrue(script.contains("if(!parent){return;}"));
+            assertTrue(script.contains("document.createElement('style')"));
+            assertTrue(script.contains("{display:none!important;}"));
+            assertTrue(script.contains("if(!window.__ssyoutubeHeaderWatcher)"));
+            assertTrue(script.contains("setInterval(apply,1000)"));
+            assertFalse(script.contains(".style.display="));
+        }
+    }
 }

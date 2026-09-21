@@ -48,6 +48,7 @@
     <string name="home">Home</string>
     <string name="close_miniplayer">Close miniplayer</string>
     <string name="hide_related">Hide related videos</string>
+    <string name="hide_header">Hide header</string>
     <string name="debugging">Debugging</string>
     <string name="enable_logging">Enable debug logging</string>
     <string name="logging_summary">Save diagnostics privately, with stack traces for errors. Logging is off by default. Review logs before sharing.</string>

@@ -86,7 +86,7 @@ public class PreferencesLayoutTest {
             assertTrue(id + " must be inside Advanced", isInside(byId(layout, id), advanced));
         }
         for (String id : new String[] {"theme_spinner", "site_mode_spinner",
-                "related_videos_toggle", "check_updates_button", "navigation_bar"}) {
+                "related_videos_toggle", "header_toggle", "check_updates_button", "navigation_bar"}) {
             assertFalse(id + " must stay outside Advanced", isInside(byId(layout, id), advanced));
         }
     }
@@ -95,8 +95,9 @@ public class PreferencesLayoutTest {
     public void hideRelatedVideosIsVisibleWithoutHeading() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         Element toggle = byId(layout, "related_videos_toggle");
-        assertEquals("Switch", toggle.getTagName());
-        assertEquals("@string/hide_related", toggle.getAttributeNS(ANDROID, "text"));
+        assertEquals("ToggleButton", toggle.getTagName());
+        assertEquals("@string/hide_related", toggle.getAttributeNS(ANDROID, "textOn"));
+        assertEquals("@string/hide_related", toggle.getAttributeNS(ANDROID, "textOff"));
         for (Node node = toggle; node instanceof Element; node = node.getParentNode()) {
             String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
             assertTrue(visibility.isEmpty() || "visible".equals(visibility));
@@ -105,6 +106,27 @@ public class PreferencesLayoutTest {
         for (int i = 0; i < labels.getLength(); i++) {
             Element label = (Element) labels.item(i);
             assertFalse("@string/related_videos".equals(label.getAttributeNS(ANDROID, "text")));
+        }
+    }
+
+    @Test
+    public void visibilityButtonsShareAnAlwaysVisibleRow() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        Element related = byId(layout, "related_videos_toggle");
+        Element header = byId(layout, "header_toggle");
+        assertHorizontalRow(related, header);
+        assertEquals("ToggleButton", header.getTagName());
+        assertEquals("@string/hide_header", header.getAttributeNS(ANDROID, "textOn"));
+        assertEquals("@string/hide_header", header.getAttributeNS(ANDROID, "textOff"));
+        for (Element button : new Element[] {related, header}) {
+            assertEquals("0dp", button.getAttributeNS(ANDROID, "layout_width"));
+            assertEquals("1", button.getAttributeNS(ANDROID, "layout_weight"));
+            assertEquals("48dp", button.getAttributeNS(ANDROID, "minHeight"));
+            assertEquals("false", button.getAttributeNS(ANDROID, "textAllCaps"));
+            for (Node node = button; node instanceof Element; node = node.getParentNode()) {
+                String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
+                assertTrue(visibility.isEmpty() || "visible".equals(visibility));
+            }
         }
     }
 
