@@ -20,6 +20,7 @@ import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.Timeline;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -52,6 +53,7 @@ final class NativePlayerView extends FrameLayout {
     private static final String STATE_HAS_POSITION = "native.hasPosition";
     private final Handler main = new Handler(Looper.getMainLooper());
     private final NativePlaybackState state = new NativePlaybackState();
+    private final Timeline.Window currentWindow = new Timeline.Window();
     private final ThreadPoolExecutor extractor = new ThreadPoolExecutor(1, 1, 30,
             TimeUnit.SECONDS, new ArrayBlockingQueue<>(1), runnable -> {
                 Thread thread = new Thread(runnable, "ssyoutube-extractor");
@@ -422,9 +424,12 @@ final class NativePlayerView extends FrameLayout {
     }
 
     private void capturePosition() {
-        if (!released && state.prepared && !player.getCurrentTimeline().isEmpty()) {
-            state.positionMs = Math.max(0, player.getCurrentPosition());
-            state.hasPosition = true;
+        if (!released && state.prepared) {
+            Timeline timeline = player.getCurrentTimeline();
+            int index = player.getCurrentMediaItemIndex();
+            boolean resolved = index >= 0 && index < timeline.getWindowCount()
+                    && !timeline.getWindow(index, currentWindow).isPlaceholder;
+            state.capturePosition(player.getCurrentPosition(), resolved);
         }
     }
 

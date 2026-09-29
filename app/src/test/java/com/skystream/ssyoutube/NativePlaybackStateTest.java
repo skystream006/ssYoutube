@@ -118,4 +118,42 @@ public class NativePlaybackStateTest {
         state.restore(FIRST, 0, 0, true, false);
         assertTrue(state.useLiveDefaultPosition(true));
     }
+
+    @Test
+    public void failedInitialLiveManifestDoesNotPinRetryToPlaceholderZero() {
+        NativePlaybackState state = new NativePlaybackState();
+        state.select(FIRST, 0);
+        state.prepared = true;
+        state.capturePosition(0, false);
+        state.failed = true;
+        state.prepared = false;
+        state.failed = false;
+        assertFalse(state.hasPosition);
+        assertTrue(state.useLiveDefaultPosition(true));
+        state.restore(FIRST, state.positionMs, state.explicitStartMs, true, state.hasPosition);
+        assertTrue(state.useLiveDefaultPosition(true));
+    }
+
+    @Test
+    public void placeholderCapturePreservesExplicitAndRestoredLivePositions() {
+        NativePlaybackState state = new NativePlaybackState();
+        state.select(FIRST, 45_000);
+        state.capturePosition(0, false);
+        assertEquals(45_000, state.positionMs);
+        assertFalse(state.useLiveDefaultPosition(true));
+        state.restore(FIRST, 0, 0, false, true);
+        state.capturePosition(0, false);
+        assertFalse(state.useLiveDefaultPosition(true));
+    }
+
+    @Test
+    public void resolvedTimelineMakesCapturedPositionKnownIncludingZero() {
+        NativePlaybackState state = new NativePlaybackState();
+        state.select(FIRST, 0);
+        state.capturePosition(0, true);
+        assertFalse(state.useLiveDefaultPosition(true));
+        state.capturePosition(123_000, true);
+        assertEquals(123_000, state.positionMs);
+        assertTrue(state.hasPosition);
+    }
 }

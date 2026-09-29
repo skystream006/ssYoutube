@@ -49,6 +49,13 @@ final class NativePlaybackState {
         return live && !hasPosition;
     }
 
+    void capturePosition(long position, boolean resolvedTimeline) {
+        if (videoId != null && resolvedTimeline) {
+            positionMs = Math.max(0, position);
+            hasPosition = true;
+        }
+    }
+
     void restore(String id, long position, long explicitStart, boolean resumePlayback,
                  boolean positionKnown) {
         if (!isVideoId(id)) {
