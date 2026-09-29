@@ -17,8 +17,8 @@ final class UpdateChecks {
     }
 
     static String normalizeVersion(String version) {
-        if (version == null || !version.matches("v?[0-9]+\\.[0-9]+\\.[0-9]+")) {
-            throw new IllegalArgumentException("Expected a numeric three-part release version");
+        if (version == null || !version.matches("v?[0-9]+\\.[0-9]+(\\.[0-9]+)?")) {
+            throw new IllegalArgumentException("Expected a numeric two- or three-part release version");
         }
         return version.startsWith("v") ? version.substring(1) : version;
     }
@@ -26,9 +26,9 @@ final class UpdateChecks {
     static int compareVersions(String left, String right) {
         String[] a = normalizeVersion(left).split("\\.");
         String[] b = normalizeVersion(right).split("\\.");
-        for (int i = 0; i < a.length; i++) {
-            String x = a[i].replaceFirst("^0+(?!$)", "");
-            String y = b[i].replaceFirst("^0+(?!$)", "");
+        for (int i = 0; i < Math.max(a.length, b.length); i++) {
+            String x = (i < a.length ? a[i] : "0").replaceFirst("^0+(?!$)", "");
+            String y = (i < b.length ? b[i] : "0").replaceFirst("^0+(?!$)", "");
             int result = Integer.compare(x.length(), y.length());
             if (result == 0) {
                 result = x.compareTo(y);

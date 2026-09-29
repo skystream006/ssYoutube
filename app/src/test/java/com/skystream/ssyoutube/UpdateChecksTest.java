@@ -21,6 +21,9 @@ public class UpdateChecksTest {
     @Test
     public void comparesNumericVersionsWithoutOverflowOrPaddingBias() {
         assertEquals("0.10.04", UpdateChecks.normalizeVersion("v0.10.04"));
+        assertEquals("1.0", UpdateChecks.normalizeVersion("v1.0"));
+        assertEquals(0, GitHubUpdateClient.compareVersions("1.0", "1.0.0"));
+        assertTrue(GitHubUpdateClient.compareVersions("1.0", "0.999.999") > 0);
         assertEquals(0, GitHubUpdateClient.compareVersions("v000.010.004", "0.10.4"));
         assertTrue(GitHubUpdateClient.compareVersions("0.10.04", "0.9.99") > 0);
         assertTrue(GitHubUpdateClient.compareVersions("0.10.10", "0.10.9") > 0);
@@ -44,6 +47,7 @@ public class UpdateChecksTest {
 
     @Test
     public void rejectsUnpublishedAndMalformedReleaseMetadata() {
+        assertEquals("1.0", UpdateChecks.releaseVersion("v1.0", false, false));
         assertThrows(IOException.class, () -> UpdateChecks.releaseVersion("1.2.3", true, false));
         assertThrows(IOException.class, () -> UpdateChecks.releaseVersion("1.2.3", false, true));
         assertThrows(IOException.class, () -> UpdateChecks.releaseVersion(null, false, false));

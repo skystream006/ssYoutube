@@ -14,8 +14,8 @@ android {
         applicationId "com.skystream.ssyoutube"
         minSdk 21
         targetSdk 34
-        versionCode 82
-        versionName "0.10.15"
+        versionCode (project.findProperty('manualReleaseVersionCode') ?: '82').toInteger()
+        versionName project.findProperty('manualReleaseVersionName') ?: "0.10.15"
     }
 
     signingConfigs {
