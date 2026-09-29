@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_player_title">Native player</string>
+    <string name="native_player_close">Close player</string>
+    <string name="native_player_minimize">Minimize player</string>
+    <string name="native_player_fullscreen">Enter fullscreen</string>
+    <string name="native_player_exit_fullscreen">Exit fullscreen</string>
+    <string name="native_player_expand">Expand player</string>
+    <string name="native_player_loading">Finding video streams…</string>
+    <string name="native_player_buffering">Buffering…</string>
+    <string name="native_player_error">This video cannot be played. It may be unavailable, restricted, or temporarily unsupported. Check your connection and try again.</string>
+    <string name="native_player_retry">Retry</string>
+</resources>

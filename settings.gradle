@@ -10,6 +10,15 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url = uri("https://jitpack.io")
+            content {
+                includeModule("com.github.teamnewpipe", "NewPipeExtractor")
+                includeGroup("com.github.teamnewpipe.NewPipeExtractor")
+                includeGroup("com.github.TeamNewPipe.NewPipeExtractor")
+                includeModule("com.github.TeamNewPipe", "nanojson")
+            }
+        }
     }
 }
 

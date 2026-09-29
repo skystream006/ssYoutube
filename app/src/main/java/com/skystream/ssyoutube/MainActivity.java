@@ -32,7 +32,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
-import android.widget.ImageView;
 import android.widget.CompoundButton;
 import android.widget.AdapterView;
 import android.widget.Spinner;
@@ -48,26 +47,25 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.FileProvider;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.lang.ref.WeakReference;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * Hosts a single WebView that shows the YouTube mobile site, keeps the sign-in session
- * across app restarts and drops advertising requests.
+ * Keeps browsing and sign-in in a single WebView while native playback owns all media.
  */
+@androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 public class MainActivity extends AppCompatActivity {
 
     private static final String PREFS_NAME = "ssyoutube_prefs";
@@ -133,344 +131,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Hides ad containers that are rendered inline by the page itself.
-     *
-     * <p>The script is also injected at document start (see {@link #installAdBlockingScripts}),
-     * i.e. before {@code <head>} exists, so it retries until there is an element it can attach
-     * the stylesheet to instead of silently doing nothing.
-     */
-    static final String AD_HIDING_SCRIPT =
-            "(function(){"
-                    + "var id='ssyoutube-adblock';"
-                    + "var css='ytm-promoted-video-renderer,"
-                    + "ytm-promoted-sparkles-web-renderer,"
-                    + "ytm-companion-slot,"
-                    + "ytm-player-ad-slot,"
-                    + "ytm-compact-promoted-video-renderer,"
-                    + "ytm-carousel-ad-renderer,"
-                    + "ytm-search-ad-renderer,"
-                    + "ytm-banner-promo-renderer,"
-                    + "ytm-statement-banner-renderer,"
-                    + "ytm-ad-slot-renderer,"
-                    + "ytm-promoted-sparkles-text-search-renderer,"
-                    + "ytm-product-card-renderer,"
-                    + "ytm-shopping-offer-renderer,"
-                    + "ytm-merch-shelf-renderer,"
-                    + "ytd-product-card-renderer,"
-                    + "ytd-shopping-offer-renderer,"
-                    + "ytd-merch-shelf-renderer,"
-                    + ".ytp-shopping-overlay,"
-                    + ".ytp-suggested-action,"
-                    + ".ad-showing .video-ads,"
-                    + ".ytp-ad-module,"
-                    + ".ytp-ad-overlay-container,"
-                    + ".ytp-ad-text,"
-                    + ".ytp-ad-player-overlay{display:none !important;}';"
-                    + "function apply(){"
-                    + "if(document.getElementById(id)){return true;}"
-                    + "var parent=document.head||document.documentElement;"
-                    + "if(!parent){return false;}"
-                    + "var s=document.createElement('style');"
-                    + "s.id=id;"
-                    + "s.textContent=css;"
-                    + "parent.appendChild(s);"
-                    + "return true;"
-                    + "}"
-                    + "if(!apply()){"
-                    + "var timer=setInterval(function(){if(apply()){clearInterval(timer);}},50);"
-                    + "document.addEventListener('DOMContentLoaded',function(){"
-                    + "if(apply()){clearInterval(timer);}"
-                    + "});"
-                    + "}"
-                    + "})()";
-
-    /**
-     * Keeps YouTube's "Stats for nerds" panel in a readable vertical grid when site updates
-     * temporarily render all entries in a single horizontal row.
-     */
-    static final String STATS_FOR_NERDS_LAYOUT_SCRIPT =
-            "(function(){"
-                    + "var id='ssyoutube-stats-layout';"
-                    + "var css='.html5-video-info-panel-content{display:grid!important;"
-                    + "grid-template-columns:max-content minmax(0,1fr)!important;"
-                    + "column-gap:8px!important;row-gap:2px!important;align-items:start!important;}"
-                    + ".html5-video-info-panel-content>div{display:block!important;"
-                    + "min-width:0!important;white-space:normal!important;}';"
-                    + "function apply(){"
-                    + "if(document.getElementById(id)){return true;}"
-                    + "var parent=document.head||document.documentElement;"
-                    + "if(!parent){return false;}"
-                    + "var s=document.createElement('style');"
-                    + "s.id=id;"
-                    + "s.textContent=css;"
-                    + "parent.appendChild(s);"
-                    + "return true;"
-                    + "}"
-                    + "if(!apply()){"
-                    + "var timer=setInterval(function(){if(apply()){clearInterval(timer);}},50);"
-                    + "document.addEventListener('DOMContentLoaded',function(){"
-                    + "if(apply()){clearInterval(timer);}"
-                    + "});"
-                    + "}"
-                    + "})()";
-
-    /**
-     * Removes ad-slot renderers after initial load and when additional feed content is appended.
-     */
-    static final String AD_SLOT_CLEANUP_SCRIPT =
-            "(function(){"
-                    + "if(window.__ssyoutubeAdSlotCleanupInstalled){return;}"
-                    + "window.__ssyoutubeAdSlotCleanupInstalled=true;"
-                    + "function cleanup(){"
-                    + "var mobileAds=document.querySelectorAll('ad-slot-renderer');"
-                    + "for(var i=0;i<mobileAds.length;i++){"
-                    + "var mobileItem=mobileAds[i].closest('ytm-rich-item-renderer');"
-                    + "if(mobileItem){mobileItem.remove();}"
-                    + "}"
-                    + "var desktopAds=document.querySelectorAll('ytd-ad-slot-renderer');"
-                    + "for(var j=0;j<desktopAds.length;j++){"
-                    + "var desktopItem=desktopAds[j].closest('ytd-rich-item-renderer');"
-                    + "if(desktopItem){desktopItem.remove();}"
-                    + "else{desktopAds[j].remove();}"
-                    + "}"
-                    + "}"
-                    + "var pending;"
-                    + "function scheduleCleanup(){"
-                    + "if(pending){clearTimeout(pending);}"
-                    + "pending=setTimeout(cleanup,250);"
-                    + "}"
-                    + "cleanup();"
-                    + "new MutationObserver(scheduleCleanup)"
-                    + ".observe(document.documentElement,{childList:true,subtree:true});"
-                    + "window.addEventListener('scroll',scheduleCleanup,{passive:true});"
-                    + "window.addEventListener('yt-navigate-finish',cleanup,true);"
-                    + "setInterval(cleanup,2000);"
-                    + "})()";
-
-    /**
-     * Removes ad-signaling keys (e.g. {@code playerAds}, {@code adPlacements}) from JSON
-     * data before the page's own scripts can read them. Mirrors uBlock Origin's
-     * {@code json-prune} scriptlet: since YouTube serves ad media from the same CDN as
-     * regular video, the only reliable way to stop in-stream ads is to strip the fields
-     * that tell the player where the ads are, before it schedules them.
-     *
-     * <p>Adblock enforcement is handled separately from ordinary playback failures. Only
-     * responses that still contain media can have their enforcement status cleared; a
-     * server-side denial without media gets one player retry, not a fabricated success.
-     */
-    static final String AD_JSON_PRUNE_SCRIPT =
-            "(function(){"
-                    + "if(location.protocol!=='https:'||"
-                    + "!/(^|\\.)youtube\\.com$/.test(location.hostname)){return;}"
-                    + "if(window.__ssyoutubeJsonPruneInstalled){"
-                    + "window.__ssyoutubeRefreshAdData();return;}"
-                    + "window.__ssyoutubeJsonPruneInstalled=true;"
-                    + "var AD_KEYS=['playerAds','adPlacements','adSlots','adBreakHeartbeatParams',"
-                    + "'playerAdParams','adPlacementConfig','adBreakParams'];"
-                    + "var ENFORCEMENT_KEYS=['adBlockMessageRenderer','adBlockMessageViewModel',"
-                    + "'enforcementMessageViewModel','bkaEnforcementMessageViewModel'];"
-                    + "function isEnforcement(value,depth){"
-                    + "if(!value||depth>8){return false;}"
-                    + "if(typeof value==='string'){"
-                    + "return /\\bad[ -]?block(?:er|ers|ing)?\\b/i.test(value)||"
-                    + "/^https:\\/\\/support\\.google\\.com\\/youtube\\/answer\\/14129599(?:[?#]|$)/"
-                    + ".test(value);}"
-                    + "if(typeof value!=='object'){return false;}"
-                    + "for(var i=0;i<ENFORCEMENT_KEYS.length;i++){"
-                    + "if(value[ENFORCEMENT_KEYS[i]]){return true;}}"
-                    + "if(value.openAdAllowlistInstructionCommand){return true;}"
-                    + "for(var key in value){"
-                    + "if(Object.prototype.hasOwnProperty.call(value,key)&&"
-                    + "isEnforcement(value[key],depth+1)){return true;}}"
-                    + "return false;}"
-                    + "function hasMedia(value){"
-                    + "var data=value&&value.streamingData;"
-                    + "return !!(data&&((data.formats&&data.formats.length)||"
-                    + "(data.adaptiveFormats&&data.adaptiveFormats.length)||"
-                    + "data.hlsManifestUrl||data.dashManifestUrl));}"
-                    + "function blocked(value){"
-                    + "var status=value&&value.playabilityStatus;"
-                    + "return !!(status&&(status.status==='ERROR'||status.status==='UNPLAYABLE')&&"
-                    + "(isEnforcement(status,0)||"
-                    + "isEnforcement(value.auxiliaryUi&&value.auxiliaryUi.messageRenderers,0)));}"
-                    + "function prune(value,depth){"
-                    + "if(!value||typeof value!=='object'||depth>8){return;}"
-                    + "if(Array.isArray(value)){"
-                    + "for(var i=0;i<value.length;i++){prune(value[i],depth+1);}"
-                    + "return;"
-                    + "}"
-                    + "if(hasMedia(value)){"
-                    + "if(blocked(value)){"
-                    + "value.playabilityStatus.status='OK';"
-                    + "delete value.playabilityStatus.reason;"
-                    + "delete value.playabilityStatus.errorScreen;}"
-                    + "var messages=value.auxiliaryUi&&value.auxiliaryUi.messageRenderers;"
-                    + "if(messages){for(var i=0;i<ENFORCEMENT_KEYS.length;i++){"
-                    + "delete messages[ENFORCEMENT_KEYS[i]];}}"
-                    + "}"
-                    + "for(var i=0;i<AD_KEYS.length;i++){"
-                    + "if(AD_KEYS[i] in value){delete value[AD_KEYS[i]];}"
-                    + "}"
-                    + "for(var key in value){"
-                    + "if(Object.prototype.hasOwnProperty.call(value,key)){prune(value[key],depth+1);}"
-                    + "}"
-                    + "}"
-                    + "var originalParse=JSON.parse;"
-                    + "JSON.parse=function(){"
-                    + "var result=originalParse.apply(this,arguments);"
-                    + "prune(result,0);"
-                    + "return result;"
-                    + "};"
-                    + "if(window.Response&&Response.prototype.json){"
-                    + "var originalJson=Response.prototype.json;"
-                    + "Response.prototype.json=function(){"
-                    + "return originalJson.apply(this,arguments).then(function(result){"
-                    + "prune(result,0);"
-                    + "return result;"
-                    + "});"
-                    + "};"
-                    + "}"
-                    + "function hookInitial(name){"
-                    + "var descriptor=Object.getOwnPropertyDescriptor(window,name);"
-                    + "if(descriptor&&(!descriptor.configurable||descriptor.get||descriptor.set||"
-                    + "descriptor.writable===false)){return;}"
-                    + "var value=window[name];"
-                    + "Object.defineProperty(window,name,{configurable:true,"
-                    + "enumerable:descriptor?descriptor.enumerable:true,"
-                    + "get:function(){return value;},"
-                    + "set:function(next){prune(next,0);value=next;}});"
-                    + "}"
-                    + "hookInitial('ytInitialPlayerResponse');"
-                    + "hookInitial('ytInitialData');"
-                    + "var warningSelector='ytd-enforcement-message-view-model,"
-                    + "ytm-enforcement-message-view-model,yt-enforcement-message-view-model,"
-                    + "yt-bka-enforcement-message-view-model,"
-                    + "ytd-ad-block-message-renderer,ytm-ad-block-message-renderer';"
-                    + "var handledWarnings=new WeakSet();"
-                    + "var currentId=videoId(),retried=false,generation=0,pending=false;"
-                    + "var pendingResume=null,allowResume=true,lastInteraction=0;"
-                    + "function cancelResume(){"
-                    + "if(!pendingResume){return;}"
-                    + "pendingResume.video.removeEventListener('loadeddata',pendingResume.run);"
-                    + "pendingResume.video.removeEventListener('canplay',pendingResume.run);"
-                    + "pendingResume=null;"
-                    + "}"
-                    + "function videoId(){"
-                    + "var url=new URL(location.href);"
-                    + "var id=url.pathname==='/watch'?url.searchParams.get('v'):"
-                    + "url.pathname.match(/^\\/(?:shorts|embed)\\/([\\w-]{11})(?:\\/|$)/);"
-                    + "if(Array.isArray(id)){id=id[1];}"
-                    + "return typeof id==='string'&&/^[\\w-]{11}$/.test(id)?id:'';"
-                    + "}"
-                    + "function resume(video,id,token){"
-                    + "if(token!==generation||videoId()!==id||document.hidden||"
-                    + "window.__ssyoutubeBlockResultsPlayback||!allowResume||"
-                    + "!video.isConnected||video.ended){return;}"
-                    + "if(video.readyState===0){"
-                    + "cancelResume();"
-                    + "var ready=function(){cancelResume();resume(video,id,token);};"
-                    + "pendingResume={video:video,run:ready};"
-                    + "video.addEventListener('loadeddata',ready);"
-                    + "video.addEventListener('canplay',ready);"
-                    + "return;}"
-                    + "cancelResume();"
-                    + "if(video.paused){try{var playback=video.play();"
-                    + "if(playback&&playback.catch){playback.catch(function(){});}}catch(e){}}"
-                    + "}"
-                    + "function recover(){"
-                    + "var id=videoId();"
-                    + "if(id!==currentId){currentId=id;retried=false;generation++;"
-                    + "cancelResume();allowResume=true;lastInteraction=0;handledWarnings=new WeakSet();}"
-                    + "if(!id||document.hidden||window.__ssyoutubeBlockResultsPlayback){return;}"
-                    + "var player=document.querySelector('#movie_player,#player .html5-video-player');"
-                    + "var video=player&&player.querySelector('video');"
-                    + "var response;"
-                    + "try{response=player&&player.getPlayerResponse&&player.getPlayerResponse();}"
-                    + "catch(e){return;}"
-                    + "var responseId=response&&response.videoDetails&&response.videoDetails.videoId;"
-                    + "if(responseId&&responseId!==id){return;}"
-                    + "if(blocked(response)){"
-                    + "if(!retried&&allowResume&&typeof player.loadVideoById==='function'){"
-                    + "retried=true;"
-                    + "var start=video&&responseId===id?video.currentTime:0;"
-                    + "if(!start){start=response.playerConfig&&response.playerConfig.playbackStartConfig"
-                    + "&&response.playerConfig.playbackStartConfig.startSeconds;}"
-                    + "start=Number(start);"
-                    + "try{player.loadVideoById(id,isFinite(start)&&start>0?start:0);}catch(e){}"
-                    + "}"
-                    + "return;"
-                    + "}"
-                    + "if(response&&response.playabilityStatus&&"
-                    + "response.playabilityStatus.status!=='OK'){return;}"
-                    + "if(!video||(!hasMedia(response)&&video.readyState===0)){return;}"
-                    + "var warnings=document.querySelectorAll(warningSelector);"
-                    + "for(var i=0;i<warnings.length;i++){"
-                    + "var warning=warnings[i];"
-                    + "if(handledWarnings.has(warning)||!warning.getClientRects().length){continue;}"
-                    + "handledWarnings.add(warning);"
-                    + "var dismiss=warning.querySelector('#dismiss-button button,#dismiss-button');"
-                    + "var dialog=warning.closest('tp-yt-paper-dialog,dialog');"
-                    + "if(dismiss){dismiss.click();}"
-                    + "if(dialog&&typeof dialog.close==='function'){dialog.close();}"
-                    + "warning.remove();"
-                    + "resume(video,id,generation);"
-                    + "}"
-                    + "}"
-                    + "function scheduleRecovery(){"
-                    + "if(pending){return;}pending=true;"
-                    + "setTimeout(function(){pending=false;recover();},100);"
-                    + "}"
-                    + "window.__ssyoutubeRefreshAdData=function(){"
-                    + "prune(window.ytInitialPlayerResponse,0);prune(window.ytInitialData,0);"
-                    + "scheduleRecovery();"
-                    + "};"
-                    + "window.__ssyoutubeRefreshAdData();"
-                    + "new MutationObserver(scheduleRecovery).observe(document,{childList:true,subtree:true});"
-                    + "function userInteraction(event){"
-                    + "if(!event.isTrusted){return;}"
-                    + "var target=event.target;"
-                    + "if(event.type==='keydown'&&target&&(target.isContentEditable||"
-                    + "/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))){return;}"
-                    + "if(event.key==='MediaPause'||event.key==='MediaStop'){"
-                    + "allowResume=false;cancelResume();return;}"
-                    + "if((target&&target.closest&&"
-                    + "target.closest('#movie_player,#player .html5-video-player'))||"
-                    + "(event.type==='keydown'&&(event.key===' '||event.key==='k'||event.key==='K'||"
-                    + "event.key==='MediaPlayPause'))){"
-                    + "var video=document.querySelector('#movie_player video,#player .html5-video-player video');"
-                    + "lastInteraction=video&&!video.paused?Date.now():0;cancelResume();"
-                    + "}"
-                    + "}"
-                    + "document.addEventListener('pointerdown',userInteraction,true);"
-                    + "document.addEventListener('keydown',userInteraction,true);"
-                    + "document.addEventListener('play',function(event){"
-                    + "if(event.target.matches&&event.target.matches("
-                    + "'#movie_player video,#player .html5-video-player video')){"
-                    + "allowResume=true;lastInteraction=0;cancelResume();}},true);"
-                    + "document.addEventListener('pause',function(event){"
-                    + "if(event.target.matches&&event.target.matches("
-                    + "'#movie_player video,#player .html5-video-player video')&&"
-                    + "Date.now()-lastInteraction<1000){allowResume=false;cancelResume();}},true);"
-                    + "var session=window.navigator&&window.navigator.mediaSession;"
-                    + "if(session&&typeof session.setActionHandler==='function'){"
-                    + "var setActionHandler=session.setActionHandler;"
-                    + "session.setActionHandler=function(action,handler){"
-                    + "if((action==='pause'||action==='stop')&&typeof handler==='function'){"
-                    + "var originalHandler=handler;"
-                    + "handler=function(){allowResume=false;cancelResume();"
-                    + "return originalHandler.apply(this,arguments);};"
-                    + "}"
-                    + "return setActionHandler.call(this,action,handler);"
-                    + "};"
-                    + "}"
-                    + "window.addEventListener('yt-navigate-start',function(){"
-                    + "generation++;cancelResume();},true);"
-                    + "window.addEventListener('yt-navigate-finish',scheduleRecovery,true);"
-                    + "document.addEventListener('DOMContentLoaded',scheduleRecovery);"
-                    + "setInterval(scheduleRecovery,1000);"
-                    + "})()";
-
-    /**
      * Elements that make up (or host) the comments section. The cleanup scripts below never
      * remove or decorate anything inside them: on large screens (e.g. unfolded foldables) the
      * mobile site renders comments inside an engagement panel whose sections look just like the
@@ -491,53 +151,6 @@ public class MainActivity extends AppCompatActivity {
                     + "if(el.closest&&el.closest(COMMENTS)){return true;}"
                     + "return !!(el.querySelector&&el.querySelector(COMMENTS));"
                     + "}";
-
-    /**
-     * Removes shopping call-to-action buttons (e.g. "Buy now", "Shop now", "Visit site")
-     * that can be added after page load.
-     */
-    static final String BUY_NOW_CLEANUP_SCRIPT =
-            "(function(){"
-                    + "if(window.__ssyoutubeBuyNowCleanupInstalled){return;}"
-                    + "window.__ssyoutubeBuyNowCleanupInstalled=true;"
-                    + COMMENTS_HELPER_SCRIPT
-                    + "var selector='a,button,[role=\"button\"],[aria-label],[title]';"
-                    + "function textOf(el){return ((el.innerText||el.textContent||'')+' '+"
-                    + "(el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||''))"
-                    + ".replace(/\\s+/g,' ').trim().toLowerCase();}"
-                    + "function asArray(list){return Array.prototype.slice.call(list);}"
-                    + "function removeBuyNow(root){"
-                    + "var nodes=(root&&root.querySelectorAll)?asArray(root.querySelectorAll(selector)):[];"
-                    + "if(root&&root.matches&&root.matches(selector)){nodes.push(root);}"
-                    + "for(var i=0;i<nodes.length;i++){"
-                    + "var el=nodes[i];"
-                    + "if(inComments(el)){continue;}"
-                    + "if(/\\bbuy\\s+(it\\s+)?now\\b|\\bshop\\s+now\\b|\\bvisit\\s+site\\b/"
-                    + ".test(textOf(el))){"
-                    + "var target=el.closest('ytm-product-card-renderer,ytm-shopping-offer-renderer,"
-                    + "ytm-promoted-sparkles-web-renderer,ytm-promoted-video-renderer,"
-                    + "ytd-product-card-renderer,ytd-shopping-offer-renderer')||el;"
-                    + "target.remove();"
-                    + "}"
-                    + "}"
-                    + "}"
-                    + "removeBuyNow(document);"
-                    + "new MutationObserver(function(mutations){"
-                    + "for(var i=0;i<mutations.length;i++){"
-                    + "for(var j=0;j<mutations[i].addedNodes.length;j++){"
-                    + "var node=mutations[i].addedNodes[j];"
-                    + "if(node.nodeType===1){removeBuyNow(node);}"
-                    + "}"
-                    + "}"
-                    + "for(var k=0;k<mutations.length;k++){"
-                    + "var target=mutations[k].target;"
-                    + "if(target&&target.nodeType===1){removeBuyNow(target);}"
-                    + "}"
-                    + "}).observe(document.documentElement,"
-                    + "{childList:true,subtree:true,characterData:true,attributes:true,"
-                    + "attributeFilter:['aria-label','title']});"
-                    + "setInterval(function(){removeBuyNow(document);},2000);"
-                    + "})()";
 
     /** Removes the "Playables" shelves and navigation entries from YouTube pages. */
     static final String PLAYABLES_CLEANUP_SCRIPT =
@@ -620,79 +233,6 @@ public class MainActivity extends AppCompatActivity {
                     + "}"
                     + "}"
                     + "}).observe(document.documentElement,{childList:true,subtree:true});"
-                    + "})()";
-
-    /** Uses YouTube's current video thumbnail as the HTML video poster while video loads. */
-    static final String VIDEO_THUMBNAIL_POSTER_SCRIPT =
-            "(function(){"
-                    + "function bestThumbnail(thumbnails){"
-                    + "if(!thumbnails||!thumbnails.length){return null;}"
-                    + "var best=thumbnails[0];"
-                    + "for(var i=1;i<thumbnails.length;i++){"
-                    + "var candidate=thumbnails[i];"
-                    + "if((candidate.width||0)>=(best.width||0)){best=candidate;}"
-                    + "}"
-                    + "return best&&best.url;"
-                    + "}"
-                    + "function currentVideoId(){"
-                    + "var match=/[?&]v=([^&#]+)/.exec(window.location.search||'');"
-                    + "if(match){return decodeURIComponent(match[1]);}"
-                    + "match=/^\\/shorts\\/([^/?#]+)/.exec(window.location.pathname||'');"
-                    + "return match?decodeURIComponent(match[1]):null;"
-                    + "}"
-                    + "function currentThumbnail(){"
-                    + "var videoId=currentVideoId();"
-                    + "if(!videoId){return null;}"
-                    + "var response=window.ytInitialPlayerResponse||{};"
-                    + "var details=response.videoDetails||{};"
-                    + "if(details.videoId===videoId){"
-                    + "var thumbnail=details.thumbnail&&details.thumbnail.thumbnails;"
-                    + "var url=bestThumbnail(thumbnail);"
-                    + "if(url){return url;}"
-                    + "}"
-                    + "return 'https://i.ytimg.com/vi/'+encodeURIComponent(videoId)+'/hqdefault.jpg';"
-                    + "}"
-                    + "function asArray(list){return Array.prototype.slice.call(list);}"
-                    + "function clearVideoPosters(){"
-                    + "var videos=asArray(document.querySelectorAll('video'));"
-                    + "for(var i=0;i<videos.length;i++){videos[i].removeAttribute('poster');}"
-                    + "}"
-                    + "function syncVideoPosters(root){"
-                    + "var videoId=currentVideoId();"
-                    + "if(videoId!==window.__ssyoutubeVideoThumbnailId){"
-                    + "window.__ssyoutubeVideoThumbnailId=videoId;"
-                    + "clearVideoPosters();"
-                    + "}"
-                    + "var thumbnail=currentThumbnail();"
-                    + "if(!thumbnail){return;}"
-                    + "var videos=(root&&root.querySelectorAll)?asArray(root.querySelectorAll('video')):[];"
-                    + "if(root&&root.tagName&&root.tagName.toLowerCase()==='video'){videos.push(root);}"
-                    + "for(var i=0;i<videos.length;i++){"
-                    + "videos[i].setAttribute('poster',thumbnail);"
-                    + "}"
-                    + "}"
-                    + "syncVideoPosters(document);"
-                    + "if(window.__ssyoutubeVideoThumbnailPosterInstalled){return;}"
-                    + "window.__ssyoutubeVideoThumbnailPosterInstalled=true;"
-                    + "document.addEventListener('yt-navigate-start',function(){"
-                    + "window.__ssyoutubeVideoThumbnailId=null;"
-                    + "clearVideoPosters();"
-                    + "},true);"
-                    + "document.addEventListener('yt-navigate-finish',function(){"
-                    + "syncVideoPosters(document);"
-                    + "},true);"
-                    + "window.addEventListener('popstate',function(){"
-                    + "syncVideoPosters(document);"
-                    + "},true);"
-                    + "new MutationObserver(function(mutations){"
-                    + "for(var i=0;i<mutations.length;i++){"
-                    + "for(var j=0;j<mutations[i].addedNodes.length;j++){"
-                    + "var node=mutations[i].addedNodes[j];"
-                    + "if(node.nodeType===1){syncVideoPosters(node);}"
-                    + "}"
-                    + "}"
-                    + "}).observe(document.documentElement,{childList:true,subtree:true});"
-                    + "setInterval(function(){syncVideoPosters(document);},1000);"
                     + "})()";
 
     /** Adds each channel's subscriber count beside its avatar on video cards. */
@@ -786,425 +326,6 @@ public class MainActivity extends AppCompatActivity {
                     + "}"
                     + "}"
                     + "}).observe(document.documentElement,{childList:true,subtree:true});"
-                    + "})()";
-
-    /**
-     * Shared touch tracking used by the swipe gestures below. It is installed once per page and
-     * exposes {@code window.__ssyoutubeGestures}.
-     *
-     * <p>Touches are followed through {@code touchmove} and the gesture is also completed on
-     * {@code touchcancel}: while the page scrolls (or the WebView takes the gesture over, which is
-     * common on large/foldable screens) the browser cancels the touch sequence instead of ending
-     * it, which previously dropped the swipe entirely. The player element is resolved from the
-     * event's composed path so touches that start inside the player's shadow DOM are recognised
-     * too, and the distance threshold scales with the viewport so the same flick works on both
-     * the folded and unfolded screen.
-     */
-    private static final String GESTURE_SUPPORT_SCRIPT =
-            "(function(){"
-                    + "if(window.__ssyoutubeGestures){return;}"
-                    + "var PLAYER_SELECTOR='#movie_player,.html5-video-player,ytd-player,ytm-player,"
-                    + "ytm-video-player,.player-container,#player-container-id,#player';"
-                    + "var handlers=[];"
-                    + "var tracking=false,startX=0,startY=0,lastX=0,lastY=0,activePlayer=null;"
-                    + "function threshold(){"
-                    + "return Math.max(32,Math.min(120,Math.round((window.innerHeight||800)*0.06)));"
-                    + "}"
-                    + "function eventPath(e){"
-                    + "if(e.composedPath){try{return e.composedPath();}catch(err){}}"
-                    + "var path=[],node=e.target;"
-                    + "while(node){path.push(node);node=node.parentNode||node.host;}"
-                    + "return path;"
-                    + "}"
-                    + "function playerElement(e){"
-                    + "var path=eventPath(e);"
-                    + "for(var i=0;i<path.length;i++){"
-                    + "var node=path[i];"
-                    + "if(!node||node.nodeType!==1){continue;}"
-                    + "if(node.matches&&node.matches(PLAYER_SELECTOR)){return node;}"
-                    + "var found=node.closest&&node.closest(PLAYER_SELECTOR);"
-                    + "if(found){return found;}"
-                    + "}"
-                    + "return null;"
-                    + "}"
-                    + "function isFullscreen(){"
-                    + "return !!(document.fullscreenElement||document.webkitFullscreenElement||"
-                    + "document.querySelector('.ytp-fullscreen'));"
-                    + "}"
-                    + "function isPlaying(player){"
-                    + "var video=player&&player.querySelector&&player.querySelector('video');"
-                    + "if(!video){video=document.querySelector('video');}"
-                    + "return !!video&&!video.paused&&!video.ended;"
-                    + "}"
-                    + "function reset(){tracking=false;activePlayer=null;}"
-                    + "function finish(){"
-                    + "if(!tracking){return;}"
-                    + "var player=activePlayer;"
-                    + "var dx=lastX-startX;"
-                    + "var dy=lastY-startY;"
-                    + "reset();"
-                    + "if(Math.abs(dy)<threshold()||Math.abs(dx)>Math.abs(dy)){return;}"
-                    + "for(var i=0;i<handlers.length;i++){"
-                    + "try{handlers[i]({player:player,dx:dx,dy:dy});}catch(err){}"
-                    + "}"
-                    + "}"
-                    + "document.addEventListener('touchstart',function(e){"
-                    + "if(e.touches.length!==1){reset();return;}"
-                    + "var player=playerElement(e);"
-                    + "if(!player){reset();return;}"
-                    + "tracking=true;"
-                    + "activePlayer=player;"
-                    + "startX=lastX=e.touches[0].clientX;"
-                    + "startY=lastY=e.touches[0].clientY;"
-                    + "},{passive:true,capture:true});"
-                    + "document.addEventListener('touchmove',function(e){"
-                    + "if(!tracking||e.touches.length!==1){return;}"
-                    + "lastX=e.touches[0].clientX;"
-                    + "lastY=e.touches[0].clientY;"
-                    + "},{passive:true,capture:true});"
-                    + "function complete(e){"
-                    + "var touch=e.changedTouches&&e.changedTouches[0];"
-                    + "if(touch){lastX=touch.clientX;lastY=touch.clientY;}"
-                    + "finish();"
-                    + "}"
-                    + "document.addEventListener('touchend',complete,{passive:true,capture:true});"
-                    + "document.addEventListener('touchcancel',complete,{passive:true,capture:true});"
-                    + "window.__ssyoutubeGestures={"
-                    + "onVerticalSwipe:function(handler){handlers.push(handler);},"
-                    + "isFullscreen:isFullscreen,"
-                    + "isPlaying:isPlaying"
-                    + "};"
-                    + "})()";
-
-    /**
-     * Lets the user swipe up on a playing video to enter fullscreen and swipe down while
-     * fullscreen to exit it, mirroring the native YouTube app's gesture behavior. The mobile
-     * site does not use the desktop player's {@code .ytp-fullscreen-button}, so the mobile
-     * control is looked up as well and the Fullscreen API is used as a last resort.
-     */
-    static final String FULLSCREEN_GESTURE_SCRIPT =
-            GESTURE_SUPPORT_SCRIPT + ";"
-                    + "(function(){"
-                    + "if(window.__ssyoutubeFullscreenGestureInstalled||!window.__ssyoutubeGestures){return;}"
-                    + "window.__ssyoutubeFullscreenGestureInstalled=true;"
-                    + "var gestures=window.__ssyoutubeGestures;"
-                    + "var BUTTON_SELECTOR='.ytp-fullscreen-button,button.fullscreen-icon,"
-                    + ".fullscreen-icon,[aria-label=\"Full screen\"],[aria-label=\"Exit full screen\"]';"
-                    + "function fullscreenButton(player){"
-                    + "return (player&&player.querySelector&&player.querySelector(BUTTON_SELECTOR))||"
-                    + "document.querySelector(BUTTON_SELECTOR);"
-                    + "}"
-                    + "function toggleFullscreen(player){"
-                    + "var button=fullscreenButton(player);"
-                    + "if(button){button.click();return;}"
-                    + "if(gestures.isFullscreen()){"
-                    + "var exit=document.exitFullscreen||document.webkitExitFullscreen;"
-                    + "if(exit){try{exit.call(document);}catch(e){}}"
-                    + "return;"
-                    + "}"
-                    + "var request=player&&(player.requestFullscreen||player.webkitRequestFullscreen);"
-                    + "if(request){try{request.call(player);}catch(e){}}"
-                    + "}"
-                    + "gestures.onVerticalSwipe(function(swipe){"
-                    + "var dy=swipe.dy;"
-                    + "var fullscreen=gestures.isFullscreen();"
-                    + "if(dy<0&&!fullscreen&&gestures.isPlaying(swipe.player)){"
-                    + "toggleFullscreen(swipe.player);"
-                    + "}else if(dy>0&&fullscreen){"
-                    + "toggleFullscreen(swipe.player);"
-                    + "}"
-                    + "});"
-                    + "})()";
-
-    /**
-     * Lets the user swipe down on a playing video (while not fullscreen) to shrink it into a
-     * small picture-in-picture window, revealing the last visited results page (search/home)
-     * underneath, mirroring the native YouTube app's miniplayer gesture.
-     *
-     * <p>The miniplayer only styles the mobile player, so this script is injected in mobile
-     * site mode only (see {@link #injectMiniplayerGesture(WebView)}).
-     */
-    static final String MINIPLAYER_GESTURE_SCRIPT =
-            GESTURE_SUPPORT_SCRIPT + ";"
-                    + "(function(){"
-                    + "if(window.__ssyoutubeMiniplayerGestureInstalled||!window.__ssyoutubeGestures){return;}"
-                    + "window.__ssyoutubeMiniplayerGestureInstalled=true;"
-                    + "var gestures=window.__ssyoutubeGestures;"
-                    + "function isWatchPage(){"
-                    + "return (window.location.pathname||'')==='/watch';"
-                    + "}"
-                    + "window.__ssyoutubeResultsUrl=window.__ssyoutubeResultsUrl||"
-                    + "(isWatchPage()?null:location.href);"
-                    + "function trackResultsUrl(){"
-                    + "if(!isWatchPage()){window.__ssyoutubeResultsUrl=location.href;}"
-                    + "}"
-                    + "document.addEventListener('yt-navigate-finish',trackResultsUrl,true);"
-                    + "window.addEventListener('popstate',trackResultsUrl,true);"
-                    + "gestures.onVerticalSwipe(function(swipe){"
-                    + "if(swipe.dy<=0||!isWatchPage()){return;}"
-                    + "if(!window.ssYouTubeNative||!window.ssYouTubeNative.minimize){return;}"
-                    + "if(gestures.isFullscreen()||!gestures.isPlaying(swipe.player)){return;}"
-                    + "window.ssYouTubeNative.minimize(window.__ssyoutubeResultsUrl||'',"
-                    + "gestures.isPlaying(swipe.player));"
-                    + "});"
-                    + "})()";
-
-    /**
-     * Strips the watch page down to just the video while it is shown in the miniplayer: the
-     * player is pinned over the whole (small) viewport, the video is scaled to fit inside it
-     * without cropping, and the surrounding page chrome plus the player's own controls and
-     * end-screen overlays are hidden. Player replacement is tracked from DOM insertions rather
-     * than repeatedly searching the entire page, which avoids periodic main-thread work while
-     * the video is playing.
-     */
-    static final String MINIPLAYER_VIEW_SCRIPT =
-            "(function(){"
-                    + "var PLAYER_SELECTOR='#movie_player,.html5-video-player,ytd-player,ytm-player,"
-                    + "ytm-video-player,.player-container,#player-container-id,#player';"
-                    + "var STYLE_ID='ssyoutube-miniplayer-style';"
-                    + "var CSS='html.ssyoutube-miniplayer,html.ssyoutube-miniplayer body{"
-                    + "margin:0!important;padding:0!important;overflow:hidden!important;"
-                    + "background:#000!important;}"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player{"
-                    + "position:fixed!important;top:0!important;left:0!important;right:0!important;"
-                    + "bottom:0!important;width:100vw!important;height:100vh!important;"
-                    + "max-width:100vw!important;max-height:100vh!important;margin:0!important;"
-                    + "padding:0!important;background:#000!important;z-index:2147483647!important;}"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .html5-video-container,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player video{"
-                    + "position:absolute!important;top:0!important;left:0!important;"
-                    + "width:100%!important;height:100%!important;object-fit:contain!important;}"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-chrome-top,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-chrome-bottom,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-gradient-top,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-gradient-bottom,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-ce-element,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-endscreen-content,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-pause-overlay,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-watermark,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .player-controls-background,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .player-controls-content,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player ytm-custom-control,"
-                    + "html.ssyoutube-miniplayer .ssyoutube-miniplayer-player .ytp-cued-thumbnail-overlay"
-                    + "{display:none!important;}';"
-                    + "function ensureStyle(){"
-                    + "if(document.getElementById(STYLE_ID)){return;}"
-                    + "var head=document.head||document.documentElement;"
-                    + "if(!head){return;}"
-                    + "var style=document.createElement('style');"
-                    + "style.id=STYLE_ID;"
-                    + "style.textContent=CSS;"
-                    + "head.appendChild(style);"
-                    + "}"
-                    + "function playerFrom(root){"
-                    + "if(!root){return null;}"
-                    + "if(root.matches&&root.matches(PLAYER_SELECTOR)){return root;}"
-                    + "return root.querySelector?root.querySelector(PLAYER_SELECTOR):null;"
-                    + "}"
-                    + "function setPlayer(player){"
-                    + "var previous=window.__ssyoutubeMiniplayerPlayer;"
-                    + "if(previous===player){return;}"
-                    + "if(previous){previous.classList.remove('ssyoutube-miniplayer-player');}"
-                    + "window.__ssyoutubeMiniplayerPlayer=player||null;"
-                    + "if(player){player.classList.add('ssyoutube-miniplayer-player');}"
-                    + "}"
-                    + "function apply(){"
-                    + "if(!window.__ssyoutubeMiniplayerViewActive){return;}"
-                    + "ensureStyle();"
-                    + "document.documentElement.classList.add('ssyoutube-miniplayer');"
-                    + "setPlayer(document.querySelector(PLAYER_SELECTOR));"
-                    + "}"
-                    + "function observePlayer(){"
-                    + "if(window.__ssyoutubeMiniplayerViewObserver||!window.MutationObserver){return;}"
-                    + "window.__ssyoutubeMiniplayerViewObserver=new MutationObserver(function(mutations){"
-                    + "if(!window.__ssyoutubeMiniplayerViewActive){return;}"
-                    + "var player=window.__ssyoutubeMiniplayerPlayer;"
-                    + "if(player&&player.isConnected){return;}"
-                    + "if(player){setPlayer(null);}"
-                    + "for(var i=0;i<mutations.length;i++){"
-                    + "for(var j=0;j<mutations[i].addedNodes.length;j++){"
-                    + "var replacement=playerFrom(mutations[i].addedNodes[j]);"
-                    + "if(replacement){setPlayer(replacement);return;}"
-                    + "}"
-                    + "}"
-                    + "});"
-                    + "window.__ssyoutubeMiniplayerViewObserver.observe("
-                    + "document.documentElement||document,{childList:true,subtree:true});"
-                    + "}"
-                    + "window.__ssyoutubeMiniplayerViewActive=true;"
-                    + "window.__ssyoutubeMiniplayerViewApply=apply;"
-                    + "apply();"
-                    + "observePlayer();"
-                    + "})()";
-
-    /** Undoes {@link #MINIPLAYER_VIEW_SCRIPT} when the video returns to the full-size view. */
-    static final String MINIPLAYER_VIEW_RESET_SCRIPT =
-            "(function(){"
-                    + "window.__ssyoutubeMiniplayerViewActive=false;"
-                    + "if(window.__ssyoutubeMiniplayerViewObserver){"
-                    + "window.__ssyoutubeMiniplayerViewObserver.disconnect();"
-                    + "window.__ssyoutubeMiniplayerViewObserver=null;"
-                    + "}"
-                    + "var style=document.getElementById('ssyoutube-miniplayer-style');"
-                    + "if(style&&style.parentNode){style.parentNode.removeChild(style);}"
-                    + "document.documentElement.classList.remove('ssyoutube-miniplayer');"
-                    + "var marked=document.querySelectorAll('.ssyoutube-miniplayer-player');"
-                    + "for(var i=0;i<marked.length;i++){"
-                    + "marked[i].classList.remove('ssyoutube-miniplayer-player');"
-                    + "}"
-                    + "window.__ssyoutubeMiniplayerPlayer=null;"
-                    + "})()";
-
-    /**
-     * Restarts a video that was playing before its WebView was moved into the miniplayer, and
-     * keeps it playing afterwards.
-     *
-     * <p>Moving the WebView between parents is not the only thing that stops playback: whenever
-     * media starts anywhere else (most notably the inline previews the results page autoplays
-     * underneath the miniplayer) the platform hands audio focus to that media and pauses the
-     * miniplayer's video. A one-shot resume therefore only survived until the results page
-     * started its first preview, so the resume is installed as a watchdog instead: it listens
-     * for {@code pause} on the video and re-checks on a short interval for as long as the
-     * miniplayer view is active, which also covers the player element being re-created.
-     */
-    static final String MINIPLAYER_PLAYBACK_RESUME_SCRIPT =
-            "(function(){"
-                    + "function clearTimer(){"
-                    + "if(window.__ssyoutubeMiniplayerResumeRetryTimer){"
-                    + "clearTimeout(window.__ssyoutubeMiniplayerResumeRetryTimer);"
-                    + "window.__ssyoutubeMiniplayerResumeRetryTimer=null;"
-                    + "}"
-                    + "}"
-                    + "function scheduleResume(delay,attempt){"
-                    + "if(!window.__ssyoutubeMiniplayerKeepPlaying){return;}"
-                    + "clearTimer();"
-                    + "window.__ssyoutubeMiniplayerResumeRetryTimer=setTimeout(function(){"
-                    + "resume(attempt||0);"
-                    + "},delay||0);"
-                    + "}"
-                    + "function currentVideo(){return document.querySelector('video');}"
-                    + "function bindVideo(video){"
-                    + "if(window.__ssyoutubeMiniplayerBoundVideo===video){return;}"
-                    + "if(window.__ssyoutubeMiniplayerBoundVideo){"
-                    + "window.__ssyoutubeMiniplayerBoundVideo.removeEventListener("
-                    + "'pause',window.__ssyoutubeMiniplayerPauseListener,true);"
-                    + "}"
-                    + "window.__ssyoutubeMiniplayerBoundVideo=video||null;"
-                    + "if(video&&window.__ssyoutubeMiniplayerPauseListener){"
-                    + "video.addEventListener('pause',window.__ssyoutubeMiniplayerPauseListener,true);"
-                    + "}"
-                    + "}"
-                    + "function retry(attempt){"
-                    + "if(attempt<5){scheduleResume(250,attempt+1);}"
-                    + "}"
-                    + "function resume(attempt){"
-                    + "if(!window.__ssyoutubeMiniplayerKeepPlaying){return;}"
-                    + "var video=currentVideo();"
-                    + "bindVideo(video);"
-                    + "if(!video){retry(attempt||0);return;}"
-                    + "if(video.ended||!video.paused){return;}"
-                    + "var playback=video.play();"
-                    + "if(playback&&playback.catch){playback.catch(function(){retry(attempt||0);});}"
-                    + "}"
-                    + "window.__ssyoutubeMiniplayerKeepPlaying=true;"
-                    + "if(!window.__ssyoutubeMiniplayerPauseListener){"
-                    + "window.__ssyoutubeMiniplayerPauseListener=function(){scheduleResume(0,0);};"
-                    + "}"
-                    + "bindVideo(currentVideo());"
-                    + "if(!window.__ssyoutubeMiniplayerResumeObserver&&window.MutationObserver){"
-                    + "window.__ssyoutubeMiniplayerResumeObserver=new MutationObserver(function(){"
-                    + "if(!window.__ssyoutubeMiniplayerKeepPlaying){return;}"
-                    + "if(window.__ssyoutubeMiniplayerBoundVideo&&"
-                    + "window.__ssyoutubeMiniplayerBoundVideo.isConnected){return;}"
-                    + "var video=currentVideo();"
-                    + "bindVideo(video);"
-                    + "if(video&&video.paused&&!video.ended){scheduleResume(0,0);}"
-                    + "});"
-                    + "window.__ssyoutubeMiniplayerResumeObserver.observe("
-                    + "document.documentElement||document,{childList:true,subtree:true});"
-                    + "}"
-                    + "scheduleResume(0,0);"
-                    + "})()";
-
-    /** Stops the {@link #MINIPLAYER_PLAYBACK_RESUME_SCRIPT} watchdog. */
-    static final String MINIPLAYER_PLAYBACK_RESUME_RESET_SCRIPT =
-            "(function(){"
-                    + "window.__ssyoutubeMiniplayerKeepPlaying=false;"
-                    + "if(window.__ssyoutubeMiniplayerResumeRetryTimer){"
-                    + "clearTimeout(window.__ssyoutubeMiniplayerResumeRetryTimer);"
-                    + "window.__ssyoutubeMiniplayerResumeRetryTimer=null;"
-                    + "}"
-                    + "if(window.__ssyoutubeMiniplayerBoundVideo&&"
-                    + "window.__ssyoutubeMiniplayerPauseListener){"
-                    + "window.__ssyoutubeMiniplayerBoundVideo.removeEventListener("
-                    + "'pause',window.__ssyoutubeMiniplayerPauseListener,true);"
-                    + "}"
-                    + "window.__ssyoutubeMiniplayerBoundVideo=null;"
-                    + "window.__ssyoutubeMiniplayerPauseListener=null;"
-                    + "if(window.__ssyoutubeMiniplayerResumeObserver){"
-                    + "window.__ssyoutubeMiniplayerResumeObserver.disconnect();"
-                    + "window.__ssyoutubeMiniplayerResumeObserver=null;"
-                    + "}"
-                    + "})()";
-
-    /**
-     * Keeps the results page shown underneath the miniplayer from playing any media of its own.
-     *
-     * <p>The home/search feeds autoplay muted inline previews of the highlighted result. Even
-     * though they are silent they still count as media playback, so starting one takes audio
-     * focus away from the miniplayer's WebView and pauses the video the user is watching.
-     * Blocking playback on the background page keeps that from happening: {@code play()} is
-     * neutralised, {@code autoplay} attributes are stripped, and anything that still manages to
-     * start is paused again from a capturing {@code play} listener.
-     */
-    static final String RESULTS_AUTOPLAY_BLOCK_SCRIPT =
-            "(function(){"
-                    + "window.__ssyoutubeBlockResultsPlayback=true;"
-                    + "function blocked(){return !!window.__ssyoutubeBlockResultsPlayback;}"
-                    + "function suppress(media){"
-                    + "if(!media){return;}"
-                    + "try{media.autoplay=false;}catch(e){}"
-                    + "try{media.removeAttribute('autoplay');}catch(e){}"
-                    + "if(!media.paused){try{media.pause();}catch(e){}}"
-                    + "}"
-                    + "function suppressAll(){"
-                    + "if(!blocked()){return;}"
-                    + "var media=document.querySelectorAll('video,audio');"
-                    + "for(var i=0;i<media.length;i++){suppress(media[i]);}"
-                    + "}"
-                    + "if(!window.__ssyoutubeResultsPlaybackBlockInstalled){"
-                    + "window.__ssyoutubeResultsPlaybackBlockInstalled=true;"
-                    + "var proto=window.HTMLMediaElement&&window.HTMLMediaElement.prototype;"
-                    + "if(proto){"
-                    + "var nativePlay=proto.play;"
-                    + "var nativePause=proto.pause;"
-                    + "proto.play=function(){"
-                    + "if(blocked()){"
-                    + "try{nativePause.call(this);}catch(e){}"
-                    + "return window.Promise?Promise.resolve():undefined;"
-                    + "}"
-                    + "return nativePlay.apply(this,arguments);"
-                    + "};"
-                    + "}"
-                    + "document.addEventListener('play',function(e){"
-                    + "if(blocked()){suppress(e.target);}"
-                    + "},true);"
-                    + "window.__ssyoutubeResultsPlaybackBlockTimer=setInterval(suppressAll,500);"
-                    + "}"
-                    + "suppressAll();"
-                    + "})()";
-
-    /**
-     * Undoes {@link #RESULTS_AUTOPLAY_BLOCK_SCRIPT} when the results page stops being a
-     * background page (i.e. the miniplayer was dismissed and it became the primary view again).
-     */
-    static final String RESULTS_AUTOPLAY_BLOCK_RESET_SCRIPT =
-            "(function(){"
-                    + "window.__ssyoutubeBlockResultsPlayback=false;"
-                    + "if(window.__ssyoutubeResultsPlaybackBlockTimer){"
-                    + "clearInterval(window.__ssyoutubeResultsPlaybackBlockTimer);"
-                    + "window.__ssyoutubeResultsPlaybackBlockTimer=null;"
-                    + "}"
                     + "})()";
 
     /**
@@ -1410,16 +531,26 @@ public class MainActivity extends AppCompatActivity {
      */
     private static final long[] APP_LOGO_REINJECT_DELAYS_MS = {300L, 1000L, 2500L, 5000L};
 
-    private static final String JS_INTERFACE_NAME = "ssYouTubeNative";
+    private static final String PLAYBACK_MESSAGE_NAME = "ssYouTubePlayback";
+    private static final String STATE_PLAYER = "native_player";
+    private static final String STATE_FULLSCREEN = "native_fullscreen";
+    private static final String STATE_MINIMIZED = "native_minimized";
+    private static final String STATE_CLOSED_VIDEO = "closed_video";
+    private static final String STATE_PLAYBACK_KEY = "playback_key";
+    private static final String STATE_ROUTE_KEY = "route_key";
 
     private final Map<Integer, byte[]> appLogoCache = new HashMap<>();
 
     private final Handler logoInjectionHandler = new Handler(Looper.getMainLooper());
 
     private WebView webView;
-    private WebView miniplayerWebView;
-    private View miniplayerContainer;
-    private boolean miniplayerKeepPlaying;
+    private NativePlayerView nativePlayer;
+    private boolean playerFullscreen;
+    private boolean playerMinimized;
+    private boolean activityResumed;
+    private String closedVideoId;
+    private String lastPlaybackKey;
+    private String lastRouteKey;
     private ViewGroup rootContainer;
     private ImageButton settingsButton;
     private TextView statsOverlay;
@@ -1433,8 +564,6 @@ public class MainActivity extends AppCompatActivity {
     private AppUpdater appUpdater;
     private boolean updatesResumed;
     private Logger logger;
-    private View fullscreenView;
-    private WebChromeClient.CustomViewCallback fullscreenViewCallback;
     private int originalSystemUiVisibility;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -1458,6 +587,38 @@ public class MainActivity extends AppCompatActivity {
         rootContainer = findViewById(R.id.root_container);
         settingsButton = findViewById(R.id.settings_button);
         statsOverlay = findViewById(R.id.stats_overlay);
+        nativePlayer = new NativePlayerView(this, new NativePlayerView.Listener() {
+            @Override
+            public void onClose() {
+                closeNativePlayback(true);
+            }
+
+            @Override
+            public void onMinimize() {
+                setPlayerFullscreen(false);
+                playerMinimized = true;
+                updatePlayerLayout();
+            }
+
+            @Override
+            public void onToggleFullscreen() {
+                if (playerMinimized) {
+                    playerMinimized = false;
+                    updatePlayerLayout();
+                } else {
+                    setPlayerFullscreen(!playerFullscreen);
+                }
+            }
+        });
+        nativePlayer.setVisibility(View.GONE);
+        rootContainer.addView(nativePlayer, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        rootContainer.addOnLayoutChangeListener((v, left, top, right, bottom,
+                oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                updatePlayerLayout();
+            }
+        });
         statsMonitor = new StatsMonitor(this, statsOverlay);
         appUpdater = new ViewModelProvider(this).get(AppUpdater.class);
         appUpdater.events().observe(this, event -> {
@@ -1478,10 +639,23 @@ public class MainActivity extends AppCompatActivity {
         setStatsForNerdsEnabled(statsForNerdsEnabled);
 
         if (savedInstanceState != null) {
-            webView.restoreState(savedInstanceState);
+            closedVideoId = savedInstanceState.getString(STATE_CLOSED_VIDEO);
+            lastPlaybackKey = savedInstanceState.getString(STATE_PLAYBACK_KEY);
+            lastRouteKey = savedInstanceState.getString(STATE_ROUTE_KEY);
+            Bundle playerState = savedInstanceState.getBundle(STATE_PLAYER);
+            if (playerState != null) {
+                nativePlayer.restoreState(playerState);
+            }
+            playerMinimized = savedInstanceState.getBoolean(STATE_MINIMIZED);
+            setPlayerFullscreen(savedInstanceState.getBoolean(STATE_FULLSCREEN)
+                    && nativePlayer.hasVideo());
+            if (webView.restoreState(savedInstanceState) == null) {
+                webView.loadUrl(startUrl(getIntent()));
+            }
         } else {
             webView.loadUrl(startUrl(getIntent()));
         }
+        updatePlayerLayout();
     }
 
     @Override
@@ -1489,7 +663,12 @@ public class MainActivity extends AppCompatActivity {
         super.onNewIntent(intent);
         logActivity("onNewIntent");
         setIntent(intent);
-        webView.loadUrl(startUrl(intent));
+        closedVideoId = null;
+        lastPlaybackKey = null;
+        setPlayerFullscreen(false);
+        String url = startUrl(intent);
+        webView.loadUrl(url);
+        routePage(url);
     }
 
     @Override
@@ -1497,18 +676,25 @@ public class MainActivity extends AppCompatActivity {
         super.onSaveInstanceState(outState);
         logActivity("onSaveInstanceState");
         webView.saveState(outState);
+        Bundle playerState = new Bundle();
+        nativePlayer.saveState(playerState);
+        outState.putBundle(STATE_PLAYER, playerState);
+        outState.putBoolean(STATE_FULLSCREEN, playerFullscreen);
+        outState.putBoolean(STATE_MINIMIZED, playerMinimized);
+        outState.putString(STATE_CLOSED_VIDEO, closedVideoId);
+        outState.putString(STATE_PLAYBACK_KEY, lastPlaybackKey);
+        outState.putString(STATE_ROUTE_KEY, lastRouteKey);
         appUpdater.saveState(outState);
     }
 
     @Override
     protected void onPause() {
         updatesResumed = false;
+        activityResumed = false;
+        nativePlayer.onPause();
         super.onPause();
         logActivity("onPause");
         webView.onPause();
-        if (miniplayerWebView != null) {
-            miniplayerWebView.onPause();
-        }
         CookieManager.getInstance().flush();
     }
 
@@ -1516,12 +702,18 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         logActivity("onResume");
+        activityResumed = true;
         webView.onResume();
-        if (miniplayerWebView != null) {
-            miniplayerWebView.onResume();
-        }
+        nativePlayer.onResume();
+        routePage(webView.getUrl());
         updatesResumed = true;
         appUpdater.dispatch(this);
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        rootContainer.post(this::updatePlayerLayout);
     }
 
     @Override
@@ -1549,12 +741,12 @@ public class MainActivity extends AppCompatActivity {
         logActivity("onDestroy");
         statsMonitor.onDestroy();
         logoInjectionHandler.removeCallbacksAndMessages(null);
-        if (miniplayerWebView != null) {
-            miniplayerWebView.destroy();
-            miniplayerWebView = null;
-        }
+        nativePlayer.release();
         if (webView != null) {
             webView.stopLoading();
+            rootContainer.removeView(webView);
+            webView.setWebChromeClient(null);
+            webView.setWebViewClient(null);
             webView.destroy();
             webView = null;
         }
@@ -1564,12 +756,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         logActivity("onKeyDown keyCode=" + keyCode);
-        if (keyCode == KeyEvent.KEYCODE_BACK && fullscreenView != null) {
-            hideFullscreenView();
-            return true;
-        }
-        if (keyCode == KeyEvent.KEYCODE_BACK && miniplayerWebView != null) {
-            expandMiniplayer();
+        if (keyCode == KeyEvent.KEYCODE_BACK && playerFullscreen) {
+            setPlayerFullscreen(false);
             return true;
         }
         if (keyCode == KeyEvent.KEYCODE_BACK && goBack()) {
@@ -1578,46 +766,26 @@ public class MainActivity extends AppCompatActivity {
         return super.onKeyDown(keyCode, event);
     }
 
-    private void showFullscreenView(View view, WebChromeClient.CustomViewCallback callback) {
-        logActivity("showFullscreenView");
-        if (fullscreenView != null) {
-            callback.onCustomViewHidden();
+    private void setPlayerFullscreen(boolean fullscreen) {
+        if (playerFullscreen == fullscreen) {
             return;
         }
-        fullscreenView = view;
-        fullscreenViewCallback = callback;
-        originalSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-        rootContainer.addView(view, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        statsOverlay.bringToFront();
-        webView.setVisibility(View.GONE);
-        settingsButton.setVisibility(View.GONE);
+        playerFullscreen = fullscreen;
+        if (fullscreen) {
+            playerMinimized = false;
+            originalSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(originalSystemUiVisibility);
+        }
+        updatePlayerLayout();
     }
 
-    private void hideFullscreenView() {
-        logActivity("hideFullscreenView");
-        if (fullscreenView == null) {
-            return;
-        }
-        ((ViewGroup) fullscreenView.getParent()).removeView(fullscreenView);
-        fullscreenView = null;
-        getWindow().getDecorView().setSystemUiVisibility(originalSystemUiVisibility);
-        webView.setVisibility(View.VISIBLE);
-        updateSettingsButton(webView.getUrl());
-        if (fullscreenViewCallback != null) {
-            fullscreenViewCallback.onCustomViewHidden();
-            fullscreenViewCallback = null;
-        }
-    }
-
-    /** Applies the shared WebView configuration used by both the primary and miniplayer views. */
     @SuppressLint("SetJavaScriptEnabled")
     private void configureWebView(WebView view) {
         logActivity("configureWebView");
@@ -1625,7 +793,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setUserAgentString(Preferences.userAgent(desktopMode));
-        settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
@@ -1647,253 +815,192 @@ public class MainActivity extends AppCompatActivity {
             cookieManager.setAcceptThirdPartyCookies(view, true);
         }
 
-        view.addJavascriptInterface(new PipBridge(view), JS_INTERFACE_NAME);
-        installAdBlockingScripts(view);
+        installPlaybackRouting(view);
         view.setWebViewClient(new YouTubeWebViewClient());
-        view.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onShowCustomView(View customView, CustomViewCallback callback) {
-                showFullscreenView(customView, callback);
-            }
-
-            @Override
-            public void onHideCustomView() {
-                hideFullscreenView();
-            }
-        });
+        view.setWebChromeClient(new WebChromeClient());
     }
 
-    /**
-     * Origins whose documents get the ad-blocking scripts injected at document start.
-     * Both the mobile ({@code m.youtube.com}) and desktop ({@code www.youtube.com}) hosts are
-     * covered by the wildcard rule; the bare host is listed separately because a wildcard rule
-     * does not match it.
-     */
-    static final List<String> AD_SCRIPT_ORIGIN_RULES = Collections.unmodifiableList(
-            Arrays.asList("https://*.youtube.com", "https://youtube.com"));
-
-    /**
-     * Registers the ad-blocking scripts so that they run at document start, i.e. before any of
-     * the page's own scripts. The {@code onPageStarted}/{@code onPageFinished} injections in
-     * {@link YouTubeWebViewClient} race with the page: on a refresh the page's scripts can read
-     * {@code ytInitialPlayerResponse} (and schedule the ad breaks) before the injection lands,
-     * which made ad blocking work only some of the time. Document start injection removes that
-     * race and is re-applied automatically on every load, reload and history navigation.
-     *
-     * <p>The client-side injections are kept as a fallback for WebView versions that do not
-     * support {@link WebViewFeature#DOCUMENT_START_SCRIPT}; every script is idempotent.
-     */
-    private void installAdBlockingScripts(WebView view) {
-        logActivity("installAdBlockingScripts");
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            logActivity("Document start scripts unsupported");
-            return;
+    private void installPlaybackRouting(WebView view) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            try {
+                WebViewCompat.addWebMessageListener(view, PLAYBACK_MESSAGE_NAME,
+                        NativePlaybackScript.ORIGIN_RULES,
+                        (source, message, origin, mainFrame, reply) -> {
+                            if (source == webView && !isDestroyed()
+                                    && message.getType() == WebMessageCompat.TYPE_STRING
+                                    && isTrustedPlaybackMessage(mainFrame, origin.toString(),
+                                            source.getUrl(), message.getData())) {
+                                routePage(source.getUrl());
+                            }
+                        });
+            } catch (IllegalArgumentException | UnsupportedOperationException error) {
+                logActivity("Playback messages unavailable", error);
+            }
         }
-        Set<String> origins = new HashSet<>(AD_SCRIPT_ORIGIN_RULES);
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            try {
+                WebViewCompat.addDocumentStartJavaScript(view, NativePlaybackScript.SCRIPT,
+                        NativePlaybackScript.ORIGIN_RULES);
+            } catch (IllegalArgumentException | UnsupportedOperationException error) {
+                logActivity("Document start script unavailable", error);
+            }
+        }
+    }
+
+    static boolean isTrustedPlaybackMessage(boolean mainFrame, String sourceOrigin,
+            String currentUrl, String reportedUrl) {
+        if (!mainFrame || !PlaybackRequest.isYouTubePage(currentUrl)
+                || !PlaybackRequest.isYouTubePage(reportedUrl)) {
+            return false;
+        }
+        String origin = playbackOrigin(sourceOrigin);
+        if (origin == null || !origin.equals(playbackOrigin(currentUrl))
+                || !origin.equals(playbackOrigin(reportedUrl))) {
+            return false;
+        }
+        PlaybackRequest current = PlaybackRequest.fromUrl(currentUrl);
+        PlaybackRequest reported = PlaybackRequest.fromUrl(reportedUrl);
+        if (current == null || reported == null) {
+            return current == null && reported == null && currentUrl.equals(reportedUrl);
+        }
+        return current.videoId.equals(reported.videoId)
+                && current.startPositionMs == reported.startPositionMs;
+    }
+
+    private static String playbackOrigin(String url) {
+        if (url == null) {
+            return null;
+        }
         try {
-            WebViewCompat.addDocumentStartJavaScript(view, AD_JSON_PRUNE_SCRIPT, origins);
-            WebViewCompat.addDocumentStartJavaScript(view, AD_HIDING_SCRIPT, origins);
-        } catch (IllegalArgumentException | UnsupportedOperationException e) {
-            logActivity("Document start script installation failed", e);
-            // Fall back to the injections done by YouTubeWebViewClient.
+            URI uri = new URI(url);
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null
+                    || uri.getRawUserInfo() != null || (uri.getPort() != -1
+                    && uri.getPort() != 443)) {
+                return null;
+            }
+            String origin = "https://" + uri.getHost().toLowerCase(Locale.US);
+            return NativePlaybackScript.ORIGIN_RULES.contains(origin) ? origin : null;
+        } catch (URISyntaxException error) {
+            return null;
         }
     }
 
-    /**
-     * JavaScript bridge that lets the injected {@link #MINIPLAYER_GESTURE_SCRIPT} tell native
-     * code when the user has swiped down on a playing video. Bound per-WebView so a call from a
-     * WebView that isn't the currently active/primary one (e.g. a stale or backgrounded view) is
-     * ignored instead of silently acting on the wrong view.
-     */
-    private final class PipBridge {
-        private final WebView source;
-
-        PipBridge(WebView source) {
-            this.source = source;
+    static String canonicalPlaybackUrl(PlaybackRequest request, boolean desktopMode) {
+        String url = request.watchUrl();
+        if (request.startPositionMs > 0) {
+            url += "&t=" + request.startPositionMs / 1000;
         }
+        return Preferences.siteModeUrl(url, desktopMode);
+    }
 
-        @android.webkit.JavascriptInterface
-        public void minimize(String resultsUrl) {
-            minimize(resultsUrl, false);
+    private void routePage(String url) {
+        if (url == null || nativePlayer == null || isDestroyed()) {
+            return;
         }
+        if (!PlaybackRequest.isYouTubePage(url)) {
+            closeNativePlayback(false);
+            lastRouteKey = null;
+            return;
+        }
+        PlaybackRequest request = PlaybackRequest.fromUrl(url);
+        if (request == null) {
+            lastRouteKey = null;
+            if (nativePlayer.hasVideo()) {
+                setPlayerFullscreen(false);
+                playerMinimized = true;
+                updatePlayerLayout();
+            }
+            return;
+        }
+        String key = request.videoId + ":" + request.startPositionMs;
+        boolean changedRoute = !key.equals(lastRouteKey);
+        lastRouteKey = key;
+        if (request.videoId.equals(closedVideoId)) {
+            return;
+        }
+        closedVideoId = null;
+        if (!nativePlayer.hasVideo() || !key.equals(lastPlaybackKey)) {
+            nativePlayer.play(request.videoId, request.startPositionMs);
+            lastPlaybackKey = key;
+            if (!activityResumed) {
+                nativePlayer.onPause();
+            }
+        }
+        if (changedRoute) {
+            playerMinimized = false;
+        }
+        updatePlayerLayout();
+    }
 
-        @android.webkit.JavascriptInterface
-        public void minimize(final String resultsUrl, final boolean resumePlayback) {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if (source != webView) {
-                        return;
-                    }
-                    enterMiniplayer(resultsUrl, resumePlayback);
+    private void closeNativePlayback(boolean suppressCurrentVideo) {
+        if (suppressCurrentVideo) {
+            PlaybackRequest current = PlaybackRequest.fromUrl(webView.getUrl());
+            closedVideoId = current != null ? current.videoId : nativePlayer.getVideoId();
+            if (closedVideoId == null && lastPlaybackKey != null) {
+                int separator = lastPlaybackKey.indexOf(':');
+                if (separator > 0) {
+                    closedVideoId = lastPlaybackKey.substring(0, separator);
                 }
-            });
+            }
         }
+        nativePlayer.stop();
+        lastPlaybackKey = null;
+        playerMinimized = false;
+        setPlayerFullscreen(false);
+        updatePlayerLayout();
     }
 
-    /**
-     * Shrinks the currently playing video into a small picture-in-picture window and shows
-     * the cached results page (the page the user was on before opening the video) underneath.
-     */
-    private void enterMiniplayer(String resultsUrl, boolean resumePlayback) {
-        logActivity("enterMiniplayer resultsUrl=" + LogFormat.safeUrl(resultsUrl)
-                + " resumePlayback=" + resumePlayback);
-        if (desktopMode) {
+    private void updatePlayerLayout() {
+        if (nativePlayer == null || webView == null || isDestroyed()) {
             return;
         }
-        if (miniplayerWebView != null || fullscreenView != null) {
-            return;
-        }
-        if (resultsUrl == null || resultsUrl.isEmpty()) {
-            return;
-        }
-
-        WebView videoView = webView;
-        rootContainer.removeView(videoView);
-
-        WebView resultsView = new WebView(this);
-        configureWebView(resultsView);
-        // Nothing on the background results page may start playing: media starting there takes
-        // audio focus away from the miniplayer and pauses the video the user is watching.
-        resultsView.getSettings().setMediaPlaybackRequiresUserGesture(true);
-        rootContainer.addView(resultsView, 0, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        resultsView.loadUrl(resultsUrl);
-        webView = resultsView;
-
-        FrameLayout container = new FrameLayout(this);
-        container.setBackgroundResource(R.drawable.bg_miniplayer);
-        container.addView(videoView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        container.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                expandMiniplayer();
-            }
-        });
-
-        int closeSize = getResources().getDimensionPixelSize(R.dimen.miniplayer_close_size);
-        ImageButton closeButton = new ImageButton(this);
-        closeButton.setImageResource(R.drawable.ic_close);
-        closeButton.setBackgroundResource(R.drawable.bg_settings_button);
-        closeButton.setContentDescription(getString(R.string.close_miniplayer));
-        closeButton.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(closeSize, closeSize);
-        closeParams.gravity = Gravity.TOP | Gravity.END;
-        closeButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                closeMiniplayer();
-            }
-        });
-        container.addView(closeButton, closeParams);
-
-        int width = getResources().getDimensionPixelSize(R.dimen.miniplayer_width);
-        int height = getResources().getDimensionPixelSize(R.dimen.miniplayer_height);
+        boolean visible = nativePlayer.hasVideo();
+        nativePlayer.setVisibility(visible ? View.VISIBLE : View.GONE);
+        nativePlayer.setFullscreen(playerFullscreen);
+        nativePlayer.setMinimized(playerMinimized);
+        webView.setVisibility(playerFullscreen ? View.INVISIBLE : View.VISIBLE);
+        int width = rootContainer.getWidth();
+        int height = rootContainer.getHeight();
+        int toolbar = Math.round(48 * getResources().getDisplayMetrics().density);
         int margin = getResources().getDimensionPixelSize(R.dimen.miniplayer_margin);
-        FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(width, height);
-        containerParams.gravity = Gravity.BOTTOM | Gravity.END;
-        containerParams.rightMargin = margin;
-        containerParams.bottomMargin = margin;
-        rootContainer.addView(container, containerParams);
-
-        miniplayerWebView = videoView;
-        miniplayerContainer = container;
-        miniplayerKeepPlaying = resumePlayback;
-        videoView.evaluateJavascript(MINIPLAYER_VIEW_SCRIPT, null);
-        if (resumePlayback) {
-            videoView.evaluateJavascript(MINIPLAYER_PLAYBACK_RESUME_SCRIPT, null);
+        FrameLayout.LayoutParams playerParams;
+        int webTop = 0;
+        if (playerFullscreen) {
+            playerParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        } else if (playerMinimized) {
+            int miniWidth = Math.min(
+                    getResources().getDimensionPixelSize(R.dimen.miniplayer_width),
+                    Math.max(1, width - 2 * margin));
+            int miniHeight = Math.min(miniWidth * 9 / 16 + toolbar,
+                    Math.max(1, height - 2 * margin));
+            playerParams = new FrameLayout.LayoutParams(miniWidth, miniHeight,
+                    Gravity.BOTTOM | Gravity.END);
+            playerParams.setMarginEnd(margin);
+            playerParams.bottomMargin = margin;
+        } else {
+            int dockHeight = Math.min(width * 9 / 16 + toolbar, Math.max(toolbar, height / 2));
+            playerParams = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dockHeight, Gravity.TOP);
+            webTop = visible ? dockHeight : 0;
         }
+        nativePlayer.setLayoutParams(playerParams);
+        FrameLayout.LayoutParams webParams = (FrameLayout.LayoutParams) webView.getLayoutParams();
+        if (webParams.topMargin != webTop) {
+            webParams.topMargin = webTop;
+            webView.setLayoutParams(webParams);
+        }
+        nativePlayer.bringToFront();
         statsOverlay.bringToFront();
         settingsButton.bringToFront();
-        updateSettingsButton(resultsView.getUrl());
-    }
-
-    /**
-     * Installs the miniplayer swipe gesture, which is a mobile site feature: the miniplayer
-     * view only knows how to strip the mobile watch page down to its player, so in desktop
-     * site mode the gesture is not installed at all.
-     */
-    private void injectMiniplayerGesture(WebView view) {
-        logActivity("injectMiniplayerGesture");
-        if (desktopMode) {
-            return;
+        FrameLayout.LayoutParams settingsParams =
+                (FrameLayout.LayoutParams) settingsButton.getLayoutParams();
+        int settingsBottom = visible && playerMinimized
+                ? playerParams.height + 2 * margin : margin;
+        if (settingsParams.bottomMargin != settingsBottom) {
+            settingsParams.bottomMargin = settingsBottom;
+            settingsButton.setLayoutParams(settingsParams);
         }
-        view.evaluateJavascript(MINIPLAYER_GESTURE_SCRIPT, null);
-    }
-
-    /** Re-applies the video-only miniplayer styling if {@code view} is the miniplayer WebView. */
-    private void reapplyMiniplayerView(WebView view) {
-        logActivity("reapplyMiniplayerView");
-        if (miniplayerWebView != null && view == miniplayerWebView) {
-            view.evaluateJavascript(MINIPLAYER_VIEW_SCRIPT, null);
-            if (miniplayerKeepPlaying) {
-                view.evaluateJavascript(MINIPLAYER_PLAYBACK_RESUME_SCRIPT, null);
-            }
-        }
-    }
-
-    /**
-     * Blocks media playback on {@code view} while it is the results page shown behind the
-     * miniplayer, so its autoplaying inline previews cannot steal audio focus from (and thereby
-     * pause) the miniplayer video.
-     */
-    private void reapplyResultsPlaybackBlock(WebView view) {
-        logActivity("reapplyResultsPlaybackBlock");
-        if (miniplayerWebView != null && view == webView) {
-            view.evaluateJavascript(RESULTS_AUTOPLAY_BLOCK_SCRIPT, null);
-        }
-    }
-
-    /** Restores the miniplayer video to fullscreen, discarding the temporary results page. */
-    private void expandMiniplayer() {
-        logActivity("expandMiniplayer");
-        if (miniplayerWebView == null) {
-            return;
-        }
-        WebView videoView = miniplayerWebView;
-        View container = miniplayerContainer;
-        miniplayerWebView = null;
-        miniplayerContainer = null;
-        miniplayerKeepPlaying = false;
-
-        videoView.evaluateJavascript(MINIPLAYER_VIEW_RESET_SCRIPT, null);
-        videoView.evaluateJavascript(MINIPLAYER_PLAYBACK_RESUME_RESET_SCRIPT, null);
-        ((ViewGroup) videoView.getParent()).removeView(videoView);
-        rootContainer.removeView(container);
-
-        WebView resultsView = webView;
-        rootContainer.removeView(resultsView);
-        resultsView.destroy();
-
-        webView = videoView;
-        rootContainer.addView(videoView, 0, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        statsOverlay.bringToFront();
-        settingsButton.bringToFront();
-        updateSettingsButton(videoView.getUrl());
-    }
-
-    /** Dismisses the miniplayer video entirely, keeping the results page as the primary view. */
-    private void closeMiniplayer() {
-        logActivity("closeMiniplayer");
-        if (miniplayerWebView == null) {
-            return;
-        }
-        WebView videoView = miniplayerWebView;
-        View container = miniplayerContainer;
-        miniplayerWebView = null;
-        miniplayerContainer = null;
-        miniplayerKeepPlaying = false;
-
-        rootContainer.removeView(container);
-        videoView.stopLoading();
-        videoView.destroy();
-        // The results page is the primary view again, so it may play media itself.
-        webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
-        webView.evaluateJavascript(RESULTS_AUTOPLAY_BLOCK_RESET_SCRIPT, null);
-        statsOverlay.bringToFront();
-        settingsButton.bringToFront();
         updateSettingsButton(webView.getUrl());
     }
 
@@ -1949,7 +1056,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateSettingsButton(String url) {
         logActivityUrl("updateSettingsButton url=", url);
-        boolean show = fullscreenView == null && (Preferences.isHomePage(url)
+        boolean show = !playerFullscreen && (Preferences.isHomePage(url)
                 || (desktopMode && Preferences.isVideoPage(url)));
         settingsButton.setVisibility(show ? View.VISIBLE : View.GONE);
     }
@@ -1963,14 +1070,14 @@ public class MainActivity extends AppCompatActivity {
     /** Applies the current related-sidebar choice to {@code view}. */
     private void applyRelatedVisibility(WebView view) {
         logActivity("applyRelatedVisibility hidden=" + relatedHidden);
-        if (view == null) {
+        if (view == null || !PlaybackRequest.isYouTubePage(view.getUrl())) {
             return;
         }
         view.evaluateJavascript(relatedVisibilityScript(relatedHidden), null);
     }
 
     private void applyHeaderVisibility(WebView view) {
-        if (view == null) {
+        if (view == null || !PlaybackRequest.isYouTubePage(view.getUrl())) {
             return;
         }
         view.evaluateJavascript(headerVisibilityScript(headerHidden, desktopMode), null);
@@ -2095,11 +1202,6 @@ public class MainActivity extends AppCompatActivity {
                 logActivity("Site mode preference changed desktop=" + wantsDesktop);
                 desktopMode = wantsDesktop;
                 prefs.edit().putBoolean(KEY_DESKTOP_MODE, wantsDesktop).apply();
-                if (wantsDesktop) {
-                    // The miniplayer is a mobile site feature, so restore the video to the
-                    // primary view before the desktop site is loaded into it.
-                    expandMiniplayer();
-                }
                 WebSettings webSettings = webView.getSettings();
                 webSettings.setUserAgentString(Preferences.userAgent(wantsDesktop));
                 webSettings.setSupportZoom(wantsDesktop);
@@ -2136,7 +1238,6 @@ public class MainActivity extends AppCompatActivity {
                 headerHidden = isChecked;
                 prefs.edit().putBoolean(KEY_HEADER_HIDDEN, headerHidden).apply();
                 applyHeaderVisibility(webView);
-                applyHeaderVisibility(miniplayerWebView);
             }
         });
 
@@ -2257,6 +1358,10 @@ public class MainActivity extends AppCompatActivity {
                 && intent.getDataString() != null) {
             String inAppUrl = SiteScope.normalizeInAppUrl(intent.getDataString());
             if (inAppUrl != null) {
+                PlaybackRequest request = PlaybackRequest.fromUrl(inAppUrl);
+                if (request != null) {
+                    return canonicalPlaybackUrl(request, desktopMode);
+                }
                 return inAppUrl;
             }
         }
@@ -2384,13 +1489,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Records an app activity with the provided stack trace only when debug logging is enabled.
+     * Records the exception type without URLs, response bodies or credentials.
      */
     private void logActivity(String message, Throwable throwable) {
         if (!loggingEnabled) {
             return;
         }
-        logger.log("E", message, throwable);
+        logger.log("E", message + " " + throwable.getClass().getSimpleName(), null);
     }
 
     /**
@@ -2444,10 +1549,6 @@ public class MainActivity extends AppCompatActivity {
                 logActivityUrl("Serving app logo ", url);
                 return appLogoResponse();
             }
-            if (AdBlocker.isAd(url)) {
-                logActivityUrl("Blocked ad request ", url);
-                return emptyResponse();
-            }
             return super.shouldInterceptRequest(view, request);
         }
 
@@ -2458,15 +1559,14 @@ public class MainActivity extends AppCompatActivity {
                 logActivityUrl("Serving app logo ", url);
                 return appLogoResponse();
             }
-            if (AdBlocker.isAd(url)) {
-                logActivityUrl("Blocked ad request ", url);
-                return emptyResponse();
-            }
             return super.shouldInterceptRequest(view, url);
         }
 
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            if (!request.isForMainFrame()) {
+                return !SiteScope.isInAppUrl(request.getUrl().toString());
+            }
             String url = request.getUrl().toString();
             return handleUrl(view, url);
         }
@@ -2474,7 +1574,9 @@ public class MainActivity extends AppCompatActivity {
         @SuppressWarnings("deprecation")
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            return handleUrl(view, url);
+            // This legacy callback does not identify frames. Only main-document callbacks may
+            // normalize a URL with loadUrl(), otherwise a subframe could navigate the browser.
+            return !SiteScope.isInAppUrl(url);
         }
 
         private boolean handleUrl(WebView view, String url) {
@@ -2483,6 +1585,10 @@ public class MainActivity extends AppCompatActivity {
             if (inAppUrl == null) {
                 logActivityUrl("Blocked out-of-scope URL ", url);
                 return true;
+            }
+            PlaybackRequest request = PlaybackRequest.fromUrl(inAppUrl);
+            if (request != null && !PlaybackRequest.isYouTubePage(inAppUrl)) {
+                inAppUrl = canonicalPlaybackUrl(request, desktopMode);
             }
             if (!inAppUrl.equals(url)) {
                 logActivityUrl("Normalized URL to ", inAppUrl);
@@ -2497,48 +1603,44 @@ public class MainActivity extends AppCompatActivity {
             super.onPageStarted(view, url, favicon);
             logActivityUrl("onPageStarted ", url);
             logoInjectionHandler.removeCallbacksAndMessages(null);
+            if (handleUrl(view, url)) {
+                return;
+            }
             updateSettingsButton(url);
-            applyRelatedVisibility(view);
-            applyHeaderVisibility(view);
-            view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
-            view.evaluateJavascript(AD_HIDING_SCRIPT, null);
-            view.evaluateJavascript(STATS_FOR_NERDS_LAYOUT_SCRIPT, null);
-            view.evaluateJavascript(AD_SLOT_CLEANUP_SCRIPT, null);
-            view.evaluateJavascript(BUY_NOW_CLEANUP_SCRIPT, null);
-            view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
-            view.evaluateJavascript(POSTS_CLEANUP_SCRIPT, null);
-            view.evaluateJavascript(VIDEO_THUMBNAIL_POSTER_SCRIPT, null);
-            view.evaluateJavascript(SUBSCRIBER_COUNT_SCRIPT, null);
-            view.evaluateJavascript(FULLSCREEN_GESTURE_SCRIPT, null);
-            injectMiniplayerGesture(view);
-            view.evaluateJavascript(APP_LOGO_SCRIPT, null);
-            reapplyMiniplayerView(view);
-            reapplyResultsPlaybackBlock(view);
+            applyPageScripts(view);
+            routePage(url);
         }
 
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
             logActivityUrl("onPageFinished ", url);
-            updateSettingsButton(url);
-            applyRelatedVisibility(view);
-            applyHeaderVisibility(view);
-            view.evaluateJavascript(AD_JSON_PRUNE_SCRIPT, null);
-            view.evaluateJavascript(AD_HIDING_SCRIPT, null);
-            view.evaluateJavascript(STATS_FOR_NERDS_LAYOUT_SCRIPT, null);
-            view.evaluateJavascript(AD_SLOT_CLEANUP_SCRIPT, null);
-            view.evaluateJavascript(BUY_NOW_CLEANUP_SCRIPT, null);
-            view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
-            view.evaluateJavascript(POSTS_CLEANUP_SCRIPT, null);
-            view.evaluateJavascript(VIDEO_THUMBNAIL_POSTER_SCRIPT, null);
-            view.evaluateJavascript(SUBSCRIBER_COUNT_SCRIPT, null);
-            view.evaluateJavascript(FULLSCREEN_GESTURE_SCRIPT, null);
-            injectMiniplayerGesture(view);
-            view.evaluateJavascript(APP_LOGO_SCRIPT, null);
-            reapplyMiniplayerView(view);
-            reapplyResultsPlaybackBlock(view);
+            updateSettingsButton(view.getUrl());
+            applyPageScripts(view);
+            routePage(view.getUrl());
             CookieManager.getInstance().flush();
             scheduleAppLogoReinjection(view);
+        }
+
+        @Override
+        public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+            super.doUpdateVisitedHistory(view, url, isReload);
+            updateSettingsButton(url);
+            applyPageScripts(view);
+            routePage(url);
+        }
+
+        private void applyPageScripts(WebView view) {
+            if (view != webView || !PlaybackRequest.isYouTubePage(view.getUrl())) {
+                return;
+            }
+            view.evaluateJavascript(NativePlaybackScript.SCRIPT, null);
+            applyRelatedVisibility(view);
+            applyHeaderVisibility(view);
+            view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
+            view.evaluateJavascript(POSTS_CLEANUP_SCRIPT, null);
+            view.evaluateJavascript(SUBSCRIBER_COUNT_SCRIPT, null);
+            view.evaluateJavascript(APP_LOGO_SCRIPT, null);
         }
 
         /**
@@ -2552,7 +1654,8 @@ public class MainActivity extends AppCompatActivity {
             for (long delayMs : APP_LOGO_REINJECT_DELAYS_MS) {
                 logoInjectionHandler.postDelayed(() -> {
                     WebView target = viewRef.get();
-                    if (target != null && target.isAttachedToWindow()) {
+                    if (target != null && target.isAttachedToWindow()
+                            && PlaybackRequest.isYouTubePage(target.getUrl())) {
                         logActivity("Reinject app logo after " + delayMs + "ms");
                         target.evaluateJavascript(APP_LOGO_SCRIPT, null);
                     }
@@ -2575,9 +1678,5 @@ public class MainActivity extends AppCompatActivity {
                     ? R.drawable.app_logo_dark : R.drawable.app_logo_light;
         }
 
-        private WebResourceResponse emptyResponse() {
-            return new WebResourceResponse("text/plain", "utf-8",
-                    new ByteArrayInputStream(new byte[0]));
-        }
     }
 }

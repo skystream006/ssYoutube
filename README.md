@@ -1,7 +1,8 @@
 # ssYouTube
 
-A minimal Android app that shows the YouTube **mobile** website in a full-screen WebView,
-keeps you signed in, and blocks advertising/tracking requests.
+An Android app that uses the YouTube website for browsing and a native Media3 player
+with NewPipeExtractor for video playback. The browsing session stays signed in;
+playback extraction is separate and anonymous.
 
 ## Features
 
@@ -39,18 +40,31 @@ keeps you signed in, and blocks advertising/tracking requests.
   package name and signing certificate. Network/release failures can be retried in Preferences.
   Only **Manual APK Release** publishes GitHub Releases for in-app updates;
   automatic main-branch and pull-request builds upload workflow artifacts, not releases.
-- **Ad blocking** – requests to known ad/tracking hosts and ad endpoints are intercepted
-  and answered with an empty response (`AdBlocker`), and a stylesheet is injected on every
-  page load to hide inline promoted/ad renderers. The ad-hiding stylesheet and the JSON
-  ad-pruning hook are registered as document start scripts (androidx.webkit), so they run
-  before the page's own scripts on every load and refresh instead of racing them.
-  Late-assigned player data is filtered too. Recognized adblock-enforcement dialogs are
-  dismissed and interrupted playback is resumed without replacing the player. Adblock-specific
-  player failures are retried once per video; errors are cleared only when the response
-  contains media. Server-side refusals that still provide no playable media, sign-in/age
-  restrictions, and other playback errors remain visible rather than leaving a blank player.
-  Shopping and "Buy Now" call-to-action elements are hidden by CSS and removed
-  as they appear.
+- **Native video playback** – watch links, Shorts, live-video links, embedded-video links,
+  and `youtu.be` links open in a Media3 player. NewPipeExtractor resolves the media directly,
+  off the UI thread, without a third-party extraction proxy. The native player provides
+  play/pause, seeking, fullscreen, a miniplayer, and explicit retry after extraction/playback
+  failures. Timestamp links are supported. Leaving the activity pauses playback; closing
+  the player cancels pending extraction, and destroying the activity releases its resources.
+  The same native player is used across fullscreen and miniplayer transitions.
+  Stream selection is automatic, supporting progressive video, separate video/audio tracks,
+  and available HLS/DASH manifests; there is no manual quality selector.
+- **Browsing-only WebView** – the site remains available for search, channels, comments,
+  and account interactions. Its media playback and previews are disabled, including after
+  single-page navigation, so they cannot play alongside the native player. Only validated
+  YouTube main-frame navigation can select native playback; sign-in pages do not receive
+  the playback bridge. The request blocklist, ad-JSON pruning, ad-hiding/cleanup scripts,
+  and adblock-warning bypass have been removed. Feed ads and shopping promotions may
+  therefore appear; this is not a network/tracker blocker.
+- **Playback limitations** – extracting a content stream avoids the web player's ad
+  scheduling; it does not guarantee that YouTube will always supply a playable stream.
+  YouTube changes, region restrictions, bot checks, and unavailable videos can prevent
+  extraction. Signed-in cookies are never passed to the extractor: private, purchased,
+  members-only, or age-restricted content may not play even when accessible in the website.
+  Native watch time/history is not synchronized with the YouTube account. Website playlist
+  autoplay and web-player-specific controls are not provided by the native player.
+  There is no automatic fallback to YouTube's web player. Creator-embedded sponsorships
+  are part of the video and are not removed.
 - **No Playables** – the "Playables" shelves and navigation entries are removed from pages
   as they appear.
 - **No Posts shelf** – the "Posts" section is removed from the home page as it appears.
@@ -64,7 +78,7 @@ keeps you signed in, and blocks advertising/tracking requests.
   including internal, device-protected and external app directories without double counting.
   Measurements start with “Measuring…” and unsupported values show “Unavailable.”
   Separate WebView renderer memory/traffic may not be included. YouTube's own playback
-  statistics panel remains separate.
+  statistics panel is not used by the native player.
 - **Debug logging** – disabled by default and enabled in Preferences. Activity, navigation,
   settings and WebView failures are recorded to logcat and app-private rotating files
   (512 KiB each, one backup). Routine events include their caller; errors and crashes
@@ -75,18 +89,12 @@ keeps you signed in, and blocks advertising/tracking requests.
   logging but retains existing files and lets queued entries finish. Logging is best effort:
   a bounded queue drops entries under heavy load. Review logs before sharing; copies
   already shared with other apps cannot be recalled.
-- **Video swipe gestures** – swiping up on a playing video enters fullscreen, swiping down
-  exits it, and swiping down on a watch page shrinks the video into a miniplayer (mobile
-  site mode only – the miniplayer styling targets the mobile player, so switching to the
-  desktop site disables the gesture and restores an open miniplayer). The
-  gestures follow the touch through `touchmove` and also complete on `touchcancel` (which
-  the WebView fires when it takes the gesture over), resolve the player through the event's
-  composed path so touches inside the player's shadow DOM count, scale their distance
-  threshold with the viewport and fall back to the mobile fullscreen control or the
-  Fullscreen API when the desktop player button is absent.
+- **Player presentation** – native controls switch between fullscreen and a compact
+  miniplayer in both mobile and desktop browsing modes. The old web-player swipe gestures
+  and second-WebView miniplayer are no longer used.
 - **Foldables** – fold/unfold posture changes (`screenLayout`, `smallestScreenSize`,
-  `density`) are handled by the activity instead of recreating it, so the page, its playback
-  and the injected gesture handlers survive folding. The cleanup injections never touch the
+  `density`) are handled by the activity instead of recreating it, so the page and native
+  playback survive folding. The cleanup injections never touch the
   comments section, which on large screens is rendered inside an engagement panel that looks
   like the shelves they remove.
 
@@ -94,8 +102,15 @@ keeps you signed in, and blocks advertising/tracking requests.
 
 ```
 app/src/main/java/com/skystream/ssyoutube/
-  MainActivity.java   WebView setup, cookie persistence, request interception
-  AdBlocker.java      URL-based ad/tracker blocklist (pure Java, unit tested)
+  MainActivity.java   Browsing WebView, trusted playback routing, native player presentation
+  NativePlayerView.java     Media3 playback, controls, lifecycle and extraction coordination
+  NativeStreamExtractor.java  NewPipeExtractor media selection
+  ExtractorDownloader.java    Bounded HTTPS extraction requests without browser cookies
+  PlaybackRequest.java        Validated video links and timestamps (pure Java, unit tested)
+  NativePlaybackScript.java   Web media suppression and same-page navigation notifications
+  NativeNetworkPolicy.java    HTTPS host/redirect and anonymous-cookie restrictions
+  NativeHttpsDataSource.java  Validated native media transport
+  NativePlaybackState.java    Playback intent and lifecycle state (pure Java, unit tested)
   SiteScope.java      Which URLs stay inside the app (pure Java, unit tested)
   Preferences.java    Theme/site-mode values, user agents, home URLs (pure Java, unit tested)
   NavigationHistory.java  Browser-like back/forward step calculation (pure Java, unit tested)
@@ -104,17 +119,31 @@ app/src/main/java/com/skystream/ssyoutube/
   Logger.java        Opt-in asynchronous logging, sharing and clearing
   LogFormat.java     Privacy-conscious diagnostic formatting (pure Java, unit tested)
   LogStore.java      Bounded rotation and export snapshots (pure Java, unit tested)
-app/src/test/java/... JUnit tests for AdBlocker, SiteScope, Preferences and NavigationHistory
+app/src/test/java/... JUnit coverage for URL routing, page scripts, preferences and app services
 ```
 
 ## Build and test
 
 Requires JDK 17 and the Android SDK (compileSdk 34); minSdk is 21.
+Dependencies resolve from Google Maven, Maven Central, and a restricted JitPack repository
+for NewPipeExtractor and its nanojson dependency. Network access to these repositories
+is required for a fresh build.
 
 ```bash
 gradle assembleDebug   # build the APK
 gradle test            # run the JVM unit tests
 ```
+
+### Third-party licensing
+
+Playback uses [AndroidX Media3](https://github.com/androidx/media) (Apache-2.0) and
+[NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) (GPL-3.0-or-later).
+NewPipeExtractor's GPL obligations apply when distributing a combined app: provide the
+app's complete corresponding source, a copy of the [GPL](https://www.gnu.org/licenses/gpl-3.0.txt),
+applicable license notices, and GPL-compatible
+distribution terms. Check the pinned dependencies' licenses before publishing APKs;
+adding a dependency does not itself grant rights to redistribute unrelated code.
+No upstream extractor implementation is copied into this repository.
 
 Merging a pull request does not publish a GitHub Release. To publish manually,
 open **Actions → Manual APK Release → Run workflow** and select
