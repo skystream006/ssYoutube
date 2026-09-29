@@ -147,8 +147,11 @@ No upstream extractor implementation is copied into this repository.
 
 Merging a pull request does not publish a GitHub Release. To publish manually,
 open **Actions → Manual APK Release → Run workflow** and select
-**main**. This separate, manual-only workflow builds the latest `main` commit using
-the existing `versionCode` and `versionName` without bumping or committing them.
+**main**. This separate, manual-only workflow builds the latest `main` commit.
+Versions are derived from Git history, so nothing is bumped or committed: with `N` first-parent
+commits on `HEAD`, `versionCode` is `N + 1` and `versionName` is `1.0.NN` (e.g. `v1.0.01`,
+zero-padded to at least two digits). Builds therefore require full history
+(`git fetch --unshallow`).
 It runs the tests, builds with the same signing key as the normal APK workflow,
 and uploads the APK as a workflow artifact. If the version's GitHub Release does
 not exist, it publishes one as the latest release for in-app updates; existing

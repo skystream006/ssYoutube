@@ -32,25 +32,12 @@ jobs:
       - name: Calculate APK version
         id: version
         run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import subprocess
-
-          commit_count = int(subprocess.check_output(
-              ["git", "rev-list", "--first-parent", "--count", "HEAD"], text=True
-          ).strip())
-          version_code = commit_count + 1
-          version_name = "1.0"
-
-          print(f"version_code={version_code}")
-          print(f"version_name={version_name}")
-          print(f"apk_name=ssYouTube-v{version_name}.apk")
-          PY
+          version_name="$(./gradlew -q :app:printVersionName)"
+          echo "version_name=${version_name}" >> "$GITHUB_OUTPUT"
+          echo "apk_name=ssYouTube-v${version_name}.apk" >> "$GITHUB_OUTPUT"
 
       - name: Build and test APK
-        env:
-          VERSION_CODE: ${{ steps.version.outputs.version_code }}
-          VERSION_NAME: ${{ steps.version.outputs.version_name }}
-        run: ./gradlew test assembleDebug -PmanualReleaseVersionCode="$VERSION_CODE" -PmanualReleaseVersionName="$VERSION_NAME"
+        run: ./gradlew test assembleDebug
 
       - name: Rename APK
         env:

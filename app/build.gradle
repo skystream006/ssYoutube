@@ -2,6 +2,19 @@ plugins {
     id 'com.android.application'
 }
 
+def gitOutput = { String... arguments ->
+    providers.exec {
+        workingDir rootDir
+        commandLine(['git'] + arguments.toList())
+    }.standardOutput.asText.get().trim()
+}
+
+if (gitOutput('rev-parse', '--is-shallow-repository') != 'false') {
+    throw new GradleException('APK versioning requires full Git history. Run git fetch --unshallow.')
+}
+def revision = gitOutput('rev-list', '--first-parent', '--count', 'HEAD').toInteger()
+def appVersionName = String.format(Locale.ROOT, '1.0.%02d', revision)
+
 android {
     namespace 'com.skystream.ssyoutube'
     compileSdk 34
@@ -14,8 +27,8 @@ android {
         applicationId "com.skystream.ssyoutube"
         minSdk 21
         targetSdk 34
-        versionCode = (project.findProperty('manualReleaseVersionCode') ?: '82').toInteger()
-        versionName project.findProperty('manualReleaseVersionName') ?: "0.10.15"
+        versionCode revision + 1
+        versionName appVersionName
     }
 
     signingConfigs {
@@ -49,6 +62,10 @@ android {
                        'META-INF/NOTICE.txt']
         }
     }
+}
+
+tasks.register('printVersionName') {
+    doLast { println appVersionName }
 }
 
 dependencies {
