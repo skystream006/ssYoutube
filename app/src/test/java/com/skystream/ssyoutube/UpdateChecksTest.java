@@ -46,7 +46,7 @@ public class UpdateChecksTest {
     }
 
     @Test
-    public void rejectsUnpublishedAndMalformedReleaseMetadata() {
+    public void rejectsUnpublishedAndMalformedReleaseMetadata() throws Exception {
         assertEquals("1.0", UpdateChecks.releaseVersion("v1.0", false, false));
         assertThrows(IOException.class, () -> UpdateChecks.releaseVersion("1.2.3", true, false));
         assertThrows(IOException.class, () -> UpdateChecks.releaseVersion("1.2.3", false, true));
