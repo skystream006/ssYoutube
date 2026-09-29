@@ -893,16 +893,22 @@ public class MainActivity extends AppCompatActivity {
         return Preferences.siteModeUrl(url, desktopMode);
     }
 
+    static String closedVideoForPage(String closedVideoId, PlaybackRequest request) {
+        return request != null && request.videoId.equals(closedVideoId) ? closedVideoId : null;
+    }
+
     private void routePage(String url) {
         if (url == null || nativePlayer == null || isDestroyed()) {
             return;
         }
         if (!PlaybackRequest.isYouTubePage(url)) {
+            closedVideoId = null;
             closeNativePlayback(false);
             lastRouteKey = null;
             return;
         }
         PlaybackRequest request = PlaybackRequest.fromUrl(url);
+        closedVideoId = closedVideoForPage(closedVideoId, request);
         if (request == null) {
             lastRouteKey = null;
             if (nativePlayer.hasVideo()) {
@@ -918,7 +924,6 @@ public class MainActivity extends AppCompatActivity {
         if (request.videoId.equals(closedVideoId)) {
             return;
         }
-        closedVideoId = null;
         if (!nativePlayer.hasVideo() || !key.equals(lastPlaybackKey)) {
             nativePlayer.play(request.videoId, request.startPositionMs);
             lastPlaybackKey = key;

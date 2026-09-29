@@ -2,6 +2,7 @@ package com.skystream.ssyoutube;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -233,5 +234,23 @@ public class MainActivityPageScriptTest {
                 MainActivity.canonicalPlaybackUrl(request, false));
         assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=90",
                 MainActivity.canonicalPlaybackUrl(request, true));
+    }
+
+    @Test
+    public void closedVideoStaysSuppressedOnlyUntilLeavingItsPage() {
+        PlaybackRequest video = PlaybackRequest.fromUrl(
+                "https://m.youtube.com/watch?v=dQw4w9WgXcQ");
+        String closed = MainActivity.closedVideoForPage(video.videoId, video);
+        assertEquals(video.videoId, closed);
+        assertEquals(closed, MainActivity.closedVideoForPage(closed, video));
+
+        closed = MainActivity.closedVideoForPage(closed,
+                PlaybackRequest.fromUrl("https://m.youtube.com/results?search_query=music"));
+        assertNull(closed);
+        assertNull(MainActivity.closedVideoForPage(closed, video));
+        assertNull(MainActivity.closedVideoForPage(video.videoId,
+                PlaybackRequest.fromUrl("https://m.youtube.com/")));
+        assertNull(MainActivity.closedVideoForPage(video.videoId,
+                PlaybackRequest.fromUrl("https://m.youtube.com/watch?v=abcdefghijk")));
     }
 }

@@ -11,6 +11,7 @@ import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 
 /** NewPipe owns YouTube protocol changes, signatures and stream extraction. */
 final class NativeStreamExtractor {
@@ -22,13 +23,16 @@ final class NativeStreamExtractor {
         final String videoMime;
         final String audioUrl;
         final String audioMime;
+        final boolean live;
 
-        Result(Kind kind, String videoUrl, String videoMime, String audioUrl, String audioMime) {
+        Result(Kind kind, String videoUrl, String videoMime, String audioUrl, String audioMime,
+               boolean live) {
             this.kind = kind;
             this.videoUrl = videoUrl;
             this.videoMime = videoMime;
             this.audioUrl = audioUrl;
             this.audioMime = audioMime;
+            this.live = live;
         }
     }
 
@@ -51,22 +55,17 @@ final class NativeStreamExtractor {
             boolean live = info.getStreamType() == StreamType.LIVE_STREAM
                     || info.getStreamType() == StreamType.AUDIO_LIVE_STREAM;
             if (live) {
-                Result manifest = manifest(info);
+                Result manifest = manifest(info, true);
                 if (manifest != null) {
                     return manifest;
                 }
             }
-            VideoStream muxed = bestVideo(info.getVideoStreams());
-            if (muxed != null) {
-                return new Result(Kind.PROGRESSIVE, muxed.getContent(), mime(muxed), null, null);
+            Result streams = selectStreams(info.getVideoStreams(),
+                    info.getVideoOnlyStreams(), info.getAudioStreams(), live);
+            if (streams != null) {
+                return streams;
             }
-            VideoStream video = bestVideo(info.getVideoOnlyStreams());
-            AudioStream audio = bestAudio(info.getAudioStreams());
-            if (video != null && audio != null) {
-                return new Result(Kind.PROGRESSIVE, video.getContent(), mime(video),
-                        audio.getContent(), mime(audio));
-            }
-            Result manifest = manifest(info);
+            Result manifest = manifest(info, live);
             if (manifest != null) {
                 return manifest;
             }
@@ -83,12 +82,30 @@ final class NativeStreamExtractor {
         }
     }
 
-    private static Result manifest(StreamInfo info) {
+    private static Result manifest(StreamInfo info, boolean live) {
         if (NativeNetworkPolicy.isMediaUrl(info.getHlsUrl())) {
-            return new Result(Kind.HLS, info.getHlsUrl(), "application/x-mpegURL", null, null);
+            return new Result(Kind.HLS, info.getHlsUrl(), "application/x-mpegURL", null, null, live);
         }
         if (NativeNetworkPolicy.isMediaUrl(info.getDashMpdUrl())) {
-            return new Result(Kind.DASH, info.getDashMpdUrl(), "application/dash+xml", null, null);
+            return new Result(Kind.DASH, info.getDashMpdUrl(), "application/dash+xml", null, null, live);
+        }
+        return null;
+    }
+
+    static Result selectStreams(List<VideoStream> muxedStreams, List<VideoStream> videoStreams,
+                                List<AudioStream> audioStreams, boolean live) {
+        VideoStream muxed = bestVideo(muxedStreams);
+        VideoStream video = bestVideo(videoStreams);
+        AudioStream audio = bestAudio(audioStreams);
+        if (video != null && audio != null && (muxed == null
+                || (resolution(video.getResolution()) > resolution(muxed.getResolution())
+                && videoCompatibility(mime(video), video.getCodec())
+                >= videoCompatibility(mime(muxed), muxed.getCodec())))) {
+            return new Result(Kind.PROGRESSIVE, video.getContent(), mime(video),
+                    audio.getContent(), mime(audio), live);
+        }
+        if (muxed != null) {
+            return new Result(Kind.PROGRESSIVE, muxed.getContent(), mime(muxed), null, null, live);
         }
         return null;
     }
@@ -108,18 +125,29 @@ final class NativeStreamExtractor {
             if (!"video/mp4".equals(mime) && !"video/webm".equals(mime)) {
                 continue;
             }
-            String codec = stream.getCodec();
-            // An MP4 container alone does not imply H.264: YouTube also serves AV1 in MP4.
-            int compatibility = codec != null && codec.startsWith("avc") ? 30_000
-                    : codec == null && "video/mp4".equals(mime) ? 20_000
-                    : "video/webm".equals(mime) ? 10_000 : 0;
-            int score = height + compatibility;
+            int score = height + videoCompatibility(mime, stream.getCodec());
             if (score > bestScore) {
                 best = stream;
                 bestScore = score;
             }
         }
         return best;
+    }
+
+    static int videoCompatibility(String mime, String codecs) {
+        if (codecs != null) {
+            for (String token : codecs.split(",")) {
+                String codec = token.trim().toLowerCase(Locale.US);
+                if (codec.startsWith("avc1") || codec.startsWith("avc3")) {
+                    return 30_000;
+                }
+            }
+        }
+        // MP4 may contain AV1: only use the container as a hint when the codec is unknown.
+        if ((codecs == null || codecs.trim().isEmpty()) && "video/mp4".equals(mime)) {
+            return 20_000;
+        }
+        return "video/webm".equals(mime) ? 10_000 : 0;
     }
 
     static AudioStream bestAudio(List<AudioStream> streams) {

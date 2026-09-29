@@ -77,4 +77,45 @@ public class NativePlaybackStateTest {
         assertEquals(NativePlaybackState.Selection.IGNORE, state.select("../bad", 0));
         assertEquals(FIRST, state.videoId);
     }
+
+    @Test
+    public void freshUntimestampedLivePlaybackUsesDefaultLivePosition() {
+        NativePlaybackState state = new NativePlaybackState();
+        state.select(FIRST, 0);
+        assertTrue(state.useLiveDefaultPosition(true));
+        assertFalse(state.useLiveDefaultPosition(false));
+        state.lifecyclePaused = false;
+        state.lifecyclePaused = true;
+        state.lifecyclePaused = false;
+        assertTrue(state.useLiveDefaultPosition(true));
+    }
+
+    @Test
+    public void explicitLiveTimestampIsPreservedAcrossDuplicateMessages() {
+        NativePlaybackState state = new NativePlaybackState();
+        state.select(FIRST, 45_000);
+        assertFalse(state.useLiveDefaultPosition(true));
+        state.select(FIRST, 0);
+        assertFalse(state.useLiveDefaultPosition(true));
+        assertEquals(45_000, state.positionMs);
+        state.select(SECOND, 0);
+        assertTrue(state.useLiveDefaultPosition(true));
+        state.select(SECOND, 90_000);
+        assertFalse(state.useLiveDefaultPosition(true));
+        assertEquals(90_000, state.positionMs);
+    }
+
+    @Test
+    public void restoredLivePositionsIncludingZeroDoNotJumpToLiveEdge() {
+        NativePlaybackState state = new NativePlaybackState();
+        state.restore(FIRST, 0, 0, false, true);
+        assertFalse(state.useLiveDefaultPosition(true));
+        assertEquals(0, state.positionMs);
+        assertFalse(state.wantsPlay);
+        state.restore(FIRST, 125_000, 0, true, true);
+        assertFalse(state.useLiveDefaultPosition(true));
+        assertEquals(125_000, state.positionMs);
+        state.restore(FIRST, 0, 0, true, false);
+        assertTrue(state.useLiveDefaultPosition(true));
+    }
 }

@@ -7,6 +7,7 @@ final class NativePlaybackState {
     String videoId;
     long positionMs;
     long explicitStartMs;
+    boolean hasPosition;
     boolean wantsPlay;
     boolean lifecyclePaused = true;
     boolean prepared;
@@ -21,6 +22,7 @@ final class NativePlaybackState {
             if (start > 0 && start != explicitStartMs) {
                 positionMs = start;
                 explicitStartMs = start;
+                hasPosition = true;
                 return Selection.SEEK;
             }
             return Selection.IGNORE;
@@ -28,6 +30,7 @@ final class NativePlaybackState {
         videoId = id;
         positionMs = start;
         explicitStartMs = start;
+        hasPosition = start > 0;
         wantsPlay = true;
         prepared = false;
         failed = false;
@@ -42,10 +45,27 @@ final class NativePlaybackState {
         return videoId != null && !lifecyclePaused && wantsPlay && !failed;
     }
 
+    boolean useLiveDefaultPosition(boolean live) {
+        return live && !hasPosition;
+    }
+
+    void restore(String id, long position, long explicitStart, boolean resumePlayback,
+                 boolean positionKnown) {
+        if (!isVideoId(id)) {
+            return;
+        }
+        stop();
+        select(id, position);
+        explicitStartMs = Math.max(0, explicitStart);
+        wantsPlay = resumePlayback;
+        hasPosition = positionKnown || positionMs > 0;
+    }
+
     void stop() {
         videoId = null;
         positionMs = 0;
         explicitStartMs = 0;
+        hasPosition = false;
         wantsPlay = false;
         prepared = false;
         failed = false;

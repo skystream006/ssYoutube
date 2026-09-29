@@ -49,6 +49,7 @@ final class NativePlayerView extends FrameLayout {
     private static final String STATE_POSITION = "native.position";
     private static final String STATE_WANTS_PLAY = "native.wantsPlay";
     private static final String STATE_EXPLICIT_START = "native.explicitStart";
+    private static final String STATE_HAS_POSITION = "native.hasPosition";
     private final Handler main = new Handler(Looper.getMainLooper());
     private final NativePlaybackState state = new NativePlaybackState();
     private final ThreadPoolExecutor extractor = new ThreadPoolExecutor(1, 1, 30,
@@ -135,10 +136,7 @@ final class NativePlayerView extends FrameLayout {
         toolbar.addView(fullscreen, new LinearLayout.LayoutParams(dp(48), dp(48)));
         ImageButton close = button(context, android.R.drawable.ic_menu_close_clear_cancel,
                 R.string.native_player_close);
-        close.setOnClickListener(view -> {
-            stop();
-            listener.onClose();
-        });
+        close.setOnClickListener(view -> listener.onClose());
         toolbar.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
         addView(toolbar, new LayoutParams(
                 LayoutParams.MATCH_PARENT, dp(48), Gravity.TOP));
@@ -233,6 +231,7 @@ final class NativePlayerView extends FrameLayout {
         outState.putLong(STATE_POSITION, state.positionMs);
         outState.putBoolean(STATE_WANTS_PLAY, state.wantsPlay);
         outState.putLong(STATE_EXPLICIT_START, state.explicitStartMs);
+        outState.putBoolean(STATE_HAS_POSITION, state.hasPosition);
     }
 
     void restoreState(Bundle savedState) {
@@ -244,9 +243,10 @@ final class NativePlayerView extends FrameLayout {
             return;
         }
         stop();
-        state.select(id, Math.max(0, savedState.getLong(STATE_POSITION, 0)));
-        state.explicitStartMs = Math.max(0, savedState.getLong(STATE_EXPLICIT_START, 0));
-        state.wantsPlay = savedState.getBoolean(STATE_WANTS_PLAY, true);
+        state.restore(id, savedState.getLong(STATE_POSITION, 0),
+                savedState.getLong(STATE_EXPLICIT_START, 0),
+                savedState.getBoolean(STATE_WANTS_PLAY, true),
+                savedState.getBoolean(STATE_HAS_POSITION, true));
         showLoading();
         // Only identifiers and positions survive recreation; expiring stream URLs never do.
         startExtraction();
@@ -317,7 +317,9 @@ final class NativePlayerView extends FrameLayout {
                             MediaSource source = mediaSource(result, id);
                             changingPlayer = true;
                             try {
-                                player.setMediaSource(source, state.positionMs);
+                                player.setMediaSource(source,
+                                        state.useLiveDefaultPosition(result.live)
+                                                ? C.TIME_UNSET : state.positionMs);
                                 player.setPlayWhenReady(state.shouldPlay());
                                 state.prepared = true;
                                 player.prepare();
@@ -420,8 +422,9 @@ final class NativePlayerView extends FrameLayout {
     }
 
     private void capturePosition() {
-        if (!released && state.prepared) {
+        if (!released && state.prepared && !player.getCurrentTimeline().isEmpty()) {
             state.positionMs = Math.max(0, player.getCurrentPosition());
+            state.hasPosition = true;
         }
     }
 
