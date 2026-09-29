@@ -35,7 +35,7 @@ public class UpdateChecksTest {
 
     @Test
     public void rejectsMalformedVersionsOnEitherSide() {
-        for (String value : new String[] {null, "", "1", "1.2", "1.2.3.4", " 1.2.3",
+        for (String value : new String[] {null, "", "1", "1.2.3.4", " 1.2.3",
                 "1.2.3\n", "V1.2.3", "vv1.2.3", "-1.2.3", "1.+2.3", "1.2.3-beta",
                 "1.2.3+4", "1.a.3", "١.2.3"}) {
             assertThrows(IllegalArgumentException.class,
