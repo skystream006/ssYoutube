@@ -44,6 +44,11 @@ keeps you signed in, and blocks advertising/tracking requests.
   page load to hide inline promoted/ad renderers. The ad-hiding stylesheet and the JSON
   ad-pruning hook are registered as document start scripts (androidx.webkit), so they run
   before the page's own scripts on every load and refresh instead of racing them.
+  Late-assigned player data is filtered too. Recognized adblock-enforcement dialogs are
+  dismissed and interrupted playback is resumed without replacing the player. Adblock-specific
+  player failures are retried once per video; errors are cleared only when the response
+  contains media. Server-side refusals that still provide no playable media, sign-in/age
+  restrictions, and other playback errors remain visible rather than leaving a blank player.
   Shopping and "Buy Now" call-to-action elements are hidden by CSS and removed
   as they appear.
 - **No Playables** – the "Playables" shelves and navigation entries are removed from pages

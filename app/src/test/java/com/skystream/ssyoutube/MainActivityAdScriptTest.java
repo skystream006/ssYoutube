@@ -36,6 +36,83 @@ public class MainActivityAdScriptTest {
     }
 
     @Test
+    public void prunesLateInitialDataWithoutReplacingExistingAccessors() {
+        String script = MainActivity.AD_JSON_PRUNE_SCRIPT;
+        assertTrue(script.contains("hookInitial('ytInitialPlayerResponse')"));
+        assertTrue(script.contains("hookInitial('ytInitialData')"));
+        assertTrue(script.contains("Object.getOwnPropertyDescriptor(window,name)"));
+        assertTrue(script.contains("!descriptor.configurable||descriptor.get||descriptor.set"));
+        assertTrue(script.contains("descriptor.writable===false"));
+        assertTrue(script.contains("set:function(next){prune(next,0);value=next;}"));
+        assertTrue(script.contains("window.__ssyoutubeRefreshAdData();return;"));
+    }
+
+    @Test
+    public void onlyClearsAdblockErrorsWhenTheResponseContainsMedia() {
+        String script = MainActivity.AD_JSON_PRUNE_SCRIPT;
+        assertTrue(script.contains("'bkaEnforcementMessageViewModel'"));
+        assertTrue(script.contains("'enforcementMessageViewModel'"));
+        assertTrue(script.contains("openAdAllowlistInstructionCommand"));
+        assertTrue(script.contains("status.status==='ERROR'||status.status==='UNPLAYABLE'"));
+        assertTrue(script.contains("isEnforcement(status,0)"));
+        assertTrue(script.contains("if(hasMedia(value)){if(blocked(value)){"));
+        assertTrue(script.contains("data.formats"));
+        assertTrue(script.contains("data.adaptiveFormats"));
+        assertTrue(script.contains("data.hlsManifestUrl||data.dashManifestUrl"));
+        assertFalse(script.contains("delete value.playabilityStatus;"));
+        assertFalse(script.contains("'trackingParams'"));
+        assertFalse(script.contains("'serviceTrackingParams'"));
+    }
+
+    @Test
+    public void retriesBlockedPlaybackOnceWithoutReloadingThePage() {
+        String script = MainActivity.AD_JSON_PRUNE_SCRIPT;
+        assertTrue(script.contains("if(id!==currentId){currentId=id;retried=false;generation++;}"));
+        assertTrue(script.contains("responseId&&responseId!==id"));
+        assertTrue(script.contains("if(!retried&&typeof player.loadVideoById==='function')"));
+        assertTrue(script.contains("retried=true;"));
+        assertTrue(script.contains("video.currentTime"));
+        assertTrue(script.contains("playbackStartConfig.startSeconds"));
+        assertTrue(script.contains("player.loadVideoById(id,isFinite(start)&&start>0?start:0)"));
+        assertFalse(script.contains("location.reload"));
+        assertFalse(script.contains("iframe"));
+    }
+
+    @Test
+    public void dismissesOnlyEnforcementWarningsAndResumesTheExistingVideo() {
+        String script = MainActivity.AD_JSON_PRUNE_SCRIPT;
+        assertTrue(script.contains("ytd-enforcement-message-view-model"));
+        assertTrue(script.contains("ytm-enforcement-message-view-model"));
+        assertTrue(script.contains("yt-bka-enforcement-message-view-model"));
+        assertTrue(script.contains("#dismiss-button button,#dismiss-button"));
+        assertTrue(script.contains("dialog.close()"));
+        assertTrue(script.contains("handledWarnings.has(warning)"));
+        assertTrue(script.contains("warning.remove()"));
+        assertTrue(script.contains("video.play()"));
+        assertTrue(script.contains("playback.catch(function(){});"));
+        assertFalse(script.contains(".ytp-error"));
+        assertFalse(script.contains("paper-dialog-backdrop"));
+        assertFalse(script.contains("parent.remove()"));
+    }
+
+    @Test
+    public void recoveryRespectsNavigationPausedVideosAndMiniplayerPlaybackBlocking() {
+        String script = MainActivity.AD_JSON_PRUNE_SCRIPT;
+        assertTrue(script.contains("window.__ssyoutubeBlockResultsPlayback"));
+        assertTrue(script.contains("document.hidden"));
+        assertTrue(script.contains("token!==generation||videoId()!==id"));
+        assertTrue(script.contains("!video.isConnected||video.ended"));
+        assertTrue(script.contains("if(attempt<4)"));
+        assertTrue(script.contains("yt-navigate-start"));
+        assertTrue(script.contains("yt-navigate-finish"));
+        assertTrue(script.contains("MutationObserver"));
+        assertTrue(script.contains("if(pending){return;}pending=true;"));
+        assertTrue(script.contains("setInterval(scheduleRecovery,1000)"));
+        assertTrue(script.contains("if(location.protocol!=='https:'"));
+        assertTrue(script.contains("youtube\\.com$"));
+    }
+
+    @Test
     public void removesBuyNowButtonsAsynchronously() {
         String script = MainActivity.BUY_NOW_CLEANUP_SCRIPT;
         assertTrue(script.contains("BuyNowCleanupInstalled"));
