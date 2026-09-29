@@ -130,6 +130,16 @@ public class PlaybackRequestTest {
     }
 
     @Test
+    public void rejectsPlaylistEmbedAsVideo() {
+        assertNull(PlaybackRequest.fromUrl("https://youtube.com/embed/videoseries"));
+        assertNull(PlaybackRequest.fromUrl(
+                "https://youtube.com/embed/videoseries?list=" + ID));
+        assertNull(PlaybackRequest.fromUrl(
+                "https://youtube.com/embed/videoseries/?v=" + ID));
+        assertRequest("https://youtube.com/embed/" + ID, 0);
+    }
+
+    @Test
     public void rejectsMissingMalformedAndInjectedVideoIds() {
         for (String value : new String[]{
                 "", "short", ID + "x", ID.substring(1), "abc.def-123",
