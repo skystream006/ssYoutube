@@ -28,28 +28,28 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Read current APK version
+      - name: Calculate APK version
         id: version
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import re
-          from pathlib import Path
+          import subprocess
 
-          text = Path("app/build.gradle").read_text()
-          code_match = re.search(r"^\s*versionCode\s+(\d+)\s*$", text, re.MULTILINE)
-          name_match = re.search(r'^\s*versionName\s+"(\d+\.\d{2}\.\d{2})"\s*$', text, re.MULTILINE)
-          if not code_match or int(code_match.group(1)) < 1:
-              raise SystemExit("A positive versionCode is required in app/build.gradle")
-          if not name_match:
-              raise SystemExit("versionName must use xx.yy.zz format, for example 0.01.01")
+          commit_count = int(subprocess.check_output(
+              ["git", "rev-list", "--first-parent", "--count", "HEAD"], text=True
+          ).strip())
+          version_code = commit_count + 1
+          version_name = "1.0"
 
-          version_name = name_match.group(1)
+          print(f"version_code={version_code}")
           print(f"version_name={version_name}")
           print(f"apk_name=ssYouTube-v{version_name}.apk")
           PY
 
       - name: Build and test APK
-        run: ./gradlew test assembleDebug
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+        run: ./gradlew test assembleDebug -PmanualReleaseVersionCode="$VERSION_CODE" -PmanualReleaseVersionName="$VERSION_NAME"
 
       - name: Rename APK
         env:
