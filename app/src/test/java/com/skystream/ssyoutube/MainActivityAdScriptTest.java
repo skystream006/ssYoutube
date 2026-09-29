@@ -121,6 +121,19 @@ public class MainActivityAdScriptTest {
     }
 
     @Test
+    public void recoveryPreservesNativeMediaPauseHandlersAndTextInput() {
+        String script = MainActivity.AD_JSON_PRUNE_SCRIPT;
+        assertTrue(script.contains("window.navigator.mediaSession"));
+        assertTrue(script.contains("session.setActionHandler=function(action,handler)"));
+        assertTrue(script.contains("(action==='pause'||action==='stop')&&typeof handler==='function'"));
+        assertTrue(script.contains("return originalHandler.apply(this,arguments);"));
+        assertTrue(script.contains("return setActionHandler.call(this,action,handler);"));
+        assertTrue(script.contains("event.key==='MediaPause'||event.key==='MediaStop'"));
+        assertTrue(script.contains("target.isContentEditable"));
+        assertTrue(script.contains("/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)"));
+    }
+
+    @Test
     public void removesBuyNowButtonsAsynchronously() {
         String script = MainActivity.BUY_NOW_CLEANUP_SCRIPT;
         assertTrue(script.contains("BuyNowCleanupInstalled"));
