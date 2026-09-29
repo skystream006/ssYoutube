@@ -49,6 +49,9 @@ final class PlaybackRequest {
             videoId = pathId(path, "/live/");
         } else if (path.startsWith("/embed/")) {
             videoId = pathId(path, "/embed/");
+            if ("videoseries".equals(videoId)) {
+                return null;
+            }
         } else {
             return null;
         }
