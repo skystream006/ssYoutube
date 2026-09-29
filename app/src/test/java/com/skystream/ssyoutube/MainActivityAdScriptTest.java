@@ -67,9 +67,9 @@ public class MainActivityAdScriptTest {
     @Test
     public void retriesBlockedPlaybackOnceWithoutReloadingThePage() {
         String script = MainActivity.AD_JSON_PRUNE_SCRIPT;
-        assertTrue(script.contains("if(id!==currentId){currentId=id;retried=false;generation++;}"));
+        assertTrue(script.contains("if(id!==currentId){currentId=id;retried=false;generation++;"));
         assertTrue(script.contains("responseId&&responseId!==id"));
-        assertTrue(script.contains("if(!retried&&typeof player.loadVideoById==='function')"));
+        assertTrue(script.contains("if(!retried&&allowResume&&typeof player.loadVideoById==='function')"));
         assertTrue(script.contains("retried=true;"));
         assertTrue(script.contains("video.currentTime"));
         assertTrue(script.contains("playbackStartConfig.startSeconds"));
@@ -102,7 +102,15 @@ public class MainActivityAdScriptTest {
         assertTrue(script.contains("document.hidden"));
         assertTrue(script.contains("token!==generation||videoId()!==id"));
         assertTrue(script.contains("!video.isConnected||video.ended"));
-        assertTrue(script.contains("if(attempt<4)"));
+        assertTrue(script.contains("!allowResume"));
+        assertTrue(script.contains("video.addEventListener('loadeddata',ready)"));
+        assertTrue(script.contains("video.addEventListener('canplay',ready)"));
+        assertTrue(script.contains("removeEventListener('loadeddata',pendingResume.run)"));
+        assertTrue(script.contains("removeEventListener('canplay',pendingResume.run)"));
+        assertTrue(script.contains("lastInteraction=video&&!video.paused?Date.now():0;"));
+        assertTrue(script.contains("allowResume=true;lastInteraction=0;cancelResume();"));
+        assertTrue(script.contains("document.addEventListener('pause'"));
+        assertTrue(script.contains("allowResume=false;cancelResume();"));
         assertTrue(script.contains("yt-navigate-start"));
         assertTrue(script.contains("yt-navigate-finish"));
         assertTrue(script.contains("MutationObserver"));
