@@ -19,6 +19,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Queue;
 
 public class GitHubUpdateClientTest {
@@ -59,6 +61,48 @@ public class GitHubUpdateClientTest {
         assertTrue(connection.getReadTimeout() > 0);
         assertEquals("identity", connection.getRequestProperty("Accept-Encoding"));
         assertEquals(null, connection.getRequestProperty("Authorization"));
+    }
+
+    @Test
+    public void reportsWrittenBytesUsingReleaseSizeWithOrWithoutContentLength() throws Exception {
+        byte[] body = new byte[40_000];
+        Thread caller = Thread.currentThread();
+        GitHubUpdateClient.Release release = GitHubUpdateClient.release(
+                "v0.10.04", "app.apk", "uploaded", URL, body.length, null);
+        for (String length : new String[] {null, Integer.toString(body.length)}) {
+            FakeConnection data = new FakeConnection(200, body);
+            data.length = length;
+            List<Long> counts = new ArrayList<>();
+            File apk = client(data).download(release, directory, (downloaded, total) -> {
+                assertEquals(body.length, total);
+                assertEquals(caller, Thread.currentThread());
+                assertTrue(downloaded >= 0 && downloaded <= total);
+                if (!counts.isEmpty()) {
+                    assertTrue(downloaded > counts.get(counts.size() - 1));
+                }
+                counts.add(downloaded);
+            });
+            assertEquals(Long.valueOf(0), counts.get(0));
+            assertEquals(Long.valueOf(body.length), counts.get(counts.size() - 1));
+            assertTrue("Expected intermediate progress", counts.size() > 2);
+            assertArrayEquals(body, Files.readAllBytes(apk.toPath()));
+            assertTrue(data.disconnected);
+            assertEquals(1, directory.list().length);
+        }
+    }
+
+    @Test
+    public void incompleteDownloadReportsOnlyWrittenBytesAndCleansPartialFile() throws Exception {
+        FakeConnection data = new FakeConnection(200, new byte[] {1, 2});
+        List<Long> counts = new ArrayList<>();
+        assertThrows(IOException.class, () -> client(data).download(
+                release(null), directory, (downloaded, total) -> {
+                    assertEquals(3, total);
+                    counts.add(downloaded);
+                }));
+        assertEquals(java.util.Arrays.asList(0L, 2L), counts);
+        assertTrue(data.disconnected);
+        assertEquals(0, directory.list().length);
     }
 
     @Test

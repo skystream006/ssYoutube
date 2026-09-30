@@ -13,6 +13,9 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class UpdateChecksTest {
     private static final String URL =
@@ -129,6 +132,46 @@ public class UpdateChecksTest {
                 () -> UpdateChecks.copy(input("abcd"), new ByteArrayOutputStream(), 100, 3, null));
         assertThrows(IOException.class,
                 () -> UpdateChecks.copy(input("abc"), new ByteArrayOutputStream(), 3, 0, null));
+    }
+
+    @Test
+    public void progressReflectsWrittenBytesAndDoesNotReportOversizedData() throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        List<Long> counts = new ArrayList<>();
+        GitHubUpdateClient.ProgressListener progress = (downloaded, total) -> {
+            assertEquals(3, total);
+            assertEquals(output.size(), downloaded);
+            counts.add(downloaded);
+        };
+        UpdateChecks.copy(input("abc"), output, 3, 3, null, progress);
+        assertEquals(Arrays.asList(0L, 3L), counts);
+        output.reset();
+        counts.clear();
+        assertThrows(IOException.class,
+                () -> UpdateChecks.copy(input("abcd"), output, 3, 3, null, progress));
+        assertEquals(Arrays.asList(0L), counts);
+        assertEquals(0, output.size());
+    }
+
+    @Test
+    public void progressCanCancelCopyWithoutWritingMoreBytes() throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        List<Long> counts = new ArrayList<>();
+        try {
+            assertThrows(InterruptedIOException.class, () -> UpdateChecks.copy(
+                    new ByteArrayInputStream(new byte[40_000]), output, 40_000, 40_000, null,
+                    (downloaded, total) -> {
+                        counts.add(downloaded);
+                        if (downloaded > 0) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }));
+            assertEquals(Arrays.asList(0L, 16_384L), counts);
+            assertEquals(16_384, output.size());
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test

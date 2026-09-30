@@ -142,11 +142,20 @@ final class UpdateChecks {
 
     static long copy(InputStream input, OutputStream output, long limit,
                      long expectedSize, MessageDigest digest) throws IOException {
+        return copy(input, output, limit, expectedSize, digest, null);
+    }
+
+    static long copy(InputStream input, OutputStream output, long limit,
+                     long expectedSize, MessageDigest digest,
+                     GitHubUpdateClient.ProgressListener progress) throws IOException {
         if (limit <= 0 || expectedSize == 0 || expectedSize > limit || expectedSize < -1) {
             throw new IOException("Invalid update download size");
         }
         byte[] buffer = new byte[16 * 1024];
         long count = 0;
+        if (progress != null) {
+            progress.onProgress(0, expectedSize);
+        }
         while (true) {
             checkInterrupted();
             int read = input.read(buffer);
@@ -162,6 +171,9 @@ final class UpdateChecks {
                 digest.update(buffer, 0, read);
             }
             count += read;
+            if (progress != null && read > 0) {
+                progress.onProgress(count, expectedSize);
+            }
         }
         if (count == 0 || (expectedSize >= 0 && count != expectedSize)) {
             throw new IOException("Update response is empty or incomplete");
