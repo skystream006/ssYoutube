@@ -53,6 +53,8 @@ playback extraction is separate and anonymous.
   The same native player is used across fullscreen and miniplayer transitions.
   Stream selection is automatic, supporting progressive video, separate video/audio tracks,
   and available HLS/DASH manifests; there is no manual quality selector.
+  Separate audio is appended with mpv's `change-list audio-files append` command after
+  initialization and before `loadfile`; CLI-only list suffixes are not libmpv option names.
   Each selected video gets its own mpv handle; fullscreen/miniplayer transitions retain
   that handle and only change its surface size. Closing or replacing a video destroys its
   handle, and callbacks from that handle cannot update the replacement.

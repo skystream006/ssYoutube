@@ -236,9 +236,7 @@ final class MpvPlayer extends SimpleBasePlayer implements SurfaceHolder.Callback
                 playbackState = STATE_BUFFERING;
                 waitingForRestart = true;
                 attachSurface();
-                if (instance.commandNode(request.loadCommand()) == null) {
-                    throw new IOException("mpv could not open the stream");
-                }
+                request.load(command -> instance.commandNode(command) != null);
                 updateFocus();
                 applyPause();
                 main.post(poll);

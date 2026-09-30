@@ -6,12 +6,19 @@ import java.util.Map;
 
 /** Only extracted HTTPS media, never page input or command text, reaches libmpv. */
 final class MpvPlaybackRequest {
+    interface CommandRunner {
+        boolean run(String... command);
+    }
+
     final String url;
+    private final String audioUrl;
     final Map<String, String> options = new LinkedHashMap<>();
 
     MpvPlaybackRequest(String videoUrl, String audioUrl, long startMs, String certificates)
             throws IOException {
         url = NativeNetworkPolicy.requireHttps(videoUrl, true).toString();
+        this.audioUrl = audioUrl == null ? null
+                : NativeNetworkPolicy.requireHttps(audioUrl, true).toString();
         options.put("config", "no");
         options.put("load-scripts", "no");
         options.put("ytdl", "no");
@@ -48,14 +55,18 @@ final class MpvPlaybackRequest {
         if (startMs >= 0) {
             options.put("start", seconds(startMs));
         }
-        if (audioUrl != null) {
-            options.put("audio-files-append",
-                    NativeNetworkPolicy.requireHttps(audioUrl, true).toString());
-        }
     }
 
-    String[] loadCommand() {
-        return new String[]{"loadfile", url, "replace"};
+    /** Run after initialization, on the fresh handle owned by this request. */
+    void load(CommandRunner runner) throws IOException {
+        // List-operation suffixes are CLI syntax, not libmpv option names.
+        // append treats the complete URL as one filename, including commas and colons.
+        if (audioUrl != null && !runner.run("change-list", "audio-files", "append", audioUrl)) {
+            throw new IOException("mpv could not configure the audio stream");
+        }
+        if (!runner.run("loadfile", url, "replace")) {
+            throw new IOException("mpv could not open the stream");
+        }
     }
 
     static String seconds(long milliseconds) {
