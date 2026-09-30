@@ -221,7 +221,11 @@ final class MpvPlayer extends SimpleBasePlayer implements SurfaceHolder.Callback
                 instance.create(context);
                 IOException configurationError = null;
                 for (Map.Entry<String, String> option : request.options.entrySet()) {
-                    if (instance.setOptionString(option.getKey(), option.getValue()) < 0) {
+                    int result = instance.setOptionString(option.getKey(), option.getValue());
+                    if (result < 0) {
+                        // Option values can contain signed URLs; log only the name and status.
+                        Logger.get(context).log("E", "mpv option rejected: "
+                                + option.getKey() + " code=" + result, null);
                         configurationError = new IOException("Unsupported mpv playback option");
                     }
                 }
@@ -229,6 +233,10 @@ final class MpvPlayer extends SimpleBasePlayer implements SurfaceHolder.Callback
                 instance.init();
                 if (configurationError != null) {
                     throw configurationError;
+                }
+                String[] audioCommand = request.audioCommand();
+                if (audioCommand != null && instance.commandNode(audioCommand) == null) {
+                    throw new IOException("mpv could not configure external audio");
                 }
                 observer = new Observer(instance);
                 instance.addObserver(observer);
@@ -502,7 +510,7 @@ final class MpvPlayer extends SimpleBasePlayer implements SurfaceHolder.Callback
                 } else if (id == MPV.mpvEvent.MPV_EVENT_END_FILE) {
                     MPVNode reason = data.get("reason");
                     if (reason != null && "error".equals(reason.asString())) {
-                        fail(new IOException("mpv network playback failed"));
+                        fail(new IOException("mpv playback failed"));
                     }
                 }
             });

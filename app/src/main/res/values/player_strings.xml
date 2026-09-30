@@ -9,6 +9,7 @@
     <string name="native_player_loading">Finding video streams…</string>
     <string name="native_player_buffering">Buffering…</string>
     <string name="native_player_error">This video cannot be played. It may be unavailable, restricted, or temporarily unsupported. Check your connection and try again.</string>
+    <string name="native_player_playback_error">The native player could not play this stream. Check your connection and retry. If this keeps happening, enable debug logging in Preferences and share the log.</string>
     <string name="native_player_retry">Retry</string>
     <string name="native_player_seek_back">−10 seconds</string>
     <string name="native_player_seek_forward">+10 seconds</string>

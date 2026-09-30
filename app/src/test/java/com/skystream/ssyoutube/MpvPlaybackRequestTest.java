@@ -17,13 +17,17 @@ public class MpvPlaybackRequestTest {
         MpvPlaybackRequest request = new MpvPlaybackRequest(url, null, 0, "/private/ca.pem");
         assertArrayEquals(new String[]{"loadfile", url, "replace"}, request.loadCommand());
         assertFalse(request.options.containsKey("audio-files-append"));
+        assertNull(request.audioCommand());
     }
 
     @Test
     public void addsSeparateAudioWithoutParsingItAsAList() throws Exception {
         MpvPlaybackRequest request = new MpvPlaybackRequest(
                 VIDEO, AUDIO + "&value=a,b:c", 12_345, "/private/ca.pem");
-        assertEquals(AUDIO + "&value=a,b:c", request.options.get("audio-files-append"));
+        assertFalse(request.options.containsKey("audio-files-append"));
+        assertFalse(request.options.containsKey("audio-files"));
+        assertArrayEquals(new String[]{"change-list", "audio-files", "append", AUDIO + "&value=a,b:c"},
+                request.audioCommand());
         assertEquals("12.345", request.options.get("start"));
     }
 
@@ -34,7 +38,20 @@ public class MpvPlaybackRequestTest {
         assertEquals("no", request.options.get("sub-auto"));
         assertEquals("no", request.options.get("audio-file-auto"));
         assertEquals("no", request.options.get("cover-art-auto"));
-        assertEquals(AUDIO, request.options.get("audio-files-append"));
+        assertArrayEquals(new String[]{"change-list", "audio-files", "append", AUDIO},
+                request.audioCommand());
+    }
+
+    @Test
+    public void muxedAndManifestRequestsDoNotAddExternalAudio() throws Exception {
+        for (String url : new String[]{VIDEO, "https://manifest.googlevideo.com/live/index.m3u8",
+                "https://manifest.googlevideo.com/live/index.mpd"}) {
+            MpvPlaybackRequest request = new MpvPlaybackRequest(url, null, -1, "/private/ca.pem");
+            assertNull(request.audioCommand());
+            assertFalse(request.options.containsKey("audio-files"));
+            assertFalse(request.options.containsKey("audio-files-append"));
+            assertArrayEquals(new String[]{"loadfile", url, "replace"}, request.loadCommand());
+        }
     }
 
     @Test

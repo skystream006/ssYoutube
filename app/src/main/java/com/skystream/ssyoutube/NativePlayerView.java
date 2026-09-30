@@ -460,7 +460,8 @@ final class NativePlayerView extends FrameLayout {
         state.prepared = false;
         setPlayerPlayWhenReady(false);
         setKeepScreenOn(false);
-        statusText.setText(R.string.native_player_error);
+        statusText.setText(error instanceof PlaybackException
+                ? R.string.native_player_playback_error : R.string.native_player_error);
         progress.setVisibility(GONE);
         retry.setVisibility(VISIBLE);
         statusPanel.setVisibility(VISIBLE);

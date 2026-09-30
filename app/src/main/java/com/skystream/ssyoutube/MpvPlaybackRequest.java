@@ -7,11 +7,14 @@ import java.util.Map;
 /** Only extracted HTTPS media, never page input or command text, reaches libmpv. */
 final class MpvPlaybackRequest {
     final String url;
+    private final String audioUrl;
     final Map<String, String> options = new LinkedHashMap<>();
 
     MpvPlaybackRequest(String videoUrl, String audioUrl, long startMs, String certificates)
             throws IOException {
         url = NativeNetworkPolicy.requireHttps(videoUrl, true).toString();
+        this.audioUrl = audioUrl == null ? null
+                : NativeNetworkPolicy.requireHttps(audioUrl, true).toString();
         options.put("config", "no");
         options.put("load-scripts", "no");
         options.put("ytdl", "no");
@@ -48,10 +51,12 @@ final class MpvPlaybackRequest {
         if (startMs >= 0) {
             options.put("start", seconds(startMs));
         }
-        if (audioUrl != null) {
-            options.put("audio-files-append",
-                    NativeNetworkPolicy.requireHttps(audioUrl, true).toString());
-        }
+    }
+
+    /** List-operation suffixes are CLI-only; append one literal URL after mpv initialization. */
+    String[] audioCommand() {
+        return audioUrl == null ? null
+                : new String[]{"change-list", "audio-files", "append", audioUrl};
     }
 
     String[] loadCommand() {

@@ -53,6 +53,9 @@ playback extraction is separate and anonymous.
   The same native player is used across fullscreen and miniplayer transitions.
   Stream selection is automatic, supporting progressive video, separate video/audio tracks,
   and available HLS/DASH manifests; there is no manual quality selector.
+  Separate audio is added after mpv initialization with `change-list audio-files append`,
+  before loading the video. Unlike the CLI-only `audio-files-append` option, this command
+  works through libmpv and preserves an HTTPS URL as one list entry.
   Each selected video gets its own mpv handle; fullscreen/miniplayer transitions retain
   that handle and only change its surface size. Closing or replacing a video destroys its
   handle, and callbacks from that handle cannot update the replacement.
@@ -115,6 +118,9 @@ playback extraction is separate and anonymous.
   logging but retains existing files and lets queued entries finish. Logging is best effort:
   a bounded queue drops entries under heavy load. Review logs before sharing; copies
   already shared with other apps cannot be recalled.
+  Native player failures are distinguished from extraction failures in the player message.
+  Rejected mpv options record only their names and numeric error codes, never their values
+  (which can contain signed stream URLs).
 - **Player presentation** – native controls switch between fullscreen and a compact
   miniplayer in both mobile and desktop browsing modes. Tap the video to toggle controls;
   double-tap its left/right side to seek back/forward 10 seconds. Swipe up to enter
