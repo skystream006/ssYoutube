@@ -75,8 +75,9 @@ playback extraction is separate and anonymous.
   are part of the video and are not removed.
   Extracted URLs are restricted to HTTPS YouTube/Googlevideo hosts before opening.
   libmpv/FFmpeg handles media redirects and manifest requests, rather than the former Java
-  media transport: its nested protocol allowlist excludes local files and cleartext HTTP,
-  but it does not apply the extractor's per-redirect host allowlist or response-size limits.
+  media transport: its protocol allowlist excludes directly opened local files and cleartext
+  HTTP URLs, but native redirects do not apply the extractor's per-redirect HTTPS/host
+  policy or response-size limits.
   TLS verification uses the library's bundled CA certificates. Browser cookies, user
   configuration/scripts, external URL extractors and mpv URL-bearing logs are disabled.
 - **Native watch history** – while playing, native position, duration, and observed watched

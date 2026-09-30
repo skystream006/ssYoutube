@@ -28,6 +28,16 @@ public class MpvPlaybackRequestTest {
     }
 
     @Test
+    public void disablesDiscoveryButAllowsExplicitAudioToBeSelected() throws Exception {
+        MpvPlaybackRequest request = new MpvPlaybackRequest(VIDEO, AUDIO, 0, "/private/ca.pem");
+        assertFalse(request.options.containsKey("autoload-files"));
+        assertEquals("no", request.options.get("sub-auto"));
+        assertEquals("no", request.options.get("audio-file-auto"));
+        assertEquals("no", request.options.get("cover-art-auto"));
+        assertEquals(AUDIO, request.options.get("audio-files-append"));
+    }
+
+    @Test
     public void liveDefaultDoesNotForceTheStartOfTheDvrWindow() throws Exception {
         MpvPlaybackRequest request = new MpvPlaybackRequest(VIDEO, null, -1, "/private/ca.pem");
         assertFalse(request.options.containsKey("start"));
@@ -77,7 +87,7 @@ public class MpvPlaybackRequestTest {
         }
         assertEquals(12_345, MpvPlaybackRequest.milliseconds(12.345));
         for (Double invalid : new Double[]{null, -1.0, Double.NaN,
-                Double.POSITIVE_INFINITY, Double.MAX_VALUE}) {
+                Double.POSITIVE_INFINITY, Double.MAX_VALUE, Long.MAX_VALUE / 1000.0}) {
             assertEquals(-1, MpvPlaybackRequest.milliseconds(invalid));
         }
         assertEquals(0, MpvPlaybackRequest.milliseconds(0.0));

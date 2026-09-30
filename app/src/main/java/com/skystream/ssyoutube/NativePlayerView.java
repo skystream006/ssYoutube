@@ -135,11 +135,7 @@ final class NativePlayerView extends FrameLayout {
         statusPanel.addView(retry);
         addView(statusPanel, new LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        if (player.getPlayerError() != null) {
-            showError(player.getPlayerError());
-        } else {
-            statusPanel.setVisibility(GONE);
-        }
+        statusPanel.setVisibility(GONE);
 
         LinearLayout toolbar = new LinearLayout(context);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
@@ -391,7 +387,11 @@ final class NativePlayerView extends FrameLayout {
                             } finally {
                                 changingPlayer = false;
                             }
-                            statusPanel.setVisibility(GONE);
+                            if (player.getPlayerError() != null) {
+                                showError(player.getPlayerError());
+                            } else {
+                                statusPanel.setVisibility(GONE);
+                            }
                         } catch (java.io.IOException | RuntimeException error) {
                             showError(error);
                         }

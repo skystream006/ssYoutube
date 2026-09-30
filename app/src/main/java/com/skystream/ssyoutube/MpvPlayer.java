@@ -80,7 +80,7 @@ final class MpvPlayer extends SimpleBasePlayer implements SurfaceHolder.Callback
         this.context = context.getApplicationContext();
         audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         focusListener = change -> main.post(() -> {
-            if (released) {
+            if (released || !focusHeld) {
                 return;
             }
             if (change == AudioManager.AUDIOFOCUS_GAIN) {
@@ -260,7 +260,7 @@ final class MpvPlayer extends SimpleBasePlayer implements SurfaceHolder.Callback
 
     @Override
     protected ListenableFuture<?> handleSetPlaybackParameters(PlaybackParameters value) {
-        parameters = value;
+        parameters = new PlaybackParameters(value.speed);
         if (mpv != null) {
             mpv.setPropertyDouble("speed", value.speed);
         }

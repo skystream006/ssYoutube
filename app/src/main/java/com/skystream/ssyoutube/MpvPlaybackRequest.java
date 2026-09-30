@@ -21,7 +21,9 @@ final class MpvPlaybackRequest {
         options.put("input-vo-keyboard", "no");
         options.put("osc", "no");
         options.put("osd-level", "0");
-        options.put("autoload-files", "no");
+        options.put("sub-auto", "no");
+        options.put("audio-file-auto", "no");
+        options.put("cover-art-auto", "no");
         options.put("cookies", "no");
         options.put("http-header-fields", "");
         options.put("user-agent", NativeNetworkPolicy.USER_AGENT);
@@ -62,7 +64,12 @@ final class MpvPlaybackRequest {
     }
 
     static long milliseconds(Double seconds) {
-        return seconds == null || seconds.isNaN() || seconds.isInfinite() || seconds < 0
-                || seconds > Long.MAX_VALUE / 1000.0 ? -1 : (long) (seconds * 1000);
+        if (seconds == null || seconds.isNaN() || seconds.isInfinite() || seconds < 0
+                || seconds > Long.MAX_VALUE / 1000.0) {
+            return -1;
+        }
+        long milliseconds = (long) (seconds * 1000);
+        // Media3 timelines also represent these values in microseconds.
+        return milliseconds > Long.MAX_VALUE / 1000 ? -1 : milliseconds;
     }
 }
