@@ -10,4 +10,9 @@
     <string name="native_player_buffering">Buffering…</string>
     <string name="native_player_error">This video cannot be played. It may be unavailable, restricted, or temporarily unsupported. Check your connection and try again.</string>
     <string name="native_player_retry">Retry</string>
+    <string name="native_player_seek_back">−10 seconds</string>
+    <string name="native_player_seek_forward">+10 seconds</string>
+    <string name="native_player_seek_unavailable">Seeking unavailable</string>
+    <string name="native_player_playing">Playing</string>
+    <string name="native_player_paused">Paused</string>
 </resources>

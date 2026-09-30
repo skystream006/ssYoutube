@@ -51,7 +51,9 @@ playback extraction is separate and anonymous.
   and available HLS/DASH manifests; there is no manual quality selector.
 - **Browsing-only WebView** – the site remains available for search, channels, comments,
   and account interactions. Its media playback and previews are disabled, including after
-  single-page navigation, so they cannot play alongside the native player. Only validated
+  single-page navigation, so they cannot play alongside the native player. Web player
+  containers, placeholders, and their reserved height are collapsed in mobile and desktop
+  layouts, leaving the native player as the only video area. Only validated
   YouTube main-frame navigation can select native playback; sign-in pages do not receive
   the playback bridge. The request blocklist, ad-JSON pruning, ad-hiding/cleanup scripts,
   and adblock-warning bypass have been removed. Feed ads and shopping promotions may
@@ -61,10 +63,20 @@ playback extraction is separate and anonymous.
   YouTube changes, region restrictions, bot checks, and unavailable videos can prevent
   extraction. Signed-in cookies are never passed to the extractor: private, purchased,
   members-only, or age-restricted content may not play even when accessible in the website.
-  Native watch time/history is not synchronized with the YouTube account. Website playlist
-  autoplay and web-player-specific controls are not provided by the native player.
+  Website playlist autoplay and web-player-specific controls are not provided by the native player.
   There is no automatic fallback to YouTube's web player. Creator-embedded sponsorships
   are part of the video and are not removed.
+- **Native watch history** – while playing, native position, duration, and observed watched
+  ranges are reported to YouTube approximately every 10 seconds, with a final best-effort
+  update on pause or close. Seeking, buffering, and paused time are not counted as watched
+  ranges. Requests use the matching video's page-provided playback/watchtime URLs and the
+  WebView's signed-in session; account cookies and tracking tokens never enter the extractor
+  or native media transport and are not logged or persisted by this feature.
+  Same-page miniplayer browsing can continue reporting only with a previously validated
+  video context and unchanged account context. Reloads, missing/stale page metadata, account
+  changes, network failures, and YouTube's history settings can prevent synchronization.
+  These are undocumented YouTube endpoints: saving history/resume position is best-effort,
+  not guaranteed, particularly for live/DVR timelines.
 - **No Playables** – the "Playables" shelves and navigation entries are removed from pages
   as they appear.
 - **No Posts shelf** – the "Posts" section is removed from the home page as it appears.
@@ -90,8 +102,12 @@ playback extraction is separate and anonymous.
   a bounded queue drops entries under heavy load. Review logs before sharing; copies
   already shared with other apps cannot be recalled.
 - **Player presentation** – native controls switch between fullscreen and a compact
-  miniplayer in both mobile and desktop browsing modes. The old web-player swipe gestures
-  and second-WebView miniplayer are no longer used.
+  miniplayer in both mobile and desktop browsing modes. Tap the video to toggle controls;
+  double-tap its left/right side to seek back/forward 10 seconds. Swipe up to enter
+  fullscreen, and down to exit fullscreen or minimize a docked player. Tap or swipe up on
+  the miniplayer to expand it; swipe down to dismiss it. Buttons and the seek bar remain
+  available, including for accessibility. Gestures resize the same native player; there
+  is no second-WebView miniplayer.
 - **Foldables** – fold/unfold posture changes (`screenLayout`, `smallestScreenSize`,
   `density`) are handled by the activity instead of recreating it, so the page and native
   playback survive folding. The cleanup injections never touch the
@@ -111,6 +127,9 @@ app/src/main/java/com/skystream/ssyoutube/
   NativeNetworkPolicy.java    HTTPS host/redirect and anonymous-cookie restrictions
   NativeHttpsDataSource.java  Validated native media transport
   NativePlaybackState.java    Playback intent and lifecycle state (pure Java, unit tested)
+  NativePlayerGestures.java   Native tap/swipe decisions and seek bounds (pure Java, unit tested)
+  NativeWatchHistoryState.java  Observed playback ranges and ten-second reporting cadence
+  NativeWatchHistoryScript.java  Page-scoped, best-effort YouTube history reporting
   SiteScope.java      Which URLs stay inside the app (pure Java, unit tested)
   Preferences.java    Theme/site-mode values, user agents, home URLs (pure Java, unit tested)
   NavigationHistory.java  Browser-like back/forward step calculation (pure Java, unit tested)
