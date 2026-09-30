@@ -56,4 +56,19 @@ public class NativePlaybackScriptTest {
         assertTrue(script.contains("if(pending){return;}pending=true"));
         assertTrue(script.contains("setInterval(update,1000)"));
     }
+
+    @Test
+    public void collapsesPlayerPlaceholdersWithoutRemovingWatchContent() {
+        String script = NativePlaybackScript.SCRIPT;
+        assertTrue(script.contains("ytm-watch .player-size,ytm-watch .player-placeholder"));
+        assertTrue(script.contains("ytd-watch-flexy #full-bleed-container"));
+        assertTrue(script.contains("#player-wide-container"));
+        assertTrue(script.contains("height:0!important;min-height:0!important;"));
+        assertTrue(script.contains("padding:0!important;margin:0!important;"));
+        assertTrue(script.contains("--ytd-watch-flexy-player-height:0px!important;"));
+        assertTrue(script.contains("ytm-watch .watch-below-the-player"));
+        assertFalse(script.contains("ytm-watch{display:none"));
+        assertFalse(script.contains("#primary{display:none"));
+        assertFalse(script.contains("#comments"));
+    }
 }

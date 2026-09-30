@@ -15,6 +15,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -542,6 +543,18 @@ public class MainActivity extends AppCompatActivity {
     private final Map<Integer, byte[]> appLogoCache = new HashMap<>();
 
     private final Handler logoInjectionHandler = new Handler(Looper.getMainLooper());
+    private final Handler watchHistoryHandler = new Handler(Looper.getMainLooper());
+    private final NativeWatchHistoryState watchHistoryState = new NativeWatchHistoryState();
+    private final Runnable watchHistoryTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!activityResumed || isDestroyed()) {
+                return;
+            }
+            updateWatchHistory(false);
+            watchHistoryHandler.postDelayed(this, NativeWatchHistoryState.SAMPLE_MS);
+        }
+    };
 
     private WebView webView;
     private NativePlayerView nativePlayer;
@@ -690,7 +703,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         updatesResumed = false;
+        updateWatchHistory(true);
         activityResumed = false;
+        watchHistoryHandler.removeCallbacks(watchHistoryTick);
         nativePlayer.onPause();
         super.onPause();
         logActivity("onPause");
@@ -706,6 +721,8 @@ public class MainActivity extends AppCompatActivity {
         webView.onResume();
         nativePlayer.onResume();
         routePage(webView.getUrl());
+        watchHistoryHandler.removeCallbacks(watchHistoryTick);
+        watchHistoryHandler.post(watchHistoryTick);
         updatesResumed = true;
         appUpdater.dispatch(this);
     }
@@ -741,6 +758,8 @@ public class MainActivity extends AppCompatActivity {
         logActivity("onDestroy");
         statsMonitor.onDestroy();
         logoInjectionHandler.removeCallbacksAndMessages(null);
+        watchHistoryHandler.removeCallbacksAndMessages(null);
+        watchHistoryState.reset();
         nativePlayer.release();
         if (webView != null) {
             webView.stopLoading();
@@ -839,7 +858,8 @@ public class MainActivity extends AppCompatActivity {
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
-                WebViewCompat.addDocumentStartJavaScript(view, NativePlaybackScript.SCRIPT,
+                WebViewCompat.addDocumentStartJavaScript(view,
+                        NativePlaybackScript.SCRIPT + ";" + NativeWatchHistoryScript.SCRIPT,
                         NativePlaybackScript.ORIGIN_RULES);
             } catch (IllegalArgumentException | UnsupportedOperationException error) {
                 logActivity("Document start script unavailable", error);
@@ -925,6 +945,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         if (!nativePlayer.hasVideo() || !key.equals(lastPlaybackKey)) {
+            if (nativePlayer.hasVideo() && !request.videoId.equals(nativePlayer.getVideoId())) {
+                updateWatchHistory(true);
+            }
             nativePlayer.play(request.videoId, request.startPositionMs);
             lastPlaybackKey = key;
             if (!activityResumed) {
@@ -948,11 +971,31 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+        updateWatchHistory(true);
+        watchHistoryState.reset();
         nativePlayer.stop();
         lastPlaybackKey = null;
         playerMinimized = false;
         setPlayerFullscreen(false);
         updatePlayerLayout();
+    }
+
+    private void updateWatchHistory(boolean flush) {
+        if (nativePlayer == null || !nativePlayer.hasVideo()) {
+            watchHistoryState.reset();
+            return;
+        }
+        String id = nativePlayer.getVideoId();
+        watchHistoryState.onContinuityToken(nativePlayer.getHistoryContinuityToken());
+        NativeWatchHistoryState.Report report = watchHistoryState.sample(id,
+                nativePlayer.getPositionMsForHistory(), nativePlayer.getDurationMsForHistory(),
+                !flush && nativePlayer.isPlayingForHistory(),
+                nativePlayer.getPlaybackSpeedForHistory(), SystemClock.elapsedRealtime(), flush);
+        if (webView != null && !isDestroyed() && playbackOrigin(webView.getUrl()) != null) {
+            webView.evaluateJavascript(
+                    NativeWatchHistoryScript.update(id, watchHistoryState.session(), report, flush),
+                    null);
+        }
     }
 
     private void updatePlayerLayout() {
@@ -1639,7 +1682,8 @@ public class MainActivity extends AppCompatActivity {
             if (view != webView || !PlaybackRequest.isYouTubePage(view.getUrl())) {
                 return;
             }
-            view.evaluateJavascript(NativePlaybackScript.SCRIPT, null);
+            view.evaluateJavascript(
+                    NativePlaybackScript.SCRIPT + ";" + NativeWatchHistoryScript.SCRIPT, null);
             applyRelatedVisibility(view);
             applyHeaderVisibility(view);
             view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
