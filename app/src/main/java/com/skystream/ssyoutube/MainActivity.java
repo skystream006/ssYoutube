@@ -71,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String PREFS_NAME = "ssyoutube_prefs";
     private static final String KEY_THEME = "theme";
+    private static final String KEY_DEFAULT_LANGUAGE = "default_language";
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
     private static final String KEY_HEADER_HIDDEN = "header_hidden";
@@ -623,6 +624,8 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+        nativePlayer.setPreferredLanguage(prefs.getString(
+                KEY_DEFAULT_LANGUAGE, Preferences.DEFAULT_LANGUAGE));
         nativePlayer.setVisibility(View.GONE);
         rootContainer.addView(nativePlayer, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -1187,6 +1190,7 @@ public class MainActivity extends AppCompatActivity {
         versionView.setText(getString(R.string.app_version_format, BuildConfig.VERSION_NAME));
         content.findViewById(R.id.check_updates_button).setOnClickListener(v ->
                 appUpdater.check(true));
+        Spinner languageSpinner = content.findViewById(R.id.language_spinner);
         Spinner themeSpinner = content.findViewById(R.id.theme_spinner);
         Spinner siteModeSpinner = content.findViewById(R.id.site_mode_spinner);
         TextView advancedToggle = content.findViewById(R.id.advanced_toggle);
@@ -1204,6 +1208,8 @@ public class MainActivity extends AppCompatActivity {
         Switch loggingToggle = content.findViewById(R.id.logging_toggle);
         Switch statsForNerdsToggle = content.findViewById(R.id.stats_for_nerds_toggle);
 
+        languageSpinner.setSelection(Preferences.languageIndex(prefs.getString(
+                KEY_DEFAULT_LANGUAGE, Preferences.DEFAULT_LANGUAGE)));
         int theme = prefs.getInt(KEY_THEME, Preferences.THEME_SYSTEM);
         if (theme == Preferences.THEME_LIGHT) {
             themeSpinner.setSelection(1);
@@ -1217,6 +1223,19 @@ public class MainActivity extends AppCompatActivity {
         headerToggle.setChecked(headerHidden);
         loggingToggle.setChecked(loggingEnabled);
         statsForNerdsToggle.setChecked(statsForNerdsEnabled);
+
+        languageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String selected = Preferences.languageAt(position);
+                prefs.edit().putString(KEY_DEFAULT_LANGUAGE, selected).apply();
+                nativePlayer.setPreferredLanguage(selected);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
 
         themeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override

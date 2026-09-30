@@ -16,6 +16,11 @@ final class MpvPlaybackRequest {
 
     MpvPlaybackRequest(String videoUrl, String audioUrl, long startMs, String certificates)
             throws IOException {
+        this(videoUrl, audioUrl, startMs, certificates, Preferences.DEFAULT_LANGUAGE);
+    }
+
+    MpvPlaybackRequest(String videoUrl, String audioUrl, long startMs, String certificates,
+                       String language) throws IOException {
         url = NativeNetworkPolicy.requireHttps(videoUrl, true).toString();
         this.audioUrl = audioUrl == null ? null
                 : NativeNetworkPolicy.requireHttps(audioUrl, true).toString();
@@ -30,6 +35,7 @@ final class MpvPlaybackRequest {
         options.put("osd-level", "0");
         options.put("sub-auto", "no");
         options.put("audio-file-auto", "no");
+        options.put("alang", Preferences.normalizeLanguage(language));
         options.put("cover-art-auto", "no");
         options.put("cookies", "no");
         options.put("http-header-fields", "");

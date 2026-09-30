@@ -13,6 +13,13 @@ public final class Preferences {
     public static final int THEME_LIGHT = 1;
     public static final int THEME_DARK = 2;
 
+    public static final String DEFAULT_LANGUAGE = "en";
+    private static final String[] LANGUAGE_CODES = {
+            "en", "ar", "bn", "zh", "nl", "fr", "de", "gu", "hi", "id", "it", "ja", "kn",
+            "ko", "ml", "mr", "pl", "pt", "pa", "ru", "es", "ta", "te", "th", "tr", "uk",
+            "ur", "vi"
+    };
+
     static final String MOBILE_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) "
                     + "Chrome/120.0.0.0 Mobile Safari/537.36";
@@ -25,6 +32,24 @@ public final class Preferences {
     static final String DESKTOP_HOME_URL = "https://www.youtube.com/";
 
     private Preferences() {
+    }
+
+    public static String languageAt(int index) {
+        return index >= 0 && index < LANGUAGE_CODES.length
+                ? LANGUAGE_CODES[index] : DEFAULT_LANGUAGE;
+    }
+
+    public static int languageIndex(String language) {
+        for (int i = 0; i < LANGUAGE_CODES.length; i++) {
+            if (LANGUAGE_CODES[i].equalsIgnoreCase(language)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    public static String normalizeLanguage(String language) {
+        return languageAt(languageIndex(language));
     }
 
     /**

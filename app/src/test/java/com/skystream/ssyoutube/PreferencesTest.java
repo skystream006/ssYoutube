@@ -6,7 +6,35 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import java.util.Locale;
+
 public class PreferencesTest {
+
+    @Test
+    public void languageDefaultsToEnglishRegardlessOfDeviceLocale() {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(new Locale("hi", "IN"));
+            assertEquals("en", Preferences.DEFAULT_LANGUAGE);
+            assertEquals("en", Preferences.normalizeLanguage(null));
+            assertEquals("en", Preferences.normalizeLanguage(""));
+            assertEquals("en", Preferences.normalizeLanguage("unsupported"));
+            assertEquals("en", Preferences.languageAt(-1));
+            assertEquals("en", Preferences.languageAt(Integer.MAX_VALUE));
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    @Test
+    public void storedLanguageCodesRoundTripThroughDropdownSelections() {
+        for (String code : new String[]{"en", "hi", "es", "fr", "ja", "pt", "ta"}) {
+            assertEquals(code, Preferences.languageAt(Preferences.languageIndex(code)));
+            assertEquals(code, Preferences.normalizeLanguage(code.toUpperCase(Locale.ROOT)));
+        }
+        assertEquals(0, Preferences.languageIndex(null));
+        assertEquals(0, Preferences.languageIndex("invalid"));
+    }
 
     @Test
     public void mobileModeUsesMobileSite() {

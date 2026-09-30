@@ -21,8 +21,15 @@ playback extraction is separate and anonymous.
   the session survives app restarts.
 - **Preferences** – a floating settings button appears on the YouTube home page (the page
   with the bottom navigation bar). It opens a preferences dialog with icon buttons for
-  back/forward/reload/home navigation, plus the theme (system/light/dark) and the site mode
+  back/forward/reload/home navigation, plus **Default language** above **Appearance**,
+  the theme (system/light/dark) and the site mode
   (mobile or desktop, `Preferences`), mirroring a browser's "desktop site" toggle.
+  Default language starts as **English** and is saved across app restarts. New video loads,
+  retries, and restored playback use it for extraction and prefer matching audio tracks
+  (including regional variants); manifest playback uses the same audio-language preference.
+  If that language is unavailable, playback falls back to the original or available audio.
+  This does not translate videos or change the app UI; changing it does not interrupt a
+  video that is already playing.
   **Hide related videos** and **Hide header** are independent button toggles on the same
   row, always available regardless of site mode or page. **Hide header** hides the desktop
   masthead or mobile header bar and collapses its reserved vertical space. Both choices

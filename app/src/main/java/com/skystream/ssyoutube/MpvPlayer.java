@@ -133,10 +133,11 @@ final class MpvPlayer extends SimpleBasePlayer implements SurfaceHolder.Callback
     }
 
     void setStream(NativeStreamExtractor.Result stream, String id, long startMs,
-            String certificates) throws IOException {
+            String certificates, String language) throws IOException {
         verifyApplicationThread();
         clearStream();
-        request = new MpvPlaybackRequest(stream.videoUrl, stream.audioUrl, startMs, certificates);
+        request = new MpvPlaybackRequest(stream.videoUrl, stream.audioUrl, startMs, certificates,
+                language);
         item = new MediaItem.Builder().setMediaId(id).build();
         live = stream.live;
         positionMs = Math.max(0, startMs);
