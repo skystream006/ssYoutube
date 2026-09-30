@@ -1,6 +1,6 @@
 # ssYouTube
 
-An Android app that uses the YouTube website for browsing and a native Media3 player
+An Android app that uses the YouTube website for browsing and an embedded mpv player
 with NewPipeExtractor for video playback. The browsing session stays signed in;
 playback extraction is separate and anonymous.
 
@@ -41,14 +41,21 @@ playback extraction is separate and anonymous.
   Only **Manual APK Release** publishes GitHub Releases for in-app updates;
   automatic main-branch and pull-request builds upload workflow artifacts, not releases.
 - **Native video playback** – watch links, Shorts, live-video links, embedded-video links,
-  and `youtu.be` links open in a Media3 player. NewPipeExtractor resolves the media directly,
-  off the UI thread, without a third-party extraction proxy. The native player provides
+  and `youtu.be` links open in an embedded libmpv player, using the same `loadfile` network-URL
+  operation as mpv-android's **Open URL**. No external player app is launched or required.
+  NewPipeExtractor resolves the media directly, off the UI thread, without a third-party
+  extraction proxy. A YouTube watch/share URL is a webpage, not a media stream: mpv-android's
+  Open URL does not replace this extraction step. Media3 supplies the existing controls,
+  not the playback engine; ExoPlayer is no longer used. The native player provides
   play/pause, seeking, fullscreen, a miniplayer, and explicit retry after extraction/playback
   failures. Timestamp links are supported. Leaving the activity pauses playback; closing
   the player cancels pending extraction, and destroying the activity releases its resources.
   The same native player is used across fullscreen and miniplayer transitions.
   Stream selection is automatic, supporting progressive video, separate video/audio tracks,
   and available HLS/DASH manifests; there is no manual quality selector.
+  Each selected video gets its own mpv handle; fullscreen/miniplayer transitions retain
+  that handle and only change its surface size. Closing or replacing a video destroys its
+  handle, and callbacks from that handle cannot update the replacement.
 - **Browsing-only WebView** – the site remains available for search, channels, comments,
   and account interactions. Its media playback and previews are disabled, including after
   single-page navigation, so they cannot play alongside the native player. Web player
@@ -66,6 +73,13 @@ playback extraction is separate and anonymous.
   Website playlist autoplay and web-player-specific controls are not provided by the native player.
   There is no automatic fallback to YouTube's web player. Creator-embedded sponsorships
   are part of the video and are not removed.
+  Extracted URLs are restricted to HTTPS YouTube/Googlevideo hosts before opening.
+  libmpv/FFmpeg handles media redirects and manifest requests, rather than the former Java
+  media transport: its protocol allowlist excludes directly opened local files and cleartext
+  HTTP URLs, but native redirects do not apply the extractor's per-redirect HTTPS/host
+  policy or response-size limits.
+  TLS verification uses the library's bundled CA certificates. Browser cookies, user
+  configuration/scripts, external URL extractors and mpv URL-bearing logs are disabled.
 - **Native watch history** – while playing, native position, duration, and observed watched
   ranges are reported to YouTube approximately every 10 seconds, with a final best-effort
   update on pause, close, or video change. Seeking, buffering, and paused time are not counted as watched
@@ -119,13 +133,14 @@ playback extraction is separate and anonymous.
 ```
 app/src/main/java/com/skystream/ssyoutube/
   MainActivity.java   Browsing WebView, trusted playback routing, native player presentation
-  NativePlayerView.java     Media3 playback, controls, lifecycle and extraction coordination
+  NativePlayerView.java     Controls, lifecycle and extraction coordination
+  MpvPlayer.java              Embedded libmpv and Media3 controls/timeline adapter
+  MpvPlaybackRequest.java     Validated network-URL commands and restricted mpv options
   NativeStreamExtractor.java  NewPipeExtractor media selection
   ExtractorDownloader.java    Bounded HTTPS extraction requests without browser cookies
   PlaybackRequest.java        Validated video links and timestamps (pure Java, unit tested)
   NativePlaybackScript.java   Web media suppression and same-page navigation notifications
-  NativeNetworkPolicy.java    HTTPS host/redirect and anonymous-cookie restrictions
-  NativeHttpsDataSource.java  Validated native media transport
+  NativeNetworkPolicy.java    Extractor HTTPS/redirect and anonymous-cookie restrictions
   NativePlaybackState.java    Playback intent and lifecycle state (pure Java, unit tested)
   NativePlayerGestures.java   Native tap/swipe decisions and seek bounds (pure Java, unit tested)
   NativeWatchHistoryState.java  Observed playback ranges and ten-second reporting cadence
@@ -148,21 +163,42 @@ Dependencies resolve from Google Maven, Maven Central, and a restricted JitPack 
 for NewPipeExtractor and its nanojson dependency. Network access to these repositories
 is required for a fresh build.
 
+The upstream mpv-android app is not an importable AAR. The pinned
+[`mpv-android-lib:0.1.12`](https://github.com/abdallahmehiz/mpv-android/tree/v0.1.12)
+library packages its mpv-android-based JNI wrapper, libmpv/FFmpeg, CA bundle and native
+dependencies for `armeabi-v7a`, `arm64-v8a`, `x86` and `x86_64`. These are resolved from
+Maven Central at build time, not downloaded as executable code at runtime. This library
+preserves API 21 support without changing the app's SDK requirements; it increases APK size.
+Kotlin coroutines are explicitly included because the wrapper uses them internally.
+When updating the library, update the versioned CA cache filename in `MpvPlayer` too.
+
 ```bash
-gradle assembleDebug   # build the APK
-gradle test            # run the JVM unit tests
+./gradlew assembleDebug   # build the APK
+./gradlew test            # run the JVM unit tests
+./gradlew lintDebug       # Android lint
 ```
+
+Device verification should cover muxed/adaptive audio and video, live HLS/DASH, timestamp
+links, seek/replay, rapid video changes, pause/resume, audio-focus/headphone interruptions,
+fullscreen/miniplayer resizing, activity recreation, network failure/retry and close while
+loading. Native rendering/decoding and ABI compatibility cannot be verified by JVM tests alone.
 
 ### Third-party licensing
 
-Playback uses [AndroidX Media3](https://github.com/androidx/media) (Apache-2.0) and
+Controls use [AndroidX Media3](https://github.com/androidx/media) (Apache-2.0).
+Playback uses [mpv-android-lib](https://github.com/abdallahmehiz/mpv-android) (MIT wrapper,
+derived from [mpv-android](https://github.com/mpv-android/mpv-android)), its GPL-enabled
+libmpv/FFmpeg native stack, and
 [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) (GPL-3.0-or-later).
-NewPipeExtractor's GPL obligations apply when distributing a combined app: provide the
+The wrapper's MIT license does not relicense the native libraries. GPL obligations
+apply when distributing the combined app: provide the
 app's complete corresponding source, a copy of the [GPL](https://www.gnu.org/licenses/gpl-3.0.txt),
 applicable license notices, and GPL-compatible
 distribution terms. Check the pinned dependencies' licenses before publishing APKs;
 adding a dependency does not itself grant rights to redistribute unrelated code.
-No upstream extractor implementation is copied into this repository.
+No upstream extractor or mpv implementation is copied into this repository; implementations
+are supplied by dependencies. Preserve their license notices and provide corresponding
+source, including the native library sources/build inputs, when distributing APKs.
 
 Merging a pull request does not publish a GitHub Release. To publish manually,
 open **Actions → Manual APK Release → Run workflow** and select
