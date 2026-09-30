@@ -28,6 +28,10 @@ public final class GitHubUpdateClient {
         HttpURLConnection open(URI uri) throws IOException;
     }
 
+    public interface ProgressListener {
+        void onProgress(long downloadedBytes, long totalBytes);
+    }
+
     public GitHubUpdateClient() {
         this(uri -> (HttpURLConnection) uri.toURL().openConnection());
     }
@@ -123,6 +127,11 @@ public final class GitHubUpdateClient {
     }
 
     public synchronized File download(Release release, File directory) throws IOException {
+        return download(release, directory, null);
+    }
+
+    public synchronized File download(Release release, File directory, ProgressListener progress)
+            throws IOException {
         UpdateChecks.checkInterrupted();
         if (release == null || directory == null) {
             throw new IOException("A release and update directory are required");
@@ -144,7 +153,8 @@ public final class GitHubUpdateClient {
                 MessageDigest digest = sha256();
                 try (InputStream input = connection.getInputStream();
                      FileOutputStream output = new FileOutputStream(partial)) {
-                    UpdateChecks.copy(input, output, UpdateChecks.MAX_APK_BYTES, release.size, digest);
+                    UpdateChecks.copy(input, output, UpdateChecks.MAX_APK_BYTES, release.size,
+                            digest, progress);
                     UpdateChecks.verifyDigest(digest, release.sha256);
                     output.getFD().sync();
                 }

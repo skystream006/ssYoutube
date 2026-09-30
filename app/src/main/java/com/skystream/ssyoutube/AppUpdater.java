@@ -37,6 +37,7 @@ public final class AppUpdater extends AndroidViewModel {
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final MutableLiveData<Event> events = new MutableLiveData<>();
+    private final MutableLiveData<DownloadProgress> downloadProgress = new MutableLiveData<>();
     private final GitHubUpdateClient client = new GitHubUpdateClient();
     private final File directory;
     private Future<?> work;
@@ -53,6 +54,10 @@ public final class AppUpdater extends AndroidViewModel {
 
     LiveData<Event> events() {
         return events;
+    }
+
+    LiveData<DownloadProgress> downloadProgress() {
+        return downloadProgress;
     }
 
     void checkOnStartup(Bundle savedState) {
@@ -96,8 +101,9 @@ public final class AppUpdater extends AndroidViewModel {
                 } else if (!manual) {
                     complete(new Event(R.string.updates_available, release.version, false));
                 } else {
-                    publish(new Event(R.string.updates_downloading, release.version, false));
-                    File apk = client.download(release, directory);
+                    publishProgress(release.version, 0, release.size);
+                    File apk = client.download(release, directory, (downloaded, total) ->
+                            publishProgress(release.version, downloaded, total));
                     if (!isCompatible(apk, release.version)) {
                         apk.delete();
                         complete(new Event(R.string.updates_invalid, null, false));
@@ -207,18 +213,18 @@ public final class AppUpdater extends AndroidViewModel {
                 .equals(new HashSet<>(Arrays.asList(candidate)));
     }
 
-    private void publish(Event event) {
-        main.post(() -> {
-            if (!cleared) {
-                events.setValue(event);
-            }
-        });
+    private void publishProgress(String version, long downloaded, long total) {
+        if (!cleared) {
+            // Coalesce fast byte updates instead of queuing a UI task for every buffer.
+            downloadProgress.postValue(new DownloadProgress(version, downloaded, total));
+        }
     }
 
     private void complete(Event event) {
         main.post(() -> {
             if (!cleared) {
                 busy = false;
+                downloadProgress.setValue(null);
                 events.setValue(event);
             }
         });
@@ -237,6 +243,18 @@ public final class AppUpdater extends AndroidViewModel {
             work.cancel(true);
         }
         main.removeCallbacksAndMessages(null);
+    }
+
+    static final class DownloadProgress {
+        final String version;
+        final long downloaded;
+        final long total;
+
+        DownloadProgress(String version, long downloaded, long total) {
+            this.version = version;
+            this.downloaded = downloaded;
+            this.total = total;
+        }
     }
 
     static final class Event {

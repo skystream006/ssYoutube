@@ -91,6 +91,36 @@ public class PreferencesLayoutTest {
     }
 
     @Test
+    public void updateProgressIsInlineBelowHeaderAndHiddenWhenIdle() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        Element panel = byId(layout, "update_progress_panel");
+        Element status = byId(layout, "update_download_status");
+        Element progress = byId(layout, "update_download_progress");
+        Element bytes = byId(layout, "update_download_bytes");
+        assertEquals(layout.getDocumentElement(), panel.getParentNode());
+        assertEquals("gone", panel.getAttributeNS(ANDROID, "visibility"));
+        assertEquals("vertical", panel.getAttributeNS(ANDROID, "orientation"));
+        assertEquals("match_parent", panel.getAttributeNS(ANDROID, "layout_width"));
+        assertEquals(panel, status.getParentNode());
+        assertEquals(panel, progress.getParentNode());
+        assertEquals(panel, bytes.getParentNode());
+        assertTrue((byId(layout, "check_updates_button").compareDocumentPosition(panel)
+                & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
+        assertTrue((status.compareDocumentPosition(progress)
+                & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
+        assertTrue((progress.compareDocumentPosition(bytes)
+                & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
+        assertEquals("ProgressBar", progress.getTagName());
+        assertEquals("?android:attr/progressBarStyleHorizontal", progress.getAttribute("style"));
+        assertEquals("match_parent", progress.getAttributeNS(ANDROID, "layout_width"));
+        assertEquals("false", progress.getAttributeNS(ANDROID, "indeterminate"));
+        assertEquals("100", progress.getAttributeNS(ANDROID, "max"));
+        assertEquals("@string/updates_download_progress",
+                progress.getAttributeNS(ANDROID, "contentDescription"));
+        assertEquals("polite", status.getAttributeNS(ANDROID, "accessibilityLiveRegion"));
+    }
+
+    @Test
     public void navigationKeepsButtonsWithoutHeading() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         NodeList labels = layout.getElementsByTagName("TextView");

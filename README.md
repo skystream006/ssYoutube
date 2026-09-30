@@ -41,8 +41,12 @@ playback extraction is separate and anonymous.
 - **In-app updates** – on launch, checks this repository's latest GitHub Release and
   announces newer versions without downloading. In Preferences, **Check for updates**
   reports when the app is current, or downloads a newer APK to app-private cache and opens
-  Android's installer. Android 8+ may first ask you to allow installs from ssYouTube;
-  return to the app to continue. Installation always requires Android's confirmation.
+  Android's installer. While downloading, Preferences shows an inline progress bar and
+  downloaded/total KB, using the release asset size even if the HTTP response omits its
+  length. Progress stays current when you reopen Preferences or recreate the activity;
+  it disappears when the update finishes or fails. Android 8+ may first ask you to allow
+  installs from ssYouTube; return to the app to continue. Installation always requires
+  Android's confirmation.
   Downloads are checked for the expected version, a higher Android version code, matching
   package name and signing certificate. Network/release failures can be retried in Preferences.
   Only **Manual APK Release** publishes GitHub Releases for in-app updates;
