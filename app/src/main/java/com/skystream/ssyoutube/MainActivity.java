@@ -33,6 +33,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.ProgressBar;
 import android.widget.CompoundButton;
 import android.widget.AdapterView;
 import android.widget.Spinner;
@@ -47,6 +48,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.FileProvider;
+import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
@@ -1188,8 +1190,26 @@ public class MainActivity extends AppCompatActivity {
         View content = getLayoutInflater().inflate(R.layout.dialog_preferences, null);
         TextView versionView = content.findViewById(R.id.app_version);
         versionView.setText(getString(R.string.app_version_format, BuildConfig.VERSION_NAME));
-        content.findViewById(R.id.check_updates_button).setOnClickListener(v ->
-                appUpdater.check(true));
+        View checkUpdatesButton = content.findViewById(R.id.check_updates_button);
+        checkUpdatesButton.setOnClickListener(v -> appUpdater.check(true));
+        View updateProgressPanel = content.findViewById(R.id.update_progress_panel);
+        TextView updateStatus = content.findViewById(R.id.update_download_status);
+        ProgressBar updateProgress = content.findViewById(R.id.update_download_progress);
+        TextView updateBytes = content.findViewById(R.id.update_download_bytes);
+        Observer<AppUpdater.DownloadProgress> updateObserver = progress -> {
+            updateProgressPanel.setVisibility(progress == null ? View.GONE : View.VISIBLE);
+            checkUpdatesButton.setEnabled(progress == null);
+            if (progress != null) {
+                String status = getString(R.string.updates_downloading, progress.version);
+                if (!status.contentEquals(updateStatus.getText())) {
+                    updateStatus.setText(status);
+                }
+                updateProgress.setProgress((int) (progress.downloaded * 100 / progress.total));
+                updateBytes.setText(getString(R.string.updates_download_bytes,
+                        progress.downloaded / 1024, progress.total / 1024));
+            }
+        };
+        appUpdater.downloadProgress().observe(this, updateObserver);
         Spinner languageSpinner = content.findViewById(R.id.language_spinner);
         Spinner themeSpinner = content.findViewById(R.id.theme_spinner);
         Spinner siteModeSpinner = content.findViewById(R.id.site_mode_spinner);
@@ -1401,6 +1421,7 @@ public class MainActivity extends AppCompatActivity {
         dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
             @Override
             public void onDismiss(DialogInterface dialogInterface) {
+                appUpdater.downloadProgress().removeObserver(updateObserver);
                 logActivity("Preferences dismissed");
                 closePreferencePanel();
             }

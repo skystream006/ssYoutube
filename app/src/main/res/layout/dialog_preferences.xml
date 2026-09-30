@@ -49,6 +49,41 @@
             tools:text="v1.0.0" />
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/update_progress_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/update_download_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:accessibilityLiveRegion="polite"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+
+        <ProgressBar
+            android:id="@+id/update_download_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:contentDescription="@string/updates_download_progress"
+            android:indeterminate="false"
+            android:max="100" />
+
+        <TextView
+            android:id="@+id/update_download_bytes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+    </LinearLayout>
+
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
