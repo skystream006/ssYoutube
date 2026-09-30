@@ -945,6 +945,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         if (!nativePlayer.hasVideo() || !key.equals(lastPlaybackKey)) {
+            if (nativePlayer.hasVideo() && !request.videoId.equals(nativePlayer.getVideoId())) {
+                updateWatchHistory(true);
+            }
             nativePlayer.play(request.videoId, request.startPositionMs);
             lastPlaybackKey = key;
             if (!activityResumed) {
@@ -990,7 +993,8 @@ public class MainActivity extends AppCompatActivity {
                 nativePlayer.getPlaybackSpeedForHistory(), SystemClock.elapsedRealtime(), flush);
         if (webView != null && !isDestroyed() && playbackOrigin(webView.getUrl()) != null) {
             webView.evaluateJavascript(
-                    NativeWatchHistoryScript.update(id, watchHistoryState.session(), report), null);
+                    NativeWatchHistoryScript.update(id, watchHistoryState.session(), report, flush),
+                    null);
         }
     }
 

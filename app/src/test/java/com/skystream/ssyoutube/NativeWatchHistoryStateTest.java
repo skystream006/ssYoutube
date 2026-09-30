@@ -108,4 +108,18 @@ public class NativeWatchHistoryStateTest {
         assertEquals("0.000,2.100", report.starts);
         assertEquals("1.000,3.100", report.ends);
     }
+
+    @Test
+    public void flushBeforeSwitchPreservesShortOutgoingSession() {
+        NativeWatchHistoryState state = new NativeWatchHistoryState();
+        state.sample(ID, 0, 90000, true, 1, 0, false);
+        state.sample(ID, 1000, 90000, true, 1, 1000, false);
+        NativeWatchHistoryState.Report outgoing =
+                state.sample(ID, 1500, 90000, false, 1, 1500, true);
+        assertEquals(ID, outgoing.videoId);
+        assertEquals("0.000", outgoing.starts);
+        assertEquals("1.000", outgoing.ends);
+        assertFalse(outgoing.playing);
+        assertNull(state.sample("12345678901", 0, 90000, true, 1, 1600, false));
+    }
 }

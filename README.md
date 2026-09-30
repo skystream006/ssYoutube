@@ -68,7 +68,7 @@ playback extraction is separate and anonymous.
   are part of the video and are not removed.
 - **Native watch history** – while playing, native position, duration, and observed watched
   ranges are reported to YouTube approximately every 10 seconds, with a final best-effort
-  update on pause or close. Seeking, buffering, and paused time are not counted as watched
+  update on pause, close, or video change. Seeking, buffering, and paused time are not counted as watched
   ranges. Requests use the matching video's page-provided playback/watchtime URLs and the
   WebView's signed-in session; account cookies and tracking tokens never enter the extractor
   or native media transport and are not logged or persisted by this feature.

@@ -30,8 +30,8 @@ public class NativeWatchHistoryScriptTest {
         assertTrue(script.contains("active.session!==session"));
         assertTrue(script.contains("active.account!==identity"));
         assertTrue(script.contains("if(!current&&identity===null){active.urls=null;return;}"));
-        assertTrue(script.contains("if(current&&current!==id){active.urls=null;return;}"));
-        assertTrue(script.contains("active!==context||account()!==context.account"));
+        assertTrue(script.contains("if(current&&current!==id&&!outgoing){active.urls=null;return;}"));
+        assertTrue(script.contains("account()===context.account"));
         assertTrue(script.contains("yt-navigate-start"));
         assertTrue(script.contains("response===blocked"));
         assertTrue(script.contains("if(initial){candidates.push(window.ytInitialPlayerResponse)"));
@@ -41,18 +41,31 @@ public class NativeWatchHistoryScriptTest {
     }
 
     @Test
+    public void retainsBusyReportsAndAllowsOnlyValidatedOutgoingSessionFinals() {
+        String script = NativeWatchHistoryScript.SCRIPT;
+        assertTrue(script.contains("context.pending=report;drain(context)"));
+        assertTrue(script.contains("context.busy=false;drain(context)"));
+        assertTrue(script.contains("context.pending.starts+','+report.starts"));
+        assertTrue(script.contains("context.pending.starts.length+report.starts.length<2048"));
+        assertTrue(script.contains(
+                "outgoing=(finish||(report&&!report.playing))&&active.urls&&identity!==null"));
+        assertTrue(script.contains("active===context||context.finishing"));
+        assertTrue(script.contains("if(!valid(context)){context.pending=null;return;}"));
+    }
+
+    @Test
     public void serializesOnlyValidatedNativeIdsAndMeasuredProgress() {
-        assertEquals("", NativeWatchHistoryScript.update("');alert(1)//", 1, null));
-        assertEquals("", NativeWatchHistoryScript.update(null, 1, null));
+        assertEquals("", NativeWatchHistoryScript.update("');alert(1)//", 1, null, false));
+        assertEquals("", NativeWatchHistoryScript.update(null, 1, null, false));
         NativeWatchHistoryState state = new NativeWatchHistoryState();
         state.sample("abcdefghijk", 5000, 90000, true, 1, 0, false);
         NativeWatchHistoryState.Report report =
                 state.sample("abcdefghijk", 6000, 90000, true, 1, 1000, true);
-        String script = NativeWatchHistoryScript.update("abcdefghijk", state.session(), report);
+        String script = NativeWatchHistoryScript.update("abcdefghijk", state.session(), report, false);
         assertTrue(script.contains("position:6.000,duration:90.000"));
         assertTrue(script.contains("starts:'5.000',ends:'6.000',playing:true"));
         assertTrue(script.contains("window.__ssyoutubeWatchHistory('abcdefghijk',1,"));
-        assertTrue(NativeWatchHistoryScript.update("abcdefghijk", 1, null)
-                .contains("'abcdefghijk',1,null"));
+        assertTrue(NativeWatchHistoryScript.update("abcdefghijk", 1, null, true)
+                .contains("'abcdefghijk',1,null,true"));
     }
 }

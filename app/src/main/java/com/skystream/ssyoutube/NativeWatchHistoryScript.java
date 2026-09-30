@@ -75,38 +75,57 @@ final class NativeWatchHistoryScript {
             + "redirect:'error',cache:'no-store',signal:controller.signal})"
             + ".then(function(response){if(response.type!=='opaque'&&!response.ok){throw Error();}})"
             + ".finally(function(){clearTimeout(timer);});}"
-            + "window.__ssyoutubeWatchHistory=function(id,session,report){try{"
+            + "function valid(context){var current=pageId();"
+            + "return (active===context||context.finishing)&&account()===context.account"
+            + "&&(current===context.id||context.account!==null)"
+            + "&&(!current||current===context.id||context.finishing);}"
+            + "function drain(context){"
+            + "if(context.busy||!context.pending){return;}"
+            + "if(!valid(context)){context.pending=null;return;}"
+            + "var report=context.pending;context.pending=null;context.busy=true;"
+            + "Promise.resolve().then(function(){"
+            + "if(!valid(context)){return;}"
+            + "return context.sent?Promise.resolve():"
+            + "send(context.urls.playback,context,report,false).then(function(){context.sent=true;});"
+            + "}).then(function(){"
+            + "if(!valid(context)){return;}"
+            + "return send(context.urls.watchtime,context,report,true);"
+            + "}).catch(function(){}).finally(function(){"
+            + "context.busy=false;drain(context);});}"
+            + "window.__ssyoutubeWatchHistory=function(id,session,report,finish){try{"
             + "if(!(" + TRUSTED_PAGE + ")||!/^[A-Za-z0-9_-]{11}$/.test(id)){return;}"
             + "if(page!==location.href){invalidate();page=location.href;}"
             + "var identity=account();"
             + "if(active&&active.account!==identity){invalidate();}"
             + "if(!active||active.id!==id||active.session!==session||active.account!==identity){"
             + "active={id:id,session:session,account:identity,cpn:nonce(),"
-            + "started:performance.now(),urls:null,sent:false,busy:false};}"
+            + "started:performance.now(),urls:null,sent:false,busy:false,pending:null,finishing:false};}"
             + "var current=pageId();"
-            + "if(current&&current!==id){active.urls=null;return;}"
+            + "var outgoing=(finish||(report&&!report.playing))&&active.urls&&identity!==null;"
+            + "if(current&&current!==id&&!outgoing){active.urls=null;return;}"
             + "if(!current&&identity===null){active.urls=null;return;}"
             + "if(!active.urls){active.urls=tracking(id);}"
-            + "if(!report||!active.urls||active.busy){return;}"
+            + "if(outgoing){active.finishing=true;}"
+            + "if(finish&&active.pending){active.pending.playing=false;}"
+            + "if(!report||!active.urls){return;}"
             + "if(!Number.isFinite(report.position)||report.position<0"
             + "||!Number.isFinite(report.duration)||report.duration<0"
             + "||typeof report.starts!=='string'||typeof report.ends!=='string'"
             + "||report.starts.length>2048||report.ends.length>2048"
             + "||!/^\\d+(\\.\\d+)?(,\\d+(\\.\\d+)?)*$/.test(report.starts)"
             + "||!/^\\d+(\\.\\d+)?(,\\d+(\\.\\d+)?)*$/.test(report.ends)){return;}"
-            + "var context=active;context.busy=true;"
-            + "var begin=context.sent?Promise.resolve():"
-            + "send(context.urls.playback,context,report,false).then(function(){context.sent=true;});"
-            + "begin.then(function(){"
-            + "if(active!==context||account()!==context.account"
-            + "||(!pageId()&&context.account===null)"
-            + "||(pageId()&&pageId()!==context.id)){return;}"
-            + "return send(context.urls.watchtime,context,report,true);"
-            + "}).catch(function(){}).finally(function(){context.busy=false;});"
+            + "var context=active;"
+            + "context.finishing=!!outgoing;"
+            + "if(context.pending&&context.pending.starts.length+report.starts.length<2048"
+            + "&&context.pending.ends.length+report.ends.length<2048){"
+            + "report.starts=context.pending.starts+','+report.starts;"
+            + "report.ends=context.pending.ends+','+report.ends;}"
+            + "context.pending=report;drain(context);"
             + "}catch(e){}};"
             + "})()";
 
-    static String update(String id, long session, NativeWatchHistoryState.Report report) {
+    static String update(String id, long session, NativeWatchHistoryState.Report report,
+                         boolean finish) {
         if (!NativePlaybackState.isVideoId(id)) {
             return "";
         }
@@ -115,7 +134,8 @@ final class NativeWatchHistoryScript {
                 + NativeWatchHistoryState.seconds(report.durationMs) + ",starts:'"
                 + report.starts + "',ends:'" + report.ends + "',playing:" + report.playing + "}";
         return "(function(){if(" + TRUSTED_PAGE + "&&window.__ssyoutubeWatchHistory){"
-                + "window.__ssyoutubeWatchHistory('" + id + "'," + session + "," + data + ");}})()";
+                + "window.__ssyoutubeWatchHistory('" + id + "'," + session + "," + data + ","
+                + finish + ");}})()";
     }
 
     private NativeWatchHistoryScript() { }
