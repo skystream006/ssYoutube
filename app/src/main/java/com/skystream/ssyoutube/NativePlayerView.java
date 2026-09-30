@@ -83,6 +83,7 @@ final class NativePlayerView extends FrameLayout {
     private boolean changingPlayer;
     private boolean isFullscreen;
     private boolean isMinimized;
+    private String preferredLanguage = Preferences.DEFAULT_LANGUAGE;
 
     NativePlayerView(Context context, Listener listener) {
         super(context);
@@ -204,6 +205,10 @@ final class NativePlayerView extends FrameLayout {
                 }
             }
         });
+    }
+
+    void setPreferredLanguage(String language) {
+        preferredLanguage = Preferences.normalizeLanguage(language);
     }
 
     void play(String videoId, long startPositionMs) {
@@ -359,6 +364,7 @@ final class NativePlayerView extends FrameLayout {
         showLoading();
         final long requestGeneration = ++generation;
         final String id = state.videoId;
+        final String language = preferredLanguage;
         final ExtractorDownloader.Cancellation requestCancellation =
                 new ExtractorDownloader.Cancellation();
         cancellation = requestCancellation;
@@ -366,7 +372,7 @@ final class NativePlayerView extends FrameLayout {
             pending = extractor.submit(() -> {
                 try {
                     NativeStreamExtractor.Result result =
-                            NativeStreamExtractor.extract(id, requestCancellation);
+                            NativeStreamExtractor.extract(id, language, requestCancellation);
                     String certificates = MpvPlayer.prepareCertificates(getContext());
                     requestCancellation.check();
                     main.post(() -> {
@@ -380,7 +386,8 @@ final class NativePlayerView extends FrameLayout {
                             try {
                                 player.setStream(result, id,
                                         state.useLiveDefaultPosition(result.live)
-                                                ? C.TIME_UNSET : state.positionMs, certificates);
+                                                ? C.TIME_UNSET : state.positionMs, certificates,
+                                        language);
                                 player.setPlayWhenReady(state.shouldPlay());
                                 state.prepared = true;
                                 player.prepare();

@@ -18,6 +18,38 @@ public class PreferencesLayoutTest {
     private static final String ANDROID = "http://schemas.android.com/apk/res/android";
 
     @Test
+    public void defaultLanguageIsALabeledDropdownAboveAppearance() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        assertDropdown(layout, "language_spinner", "@array/language_options");
+        Element language = byId(layout, "language_spinner");
+        Element theme = byId(layout, "theme_spinner");
+        assertEquals(language.getParentNode().getParentNode(),
+                theme.getParentNode().getParentNode());
+        assertTrue((language.compareDocumentPosition(theme)
+                & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
+        NodeList labels = ((Element) language.getParentNode()).getElementsByTagName("TextView");
+        assertEquals("@string/default_language",
+                ((Element) labels.item(0)).getAttributeNS(ANDROID, "text"));
+    }
+
+    @Test
+    public void languageLabelsMatchStablePreferenceCodesWithEnglishFirst() throws Exception {
+        String[] codes = {"en", "ar", "bn", "zh", "nl", "fr", "de", "gu", "hi", "id",
+                "it", "ja", "kn", "ko", "ml", "mr", "pl", "pt", "pa", "ru", "es", "ta",
+                "te", "th", "tr", "uk", "ur", "vi"};
+        assertOptions(resource("values/strings.xml"), "language_options",
+                "English", "Arabic", "Bengali", "Chinese", "Dutch", "French", "German",
+                "Gujarati", "Hindi", "Indonesian", "Italian", "Japanese", "Kannada", "Korean",
+                "Malayalam", "Marathi", "Polish", "Portuguese", "Punjabi", "Russian", "Spanish",
+                "Tamil", "Telugu", "Thai", "Turkish", "Ukrainian", "Urdu", "Vietnamese");
+        for (int index = 0; index < codes.length; index++) {
+            assertEquals(codes[index], Preferences.languageAt(index));
+            assertEquals(index, Preferences.languageIndex(codes[index]));
+        }
+        assertEquals(Preferences.DEFAULT_LANGUAGE, Preferences.languageAt(codes.length));
+    }
+
+    @Test
     public void appearanceAndSiteModeUseLabeledDropdowns() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         assertDropdown(layout, "theme_spinner", "@array/theme_options");
@@ -85,7 +117,7 @@ public class PreferencesLayoutTest {
                 "view_logs_button", "share_log_button", "clear_log_button", "stats_for_nerds_toggle"}) {
             assertTrue(id + " must be inside Advanced", isInside(byId(layout, id), advanced));
         }
-        for (String id : new String[] {"theme_spinner", "site_mode_spinner",
+        for (String id : new String[] {"language_spinner", "theme_spinner", "site_mode_spinner",
                 "related_videos_toggle", "header_toggle", "check_updates_button", "navigation_bar"}) {
             assertFalse(id + " must stay outside Advanced", isInside(byId(layout, id), advanced));
         }

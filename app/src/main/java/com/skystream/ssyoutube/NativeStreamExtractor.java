@@ -2,9 +2,12 @@ package com.skystream.ssyoutube;
 
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
+import org.schabi.newpipe.extractor.localization.Localization;
 import org.schabi.newpipe.extractor.stream.AudioStream;
+import org.schabi.newpipe.extractor.stream.AudioTrackType;
 import org.schabi.newpipe.extractor.stream.DeliveryMethod;
 import org.schabi.newpipe.extractor.stream.Stream;
+import org.schabi.newpipe.extractor.stream.StreamExtractor;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.extractor.stream.VideoStream;
@@ -41,16 +44,23 @@ final class NativeStreamExtractor {
 
     private NativeStreamExtractor() { }
 
-    static Result extract(String videoId, ExtractorDownloader.Cancellation cancellation)
-            throws Exception {
+    static StreamExtractor localizedExtractor(String videoId, String language) throws Exception {
         if (!NativePlaybackState.isVideoId(videoId)) {
             throw new IOException("Invalid native video identifier");
         }
         initialize();
+        StreamExtractor extractor = ServiceList.YouTube.getStreamExtractor(
+                "https://www.youtube.com/watch?v=" + videoId);
+        extractor.forceLocalization(new Localization(Preferences.normalizeLanguage(language)));
+        return extractor;
+    }
+
+    static Result extract(String videoId, String language,
+                          ExtractorDownloader.Cancellation cancellation) throws Exception {
+        StreamExtractor extractor = localizedExtractor(videoId, language);
         DOWNLOADER.begin(cancellation);
         try {
-            StreamInfo info = StreamInfo.getInfo(ServiceList.YouTube,
-                    "https://www.youtube.com/watch?v=" + videoId);
+            StreamInfo info = StreamInfo.getInfo(extractor);
             cancellation.check();
             boolean live = info.getStreamType() == StreamType.LIVE_STREAM
                     || info.getStreamType() == StreamType.AUDIO_LIVE_STREAM;
@@ -61,7 +71,7 @@ final class NativeStreamExtractor {
                 }
             }
             Result streams = selectStreams(info.getVideoStreams(),
-                    info.getVideoOnlyStreams(), info.getAudioStreams(), live);
+                    info.getVideoOnlyStreams(), info.getAudioStreams(), live, language);
             if (streams != null) {
                 return streams;
             }
@@ -94,9 +104,15 @@ final class NativeStreamExtractor {
 
     static Result selectStreams(List<VideoStream> muxedStreams, List<VideoStream> videoStreams,
                                 List<AudioStream> audioStreams, boolean live) {
+        return selectStreams(muxedStreams, videoStreams, audioStreams, live,
+                Preferences.DEFAULT_LANGUAGE);
+    }
+
+    static Result selectStreams(List<VideoStream> muxedStreams, List<VideoStream> videoStreams,
+                                List<AudioStream> audioStreams, boolean live, String language) {
         VideoStream muxed = bestVideo(muxedStreams);
         VideoStream video = bestVideo(videoStreams);
-        AudioStream audio = bestAudio(audioStreams);
+        AudioStream audio = bestAudio(audioStreams, language);
         if (video != null && audio != null && (muxed == null
                 || (resolution(video.getResolution()) > resolution(muxed.getResolution())
                 && videoCompatibility(mime(video), video.getCodec())
@@ -105,6 +121,11 @@ final class NativeStreamExtractor {
                     audio.getContent(), mime(audio), live);
         }
         if (muxed != null) {
+            // Muxed streams have no audio-language metadata; use a matching separate track.
+            if (audio != null && matchesLanguage(audio, Preferences.normalizeLanguage(language))) {
+                return new Result(Kind.PROGRESSIVE, muxed.getContent(), mime(muxed),
+                        audio.getContent(), mime(audio), live);
+            }
             return new Result(Kind.PROGRESSIVE, muxed.getContent(), mime(muxed), null, null, live);
         }
         return null;
@@ -151,6 +172,11 @@ final class NativeStreamExtractor {
     }
 
     static AudioStream bestAudio(List<AudioStream> streams) {
+        return bestAudio(streams, Preferences.DEFAULT_LANGUAGE);
+    }
+
+    static AudioStream bestAudio(List<AudioStream> streams, String language) {
+        String preferredLanguage = Preferences.normalizeLanguage(language);
         AudioStream best = null;
         int bestScore = -1;
         for (AudioStream stream : streams) {
@@ -164,12 +190,23 @@ final class NativeStreamExtractor {
             }
             int score = Math.max(0, Math.min(320, stream.getAverageBitrate()))
                     + (mp4 ? 1_000 : 0);
+            if (matchesLanguage(stream, preferredLanguage)) {
+                score += 10_000;
+            }
+            if (stream.getAudioTrackType() == AudioTrackType.ORIGINAL) {
+                score += 2_000;
+            }
             if (score > bestScore) {
                 best = stream;
                 bestScore = score;
             }
         }
         return best;
+    }
+
+    private static boolean matchesLanguage(AudioStream stream, String language) {
+        Locale locale = stream.getAudioLocale();
+        return locale != null && new Locale(language).getLanguage().equals(locale.getLanguage());
     }
 
     private static boolean isProgressive(Stream stream) {

@@ -17,6 +17,37 @@
     <string name="updates_allow_install">Allow ssYouTube to install updates on the next screen, then return to the app.</string>
     <string name="updates_install_denied">Update saved. Allow installs from ssYouTube and check for updates again to install.</string>
     <string name="updates_installer_unavailable">Could not open the Android package installer</string>
+    <string name="default_language">Default language</string>
+    <string-array name="language_options">
+        <item>English</item>
+        <item>Arabic</item>
+        <item>Bengali</item>
+        <item>Chinese</item>
+        <item>Dutch</item>
+        <item>French</item>
+        <item>German</item>
+        <item>Gujarati</item>
+        <item>Hindi</item>
+        <item>Indonesian</item>
+        <item>Italian</item>
+        <item>Japanese</item>
+        <item>Kannada</item>
+        <item>Korean</item>
+        <item>Malayalam</item>
+        <item>Marathi</item>
+        <item>Polish</item>
+        <item>Portuguese</item>
+        <item>Punjabi</item>
+        <item>Russian</item>
+        <item>Spanish</item>
+        <item>Tamil</item>
+        <item>Telugu</item>
+        <item>Thai</item>
+        <item>Turkish</item>
+        <item>Ukrainian</item>
+        <item>Urdu</item>
+        <item>Vietnamese</item>
+    </string-array>
     <string name="appearance">Appearance</string>
     <string name="theme_system">System default</string>
     <string name="theme_light">Light mode</string>

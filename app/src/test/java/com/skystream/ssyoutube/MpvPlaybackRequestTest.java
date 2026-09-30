@@ -14,6 +14,30 @@ public class MpvPlaybackRequestTest {
     private static final String AUDIO = "https://rr2.googlevideo.com/videoplayback?id=audio";
 
     @Test
+    public void audioLanguageDefaultsToEnglishAndRejectsUnsupportedValues() throws Exception {
+        assertEquals("en", new MpvPlaybackRequest(VIDEO, null, 0, "/private/ca.pem")
+                .options.get("alang"));
+        for (String language : new String[]{null, "", "invalid", "es,en", "en;stop"}) {
+            assertEquals("en", new MpvPlaybackRequest(
+                    VIDEO, null, 0, "/private/ca.pem", language).options.get("alang"));
+        }
+    }
+
+    @Test
+    public void selectedLanguageAppliesToManifestAndSeparateAudioPlayback() throws Exception {
+        String manifest = "https://manifest.googlevideo.com/api/manifest/hls_playlist/index.m3u8";
+        MpvPlaybackRequest live = new MpvPlaybackRequest(
+                manifest, null, -1, "/private/ca.pem", "es");
+        assertEquals("es", live.options.get("alang"));
+        assertFalse(live.options.containsKey("start"));
+        MpvPlaybackRequest adaptive = new MpvPlaybackRequest(
+                VIDEO, AUDIO, 0, "/private/ca.pem", "hi");
+        assertEquals("hi", adaptive.options.get("alang"));
+        assertArrayEquals(new String[]{"change-list", "audio-files", "append", AUDIO},
+                loadCommands(adaptive).get(0));
+    }
+
+    @Test
     public void loadsNetworkUrlAsOneArgumentWithoutCommandInterpolation() throws Exception {
         String url = VIDEO + "&parameter=hello%20world,seek=100";
         MpvPlaybackRequest request = new MpvPlaybackRequest(url, null, 0, "/private/ca.pem");
