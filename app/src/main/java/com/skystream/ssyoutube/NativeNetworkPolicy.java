@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Shared restrictions for anonymous extraction and media requests, including every redirect. */
+/** Restrictions for anonymous extraction (including redirects) and initially selected media URLs. */
 final class NativeNetworkPolicy {
     static final int CONNECT_TIMEOUT_MS = 15_000;
     static final int READ_TIMEOUT_MS = 20_000;

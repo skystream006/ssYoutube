@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="native_player_title">Native player</string>
+    <string name="native_player_title">mpv player</string>
     <string name="native_player_close">Close player</string>
     <string name="native_player_minimize">Minimize player</string>
     <string name="native_player_fullscreen">Enter fullscreen</string>

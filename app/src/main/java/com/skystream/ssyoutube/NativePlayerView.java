@@ -21,7 +21,6 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.OptIn;
-import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
@@ -29,13 +28,6 @@ import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.Timeline;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.datasource.DataSource;
-import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.dash.DashMediaSource;
-import androidx.media3.exoplayer.hls.HlsMediaSource;
-import androidx.media3.exoplayer.source.MediaSource;
-import androidx.media3.exoplayer.source.MergingMediaSource;
-import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.TimeBar;
 
@@ -71,7 +63,7 @@ final class NativePlayerView extends FrameLayout {
                 thread.setDaemon(true);
                 return thread;
             });
-    private final ExoPlayer player;
+    private final MpvPlayer player;
     private final PlayerView playerView;
     private final Listener listener;
     private final NativePlayerGestures gestures;
@@ -101,12 +93,7 @@ final class NativePlayerView extends FrameLayout {
                 ViewConfiguration.getDoubleTapTimeout(), ViewConfiguration.getLongPressTimeout());
         setBackgroundColor(Color.BLACK);
         extractor.allowCoreThreadTimeOut(true);
-        player = new ExoPlayer.Builder(context).build();
-        player.setAudioAttributes(new AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true);
-        player.setHandleAudioBecomingNoisy(true);
-        player.setTrackSelectionParameters(player.getTrackSelectionParameters()
-                .buildUpon().setMaxVideoSize(1920, 1080).build());
+        player = new MpvPlayer(context);
         playerView = new SurfacePlayerView(context);
         playerView.setPlayer(player);
         playerView.setUseController(true);
@@ -148,7 +135,11 @@ final class NativePlayerView extends FrameLayout {
         statusPanel.addView(retry);
         addView(statusPanel, new LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        statusPanel.setVisibility(GONE);
+        if (player.getPlayerError() != null) {
+            showError(player.getPlayerError());
+        } else {
+            statusPanel.setVisibility(GONE);
+        }
 
         LinearLayout toolbar = new LinearLayout(context);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
@@ -380,6 +371,7 @@ final class NativePlayerView extends FrameLayout {
                 try {
                     NativeStreamExtractor.Result result =
                             NativeStreamExtractor.extract(id, requestCancellation);
+                    String certificates = MpvPlayer.prepareCertificates(getContext());
                     requestCancellation.check();
                     main.post(() -> {
                         if (!isCurrent(requestGeneration, id)) {
@@ -388,12 +380,11 @@ final class NativePlayerView extends FrameLayout {
                         pending = null;
                         cancellation = null;
                         try {
-                            MediaSource source = mediaSource(result, id);
                             changingPlayer = true;
                             try {
-                                player.setMediaSource(source,
+                                player.setStream(result, id,
                                         state.useLiveDefaultPosition(result.live)
-                                                ? C.TIME_UNSET : state.positionMs);
+                                                ? C.TIME_UNSET : state.positionMs, certificates);
                                 player.setPlayWhenReady(state.shouldPlay());
                                 state.prepared = true;
                                 player.prepare();
@@ -401,7 +392,7 @@ final class NativePlayerView extends FrameLayout {
                                 changingPlayer = false;
                             }
                             statusPanel.setVisibility(GONE);
-                        } catch (RuntimeException error) {
+                        } catch (java.io.IOException | RuntimeException error) {
                             showError(error);
                         }
                     });
@@ -441,27 +432,6 @@ final class NativePlayerView extends FrameLayout {
         }
         extractor.purge();
         main.removeCallbacksAndMessages(null);
-    }
-
-    private MediaSource mediaSource(NativeStreamExtractor.Result result, String id) {
-        DataSource.Factory transport = NativeHttpsDataSource::new;
-        MediaItem video = new MediaItem.Builder().setMediaId(id).setUri(result.videoUrl)
-                .setMimeType(result.videoMime).build();
-        if (result.kind == NativeStreamExtractor.Kind.HLS) {
-            return new HlsMediaSource.Factory(transport).createMediaSource(video);
-        }
-        if (result.kind == NativeStreamExtractor.Kind.DASH) {
-            return new DashMediaSource.Factory(transport).createMediaSource(video);
-        }
-        MediaSource videoSource = new ProgressiveMediaSource.Factory(transport)
-                .createMediaSource(video);
-        if (result.audioUrl == null) {
-            return videoSource;
-        }
-        MediaItem audio = new MediaItem.Builder().setMediaId(id).setUri(result.audioUrl)
-                .setMimeType(result.audioMime).build();
-        return new MergingMediaSource(true, videoSource,
-                new ProgressiveMediaSource.Factory(transport).createMediaSource(audio));
     }
 
     private void retry() {
@@ -511,7 +481,7 @@ final class NativePlayerView extends FrameLayout {
         changingPlayer = true;
         try {
             player.stop();
-            player.clearMediaItems();
+            player.clearStream();
         } finally {
             changingPlayer = false;
         }
