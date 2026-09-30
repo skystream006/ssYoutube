@@ -3,6 +3,8 @@ package com.skystream.ssyoutube;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 import org.junit.Test;
@@ -15,15 +17,25 @@ public class MpvPlaybackRequestTest {
     public void loadsNetworkUrlAsOneArgumentWithoutCommandInterpolation() throws Exception {
         String url = VIDEO + "&parameter=hello%20world,seek=100";
         MpvPlaybackRequest request = new MpvPlaybackRequest(url, null, 0, "/private/ca.pem");
-        assertArrayEquals(new String[]{"loadfile", url, "replace"}, request.loadCommand());
+        List<String[]> commands = loadCommands(request);
+        assertEquals(1, commands.size());
+        assertArrayEquals(new String[]{"loadfile", url, "replace"}, commands.get(0));
         assertFalse(request.options.containsKey("audio-files-append"));
+        assertFalse(request.options.containsKey("audio-files"));
     }
 
     @Test
-    public void addsSeparateAudioWithoutParsingItAsAList() throws Exception {
+    public void appendsSeparateAudioBeforeLoadWithoutParsingItAsAList() throws Exception {
+        String audio = AUDIO + "&value=a,b:c&escaped=%2C%3A&command=;stop";
         MpvPlaybackRequest request = new MpvPlaybackRequest(
-                VIDEO, AUDIO + "&value=a,b:c", 12_345, "/private/ca.pem");
-        assertEquals(AUDIO + "&value=a,b:c", request.options.get("audio-files-append"));
+                VIDEO, audio, 12_345, "/private/ca.pem");
+        List<String[]> commands = loadCommands(request);
+        assertEquals(2, commands.size());
+        assertArrayEquals(new String[]{"change-list", "audio-files", "append", audio},
+                commands.get(0));
+        assertArrayEquals(new String[]{"loadfile", VIDEO, "replace"}, commands.get(1));
+        assertFalse(request.options.containsKey("audio-files-append"));
+        assertFalse(request.options.containsKey("audio-files"));
         assertEquals("12.345", request.options.get("start"));
     }
 
@@ -34,7 +46,47 @@ public class MpvPlaybackRequestTest {
         assertEquals("no", request.options.get("sub-auto"));
         assertEquals("no", request.options.get("audio-file-auto"));
         assertEquals("no", request.options.get("cover-art-auto"));
-        assertEquals(AUDIO, request.options.get("audio-files-append"));
+        assertArrayEquals(new String[]{"change-list", "audio-files", "append", AUDIO},
+                loadCommands(request).get(0));
+    }
+
+    @Test
+    public void failedAudioConfigurationDoesNotLoadSilentVideo() throws Exception {
+        MpvPlaybackRequest request = new MpvPlaybackRequest(VIDEO, AUDIO, 0, "/private/ca.pem");
+        List<String[]> commands = new ArrayList<>();
+        assertThrows(IOException.class, () -> request.load(command -> {
+            commands.add(command);
+            return false;
+        }));
+        assertEquals(1, commands.size());
+        assertEquals("change-list", commands.get(0)[0]);
+    }
+
+    @Test
+    public void failedLoadIsReportedForBothMuxedAndAdaptiveStreams() throws Exception {
+        for (String audio : new String[]{null, AUDIO}) {
+            MpvPlaybackRequest request = new MpvPlaybackRequest(VIDEO, audio, 0, "/private/ca.pem");
+            List<String[]> commands = new ArrayList<>();
+            assertThrows(IOException.class, () -> request.load(command -> {
+                commands.add(command);
+                return !"loadfile".equals(command[0]);
+            }));
+            assertEquals(audio == null ? 1 : 2, commands.size());
+            assertEquals("loadfile", commands.get(commands.size() - 1)[0]);
+        }
+    }
+
+    @Test
+    public void manifestRequestsDoNotAddExternalAudioOrForceLiveStart() throws Exception {
+        for (String manifest : new String[]{
+                "https://manifest.googlevideo.com/api/manifest/hls_playlist/index.m3u8",
+                "https://manifest.googlevideo.com/api/manifest/dash/index.mpd"}) {
+            MpvPlaybackRequest request = new MpvPlaybackRequest(manifest, null, -1, "/private/ca.pem");
+            List<String[]> commands = loadCommands(request);
+            assertEquals(1, commands.size());
+            assertArrayEquals(new String[]{"loadfile", manifest, "replace"}, commands.get(0));
+            assertFalse(request.options.containsKey("start"));
+        }
     }
 
     @Test
@@ -91,5 +143,14 @@ public class MpvPlaybackRequestTest {
             assertEquals(-1, MpvPlaybackRequest.milliseconds(invalid));
         }
         assertEquals(0, MpvPlaybackRequest.milliseconds(0.0));
+    }
+
+    private static List<String[]> loadCommands(MpvPlaybackRequest request) throws IOException {
+        List<String[]> commands = new ArrayList<>();
+        request.load(command -> {
+            commands.add(command);
+            return true;
+        });
+        return commands;
     }
 }
