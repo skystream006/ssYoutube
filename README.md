@@ -233,6 +233,11 @@ activity/process recreation, persistence after restart, and expired/revoked logi
 Verify playlist versus single-media jobs, Shorts and miniplayer selection, and the
 compact row in light/dark themes at narrow widths and large font sizes. Android
 Keystore and browser/passkey interaction require device testing.
+Credential files use AES-GCM with a fresh Keystore-wrapped key per write: RSA-OAEP
+on Android 6+, or RSA PKCS#1 wrapping on Android 5, whose Keystore cannot decrypt
+OAEP. The versioned legacy format remains readable after an OS upgrade. CodeQL
+flags that compatibility path; it only decrypts app-private, backup-excluded
+files, never remote ciphertext, and exposes no padding-error oracle.
 
 ### Third-party licensing
 
