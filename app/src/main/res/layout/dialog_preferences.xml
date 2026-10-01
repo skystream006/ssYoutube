@@ -202,6 +202,91 @@
                     android:textOff="@string/hide_header" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/music_server_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_music_server"
+                android:padding="8dp"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/music_server_actions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="64dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="4dp"
+                        android:text="@string/music_server"
+                        android:textStyle="bold"
+                        android:textSize="13sp" />
+
+                    <Button
+                        android:id="@+id/music_login"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minWidth="0dp"
+                        android:minHeight="48dp"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:textAllCaps="false"
+                        android:textSize="12sp"
+                        android:text="@string/music_login" />
+
+                    <Button
+                        android:id="@+id/music_send_playlist"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minWidth="0dp"
+                        android:minHeight="48dp"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:textAllCaps="false"
+                        android:textSize="12sp"
+                        android:text="@string/music_send_playlist"
+                        android:visibility="gone" />
+
+                    <Button
+                        android:id="@+id/music_send_media"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minWidth="0dp"
+                        android:minHeight="48dp"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:textAllCaps="false"
+                        android:textSize="12sp"
+                        android:text="@string/music_send_media"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/music_forget"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?android:attr/selectableItemBackground"
+                        android:contentDescription="@string/music_forget"
+                        android:src="@drawable/ic_close"
+                        android:tint="?android:attr/textColorSecondary"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/music_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:accessibilityLiveRegion="polite"
+                    android:textAppearance="?android:attr/textAppearanceSmall"
+                    android:visibility="gone" />
+            </LinearLayout>
+
             <Button
                 android:id="@+id/advanced_toggle"
                 android:layout_width="match_parent"

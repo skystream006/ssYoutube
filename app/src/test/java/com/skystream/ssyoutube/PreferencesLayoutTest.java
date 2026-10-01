@@ -121,6 +121,33 @@ public class PreferencesLayoutTest {
     }
 
     @Test
+    public void musicServerUsesCompactShadedHorizontalControls() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        Element panel = byId(layout, "music_server_panel");
+        Element login = byId(layout, "music_login");
+        Element playlist = byId(layout, "music_send_playlist");
+        Element media = byId(layout, "music_send_media");
+        assertEquals("@drawable/bg_music_server", panel.getAttributeNS(ANDROID, "background"));
+        assertHorizontalRow(login, playlist);
+        assertHorizontalRow(playlist, media);
+        assertHorizontalRow(media, byId(layout, "music_forget"));
+        for (Element button : new Element[] {login, playlist, media}) {
+            assertEquals("0dp", button.getAttributeNS(ANDROID, "layout_width"));
+            assertEquals("1", button.getAttributeNS(ANDROID, "layout_weight"));
+            assertEquals("48dp", button.getAttributeNS(ANDROID, "minHeight"));
+            assertEquals("false", button.getAttributeNS(ANDROID, "textAllCaps"));
+        }
+        assertEquals("gone", playlist.getAttributeNS(ANDROID, "visibility"));
+        assertEquals("gone", media.getAttributeNS(ANDROID, "visibility"));
+        assertFalse(isInside(panel, byId(layout, "advanced_settings")));
+        assertEquals("polite", byId(layout, "music_status")
+                .getAttributeNS(ANDROID, "accessibilityLiveRegion"));
+        Document background = resource("drawable/bg_music_server.xml");
+        assertEquals(1, background.getElementsByTagName("solid").getLength());
+        assertEquals(1, background.getElementsByTagName("stroke").getLength());
+    }
+
+    @Test
     public void navigationKeepsButtonsWithoutHeading() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         NodeList labels = layout.getElementsByTagName("TextView");

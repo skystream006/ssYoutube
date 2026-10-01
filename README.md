@@ -51,6 +51,29 @@ playback extraction is separate and anonymous.
   package name and signing certificate. Network/release failures can be retried in Preferences.
   Only **Manual APK Release** publishes GitHub Releases for in-app updates;
   automatic main-branch and pull-request builds upload workflow artifacts, not releases.
+- **Music server** – the compact, shaded row in Preferences connects to
+  [ssYTDLP_Server](https://github.com/skystream006/ssYTDLP_Server).
+  Tap **Login to Music Server**, enter the server's configured HTTPS passkey origin
+  (including its port), and authorize with your passkey in your external browser.
+  Return to ssYouTube after approval; your YouTube sign-in is not shared with the server.
+  Use an existing approved server account and a certificate trusted by both Android
+  and the browser. Cleartext HTTP and certificate-validation bypasses are not supported.
+  Browser login uses the server's `com.ssytdlp.app:/oauth/callback` redirect, a random
+  state and S256 PKCE. If Android asks which app should handle the return link,
+  choose ssYouTube; the server uses a shared private-use scheme, not a verified app link.
+  Pending login details and the resulting session are encrypted
+  using Android Keystore and excluded from backup. Sessions survive app restarts;
+  expired or revoked sessions require a new login. Retry or cancel an unfinished login
+  from the same row. The × button forgets the local session, not the browser's login;
+  it does not revoke the session on the server.
+  After login, **Send playlist** submits the current page URL to `POST /api/jobs`
+  as an audio job; this button is hidden unless the page has a nonempty `list` parameter.
+  **Send media** removes playlist parameters before submitting just the current video
+  (including Shorts). When browsing elsewhere with a native miniplayer, it sends that
+  player's video instead. It is disabled when no media is selected.
+  Both actions show success/failure inline and disable repeat submissions while busy.
+  On a network failure, check the server's job list before retrying: the request may
+  have arrived even when its response did not.
 - **Native video playback** – watch links, live-video links, embedded-video links,
   and `youtu.be` links open in an embedded libmpv player, using the same `loadfile` network-URL
   operation as mpv-android's **Open URL**. No external player app is launched or required.
@@ -165,6 +188,11 @@ app/src/main/java/com/skystream/ssyoutube/
   SiteScope.java      Which URLs stay inside the app (pure Java, unit tested)
   Preferences.java    Theme/site-mode values, user agents, home URLs (pure Java, unit tested)
   NavigationHistory.java  Browser-like back/forward step calculation (pure Java, unit tested)
+  MusicServer.java    Lifecycle-aware browser login and music job coordination
+  MusicServerProtocol.java  PKCE, callback validation and playlist/media URL selection
+  MusicServerClient.java    Bounded HTTPS token exchange and audio job submission
+  MusicServerStore.java     Keystore-protected, backup-excluded login/session storage
+  MusicServerCallbackActivity.java  Routes browser returns to the existing app task
   StatsMonitor.java  Lifecycle-aware background resource sampling
   StatsValues.java   Network rates and safe storage traversal (pure Java, unit tested)
   Logger.java        Opt-in asynchronous logging, sharing and clearing
@@ -199,6 +227,17 @@ Device verification should cover muxed/adaptive audio and video, live HLS/DASH, 
 links, seek/replay, rapid video changes, pause/resume, audio-focus/headphone interruptions,
 fullscreen/miniplayer resizing, activity recreation, network failure/retry and close while
 loading. Native rendering/decoding and ABI compatibility cannot be verified by JVM tests alone.
+
+For Music Server, device-check browser authorization, cancellation/retry, return after
+activity/process recreation, persistence after restart, and expired/revoked logins.
+Verify playlist versus single-media jobs, Shorts and miniplayer selection, and the
+compact row in light/dark themes at narrow widths and large font sizes. Android
+Keystore and browser/passkey interaction require device testing.
+Credential files use AES-GCM with a fresh Keystore-wrapped key per write: RSA-OAEP
+on Android 6+, or RSA PKCS#1 wrapping on Android 5, whose Keystore cannot decrypt
+OAEP. The versioned legacy format remains readable after an OS upgrade. CodeQL
+flags that compatibility path; it only decrypts app-private, backup-excluded
+files, never remote ciphertext, and exposes no padding-error oracle.
 
 ### Third-party licensing
 
