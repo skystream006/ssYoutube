@@ -266,6 +266,9 @@ public final class MusicServerProtocol {
         } else if ("/watch".equals(path)) {
             id = unique(query, "v");
         } else {
+            if ("/embed/videoseries".equals(path) || "/embed/videoseries/".equals(path)) {
+                return null;
+            }
             for (String prefix : new String[] {"/shorts/", "/live/", "/embed/"}) {
                 if (path.startsWith(prefix)) {
                     id = path.substring(prefix.length());
