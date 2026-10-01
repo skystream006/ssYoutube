@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** A validated video target, independent of Android and the playback implementation. */
+/** A validated native video target, independent of Android and the playback implementation. */
 final class PlaybackRequest {
 
     private static final Pattern VIDEO_ID = Pattern.compile("[A-Za-z0-9_-]{11}");
@@ -43,8 +43,6 @@ final class PlaybackRequest {
             videoId = pathId(path, "/");
         } else if ("/watch".equals(path)) {
             videoId = query.get("v");
-        } else if (path.startsWith("/shorts/")) {
-            videoId = pathId(path, "/shorts/");
         } else if (path.startsWith("/live/")) {
             videoId = pathId(path, "/live/");
         } else if (path.startsWith("/embed/")) {
@@ -83,6 +81,13 @@ final class PlaybackRequest {
     static boolean isYouTubePage(String url) {
         URI uri = trustedUri(url);
         return uri != null && !isShortlinkHost(uri.getHost());
+    }
+
+    static boolean isShortsPage(String url) {
+        URI uri = trustedUri(url);
+        return uri != null && !isShortlinkHost(uri.getHost())
+                && ("/shorts".equals(uri.getRawPath())
+                || uri.getRawPath().startsWith("/shorts/"));
     }
 
     private static URI trustedUri(String url) {

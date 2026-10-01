@@ -18,9 +18,9 @@ public class NativePlaybackScriptTest {
     }
 
     @Test
-    public void disablesAllWebMediaInsteadOfFilteringAdsOrPlayerResponses() {
+    public void disablesWebMediaOutsideShortsInsteadOfFilteringAdsOrPlayerResponses() {
         String script = NativePlaybackScript.SCRIPT;
-        assertTrue(script.contains("proto.play=function(){silence(this);return Promise.resolve();}"));
+        assertTrue(script.contains("silence(this);return Promise.resolve();"));
         assertTrue(script.contains("querySelectorAll('video,audio')"));
         assertTrue(script.contains("media.muted=true"));
         assertTrue(script.contains("media.pause()"));
@@ -30,6 +30,32 @@ public class NativePlaybackScriptTest {
         assertFalse(script.contains("playabilityStatus"));
         assertFalse(script.contains("adPlacements"));
         assertFalse(script.contains("fetch="));
+    }
+
+    @Test
+    public void allowsOriginalPlaybackOnlyOnMainFrameShortsPages() {
+        String script = NativePlaybackScript.SCRIPT;
+        assertTrue(script.contains(
+                "return window.top===window&&/^\\/shorts(?:\\/|$)/.test(location.pathname)"));
+        assertTrue(script.contains("var originalPlay=proto.play"));
+        assertTrue(script.contains(
+                "if(isShortsPage()){restore(this);return originalPlay.apply(this,arguments);}"));
+        assertTrue(script.contains("if(isShortsPage()){restore(media);return;}"));
+    }
+
+    @Test
+    public void restoresSuppressedMediaAndLayoutWhenNavigatingToShorts() {
+        String script = NativePlaybackScript.SCRIPT;
+        assertTrue(script.contains("suppressedMedia=new WeakMap()"));
+        assertTrue(script.contains("if(!suppressedMedia.has(media))"));
+        assertTrue(script.contains("{muted:media.muted,autoplay:media.autoplay}"));
+        assertTrue(script.contains("media.muted=saved.muted;media.autoplay=saved.autoplay"));
+        assertTrue(script.contains("suppressedMedia.delete(media)"));
+        assertTrue(script.contains("if(isShortsPage()){if(existingStyle){existingStyle.remove();}}"));
+        assertTrue(script.contains("else if(parent&&!existingStyle)"));
+        assertTrue(script.contains("var result=original.apply(this,arguments);update();return result;"));
+        assertTrue(script.indexOf("existingStyle.remove()")
+                < script.indexOf("ssYouTubePlayback.postMessage(location.href)"));
     }
 
     @Test

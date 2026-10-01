@@ -51,7 +51,7 @@ playback extraction is separate and anonymous.
   package name and signing certificate. Network/release failures can be retried in Preferences.
   Only **Manual APK Release** publishes GitHub Releases for in-app updates;
   automatic main-branch and pull-request builds upload workflow artifacts, not releases.
-- **Native video playback** – watch links, Shorts, live-video links, embedded-video links,
+- **Native video playback** – watch links, live-video links, embedded-video links,
   and `youtu.be` links open in an embedded libmpv player, using the same `loadfile` network-URL
   operation as mpv-android's **Open URL**. No external player app is launched or required.
   NewPipeExtractor resolves the media directly, off the UI thread, without a third-party
@@ -69,11 +69,14 @@ playback extraction is separate and anonymous.
   Each selected video gets its own mpv handle; fullscreen/miniplayer transitions retain
   that handle and only change its surface size. Closing or replacing a video destroys its
   handle, and callbacks from that handle cannot update the replacement.
-- **Browsing-only WebView** – the site remains available for search, channels, comments,
-  and account interactions. Its media playback and previews are disabled, including after
-  single-page navigation, so they cannot play alongside the native player. Web player
-  containers, placeholders, and their reserved height are collapsed in mobile and desktop
-  layouts, leaving the native player as the only video area. Only validated
+- **Shorts in the WebView** – `/shorts` pages stay on YouTube's web player, including
+  incoming Shorts links and single-page navigation. Entering Shorts closes any native
+  playback so the two players do not play together.
+- **Browsing WebView** – the site remains available for search, channels, comments,
+  and account interactions. Outside Shorts, media playback and previews are disabled,
+  including after single-page navigation. Web player containers, placeholders, and their
+  reserved height are collapsed in mobile and desktop layouts outside Shorts, leaving the
+  native player as the only video area on those pages. Only validated
   YouTube main-frame navigation can select native playback; sign-in pages do not receive
   the playback bridge. The request blocklist, ad-JSON pruning, ad-hiding/cleanup scripts,
   and adblock-warning bypass have been removed. Feed ads and shopping promotions may
@@ -84,7 +87,8 @@ playback extraction is separate and anonymous.
   extraction. Signed-in cookies are never passed to the extractor: private, purchased,
   members-only, or age-restricted content may not play even when accessible in the website.
   Website playlist autoplay and web-player-specific controls are not provided by the native player.
-  There is no automatic fallback to YouTube's web player. Creator-embedded sponsorships
+  There is no automatic fallback to YouTube's web player for native playback. Shorts use
+  the website's playback behavior, including its ads. Creator-embedded sponsorships
   are part of the video and are not removed.
   Extracted URLs are restricted to HTTPS YouTube/Googlevideo hosts before opening.
   libmpv/FFmpeg handles media redirects and manifest requests, rather than the former Java

@@ -926,7 +926,7 @@ public class MainActivity extends AppCompatActivity {
         if (url == null || nativePlayer == null || isDestroyed()) {
             return;
         }
-        if (!PlaybackRequest.isYouTubePage(url)) {
+        if (!PlaybackRequest.isYouTubePage(url) || PlaybackRequest.isShortsPage(url)) {
             closedVideoId = null;
             closeNativePlayback(false);
             lastRouteKey = null;

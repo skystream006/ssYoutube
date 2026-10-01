@@ -228,6 +228,21 @@ public class MainActivityPageScriptTest {
     }
 
     @Test
+    public void shortsMessagesCannotSelectNativePlaybackEvenForTheSameVideo() {
+        String origin = "https://m.youtube.com";
+        String shorts = origin + "/shorts/dQw4w9WgXcQ";
+        String watch = origin + "/watch?v=dQw4w9WgXcQ";
+        assertTrue(MainActivity.isTrustedPlaybackMessage(true, origin, shorts, shorts));
+        assertFalse(MainActivity.isTrustedPlaybackMessage(false, origin, shorts, shorts));
+        assertFalse(MainActivity.isTrustedPlaybackMessage(true, origin, shorts, watch));
+        assertFalse(MainActivity.isTrustedPlaybackMessage(true, origin, watch, shorts));
+        assertFalse(MainActivity.isTrustedPlaybackMessage(true, origin, shorts,
+                origin + "/shorts/abcdefghijk"));
+        assertNull(MainActivity.closedVideoForPage("dQw4w9WgXcQ",
+                PlaybackRequest.fromUrl(shorts)));
+    }
+
+    @Test
     public void canonicalizesShortLinksWithoutLosingStartPosition() {
         PlaybackRequest request = PlaybackRequest.fromUrl("https://youtu.be/dQw4w9WgXcQ?t=1m30s");
         assertEquals("https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=90",
