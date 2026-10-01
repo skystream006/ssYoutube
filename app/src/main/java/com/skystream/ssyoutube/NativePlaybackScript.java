@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-/** Makes the WebView a browsing surface, leaving all media playback to the native player. */
+/** Leaves Shorts in the WebView and suppresses web media elsewhere for native playback. */
 final class NativePlaybackScript {
     static final Set<String> ORIGIN_RULES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "https://youtube.com", "https://www.youtube.com", "https://m.youtube.com",
@@ -17,13 +17,26 @@ final class NativePlaybackScript {
                     + "!/^(www\\.|m\\.|music\\.)?youtube\\.com$/.test(location.hostname)){return;}"
                     + "if(window.__ssyoutubeNativePlayback){"
                     + "window.__ssyoutubeNativePlayback();return;}"
-                    + "var lastUrl='',pending=false;"
+                    + "var lastUrl='',pending=false,suppressedMedia=new WeakMap();"
+                    + "function isShortsPage(){"
+                    + "return window.top===window&&/^\\/shorts(?:\\/|$)/.test(location.pathname);"
+                    + "}"
+                    + "function restore(media){"
+                    + "var saved=suppressedMedia.get(media);if(!saved){return;}"
+                    + "try{media.muted=saved.muted;media.autoplay=saved.autoplay;"
+                    + "suppressedMedia.delete(media);}catch(e){}"
+                    + "}"
                     + "function silence(media){"
-                    + "try{media.autoplay=false;media.removeAttribute('autoplay');"
+                    + "if(isShortsPage()){restore(media);return;}"
+                    + "try{if(!suppressedMedia.has(media)){"
+                    + "suppressedMedia.set(media,{muted:media.muted,autoplay:media.autoplay});}"
+                    + "media.autoplay=false;media.removeAttribute('autoplay');"
                     + "media.muted=true;if(!media.paused){media.pause();}}catch(e){}"
                     + "}"
                     + "var proto=window.HTMLMediaElement&&HTMLMediaElement.prototype;"
-                    + "if(proto){proto.play=function(){silence(this);return Promise.resolve();};}"
+                    + "if(proto){var originalPlay=proto.play;proto.play=function(){"
+                    + "if(isShortsPage()){restore(this);return originalPlay.apply(this,arguments);}"
+                    + "silence(this);return Promise.resolve();};}"
                     + "document.addEventListener('play',function(event){"
                     + "if(event.target instanceof HTMLMediaElement){silence(event.target);}"
                     + "},true);"
@@ -32,7 +45,9 @@ final class NativePlaybackScript {
                     + "var media=document.querySelectorAll('video,audio');"
                     + "for(var i=0;i<media.length;i++){silence(media[i]);}"
                     + "var parent=document.head||document.documentElement;"
-                    + "if(parent&&!document.getElementById('ssyoutube-native-player')){"
+                    + "var existingStyle=document.getElementById('ssyoutube-native-player');"
+                    + "if(isShortsPage()){if(existingStyle){existingStyle.remove();}}"
+                    + "else if(parent&&!existingStyle){"
                     + "var style=document.createElement('style');style.id='ssyoutube-native-player';"
                     + "style.textContent='video,audio,#player,#movie_player,#player-container-outer,"
                     + "#player-container-inner,ytd-player,ytm-player,ytm-player-container,"
@@ -62,7 +77,7 @@ final class NativePlaybackScript {
                     + "window.__ssyoutubeNativePlayback=update;"
                     + "['pushState','replaceState'].forEach(function(name){"
                     + "var original=history[name];history[name]=function(){"
-                    + "var result=original.apply(this,arguments);schedule();return result;};"
+                    + "var result=original.apply(this,arguments);update();return result;};"
                     + "});"
                     + "new MutationObserver(schedule).observe(document,{childList:true,subtree:true});"
                     + "document.addEventListener('DOMContentLoaded',schedule);"

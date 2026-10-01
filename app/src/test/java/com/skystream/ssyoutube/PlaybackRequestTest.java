@@ -29,7 +29,7 @@ public class PlaybackRequestTest {
 
     @Test
     public void acceptsDirectVideoPathsAndShortlinks() {
-        for (String path : new String[]{"shorts", "live", "embed"}) {
+        for (String path : new String[]{"live", "embed"}) {
             assertRequest("https://m.youtube.com/" + path + "/" + ID, 0);
             assertRequest("https://www.youtube.com/" + path + "/" + ID + "/", 0);
         }
@@ -37,6 +37,42 @@ public class PlaybackRequestTest {
             assertRequest("https://" + host + "/" + ID + "?si=sharing", 0);
             assertRequest("http://" + host + ":80/" + ID + "/", 0);
         }
+    }
+
+    @Test
+    public void leavesShortsInTheWebView() {
+        for (String host : new String[]{
+                "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"
+        }) {
+            for (String path : new String[]{
+                    "/shorts", "/shorts/", "/shorts/" + ID, "/shorts/" + ID + "/",
+                    "/shorts/" + ID + "?t=10&feature=share", "/shorts/" + ID + "#t=10"
+            }) {
+                String url = "https://" + host + path;
+                assertTrue(url, PlaybackRequest.isShortsPage(url));
+                assertNull(url, PlaybackRequest.fromUrl(url));
+            }
+        }
+        assertTrue(PlaybackRequest.isShortsPage("HTTPS://WWW.YOUTUBE.COM:443/shorts/" + ID));
+        assertTrue(PlaybackRequest.isShortsPage("http://m.youtube.com:80/shorts/" + ID));
+    }
+
+    @Test
+    public void shortsPredicateRequiresATrustedOriginAndShortsPath() {
+        for (String url : new String[]{
+                null, "", "/shorts/" + ID, "https://youtube.com",
+                "https://youtube.com/shorts-other/" + ID,
+                "https://youtube.com/watch?v=" + ID + "&next=/shorts/" + ID,
+                "https://youtu.be/" + ID, "https://youtu.be/shorts/" + ID,
+                "https://youtube.com.evil.example/shorts/" + ID,
+                "https://evil.example@youtube.com/shorts/" + ID,
+                "https://youtube.com:444/shorts/" + ID,
+                "https://accounts.google.com/shorts/" + ID,
+                "file://youtube.com/shorts/" + ID
+        }) {
+            assertFalse(url, PlaybackRequest.isShortsPage(url));
+        }
+        assertRequest(WATCH, 0);
     }
 
     @Test
@@ -174,7 +210,6 @@ public class PlaybackRequestTest {
         assertRequest(WATCH + "&start=32", 32000);
         assertRequest("https://youtu.be/" + ID + "?t=1m2s", 62000);
         assertRequest("https://youtube.com/embed/" + ID + "?start=30", 30000);
-        assertRequest("https://youtube.com/shorts/" + ID + "?t=10", 10000);
         assertRequest("https://youtube.com/live/" + ID + "?t=20", 20000);
     }
 
