@@ -32,6 +32,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.CompoundButton;
@@ -578,6 +579,8 @@ public class MainActivity extends AppCompatActivity {
     private volatile boolean statsForNerdsEnabled;
     private StatsMonitor statsMonitor;
     private AppUpdater appUpdater;
+    private MusicServer musicServer;
+    private AlertDialog preferenceDialog;
     private boolean updatesResumed;
     private Logger logger;
     private int originalSystemUiVisibility;
@@ -645,6 +648,13 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         appUpdater.checkOnStartup(savedInstanceState);
+        musicServer = new ViewModelProvider(this).get(MusicServer.class);
+        musicServer.browserUrl().observe(this, url -> {
+            if (updatesResumed && url != null) {
+                openMusicServerBrowser();
+            }
+        });
+        boolean musicCallback = handleMusicServerCallback(getIntent());
         settingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -674,12 +684,19 @@ public class MainActivity extends AppCompatActivity {
             webView.loadUrl(startUrl(getIntent()));
         }
         updatePlayerLayout();
+        if (musicCallback) {
+            showPreferences();
+        }
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         logActivity("onNewIntent");
+        if (handleMusicServerCallback(intent)) {
+            showPreferences();
+            return;
+        }
         setIntent(intent);
         closedVideoId = null;
         lastPlaybackKey = null;
@@ -730,6 +747,8 @@ public class MainActivity extends AppCompatActivity {
         watchHistoryHandler.post(watchHistoryTick);
         updatesResumed = true;
         appUpdater.dispatch(this);
+        musicServer.refresh();
+        openMusicServerBrowser();
     }
 
     @Override
@@ -761,6 +780,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         logActivity("onDestroy");
+        if (preferenceDialog != null) {
+            preferenceDialog.dismiss();
+        }
         statsMonitor.onDestroy();
         logoInjectionHandler.removeCallbacksAndMessages(null);
         watchHistoryHandler.removeCallbacksAndMessages(null);
@@ -1186,6 +1208,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showPreferences() {
+        if (preferenceDialog != null && preferenceDialog.isShowing()) {
+            musicServer.refresh();
+            return;
+        }
+        musicServer.refresh();
         logActivity("showPreferences");
         View content = getLayoutInflater().inflate(R.layout.dialog_preferences, null);
         TextView versionView = content.findViewById(R.id.app_version);
@@ -1210,6 +1237,42 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         appUpdater.downloadProgress().observe(this, updateObserver);
+        View musicLogin = content.findViewById(R.id.music_login);
+        View musicPlaylist = content.findViewById(R.id.music_send_playlist);
+        View musicMedia = content.findViewById(R.id.music_send_media);
+        View musicForget = content.findViewById(R.id.music_forget);
+        TextView musicStatus = content.findViewById(R.id.music_status);
+        Observer<MusicServer.Status> musicObserver = state -> {
+            musicLogin.setVisibility(state.loggedIn ? View.GONE : View.VISIBLE);
+            musicLogin.setEnabled(!state.busy);
+            musicPlaylist.setVisibility(state.loggedIn
+                    && MusicServerProtocol.playlistUrl(webView.getUrl()) != null
+                    ? View.VISIBLE : View.GONE);
+            musicPlaylist.setEnabled(!state.busy);
+            musicMedia.setVisibility(state.loggedIn ? View.VISIBLE : View.GONE);
+            musicMedia.setEnabled(!state.busy && currentMusicMediaUrl() != null);
+            musicForget.setVisibility(state.loggedIn || state.awaitingLogin
+                    ? View.VISIBLE : View.GONE);
+            musicForget.setEnabled(!state.busy);
+            musicForget.setContentDescription(getString(state.loggedIn
+                    ? R.string.music_forget : R.string.music_cancel_login));
+            int message = state.message != 0 ? state.message
+                    : state.awaitingLogin ? R.string.music_waiting : 0;
+            musicStatus.setVisibility(message == 0 ? View.GONE : View.VISIBLE);
+            if (message != 0) {
+                musicStatus.setText(message);
+            }
+        };
+        musicServer.status().observe(this, musicObserver);
+        musicLogin.setOnClickListener(v -> showMusicServerLogin());
+        musicPlaylist.setOnClickListener(v ->
+                musicServer.send(MusicServerProtocol.playlistUrl(webView.getUrl())));
+        musicMedia.setOnClickListener(v -> musicServer.send(currentMusicMediaUrl()));
+        musicForget.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setMessage(R.string.music_forget_confirmation)
+                .setPositiveButton(android.R.string.ok, (d, which) -> musicServer.forget(0))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show());
         Spinner languageSpinner = content.findViewById(R.id.language_spinner);
         Spinner themeSpinner = content.findViewById(R.id.theme_spinner);
         Spinner siteModeSpinner = content.findViewById(R.id.site_mode_spinner);
@@ -1366,6 +1429,7 @@ public class MainActivity extends AppCompatActivity {
         final AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(content)
                 .create();
+        preferenceDialog = dialog;
 
         Window dialogWindow = dialog.getWindow();
         if (dialogWindow != null) {
@@ -1422,6 +1486,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onDismiss(DialogInterface dialogInterface) {
                 appUpdater.downloadProgress().removeObserver(updateObserver);
+                musicServer.status().removeObserver(musicObserver);
+                preferenceDialog = null;
                 logActivity("Preferences dismissed");
                 closePreferencePanel();
             }
@@ -1440,6 +1506,65 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private String currentMusicMediaUrl() {
+        return MusicServerProtocol.mediaUrl(webView.getUrl(),
+                nativePlayer.hasVideo() ? nativePlayer.getVideoId() : null);
+    }
+
+    private boolean handleMusicServerCallback(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())
+                || intent.getData() == null
+                || !"com.ssytdlp.app".equals(intent.getData().getScheme())) {
+            return false;
+        }
+        musicServer.acceptCallback(intent.getDataString());
+        // Do not retain authorization codes in the activity's saved launch intent.
+        setIntent(new Intent(this, MainActivity.class));
+        return true;
+    }
+
+    private void openMusicServerBrowser() {
+        String url = musicServer.takeBrowserUrl();
+        if (url == null) {
+            return;
+        }
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    .addCategory(Intent.CATEGORY_BROWSABLE));
+        } catch (ActivityNotFoundException | SecurityException e) {
+            musicServer.forget(R.string.music_browser_unavailable);
+        }
+    }
+
+    private void showMusicServerLogin() {
+        EditText origin = new EditText(this);
+        origin.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        origin.setSingleLine(true);
+        origin.setHint(R.string.music_server_hint);
+        origin.setContentDescription(getString(R.string.music_server_address));
+        origin.setText(musicServer.origin());
+        AlertDialog login = new AlertDialog.Builder(this)
+                .setTitle(R.string.music_login)
+                .setMessage(R.string.music_login_help)
+                .setView(origin)
+                .setPositiveButton(R.string.music_login, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+        login.setOnShowListener(d -> login.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    try {
+                        String server = MusicServerProtocol.normalizeOrigin(
+                                origin.getText().toString());
+                        musicServer.login(server);
+                        login.dismiss();
+                    } catch (java.io.IOException e) {
+                        origin.setError(getString(R.string.music_invalid_address));
+                    }
+                }));
+        login.show();
+    }
+
     private String startUrl(Intent intent) {
         logActivity("startUrl");
         if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction())
@@ -1448,7 +1573,8 @@ public class MainActivity extends AppCompatActivity {
             if (inAppUrl != null) {
                 PlaybackRequest request = PlaybackRequest.fromUrl(inAppUrl);
                 if (request != null) {
-                    return canonicalPlaybackUrl(request, desktopMode);
+                    return MusicServerProtocol.preservePlaylist(
+                            canonicalPlaybackUrl(request, desktopMode), inAppUrl);
                 }
                 return inAppUrl;
             }
@@ -1676,7 +1802,8 @@ public class MainActivity extends AppCompatActivity {
             }
             PlaybackRequest request = PlaybackRequest.fromUrl(inAppUrl);
             if (request != null && !PlaybackRequest.isYouTubePage(inAppUrl)) {
-                inAppUrl = canonicalPlaybackUrl(request, desktopMode);
+                inAppUrl = MusicServerProtocol.preservePlaylist(
+                        canonicalPlaybackUrl(request, desktopMode), inAppUrl);
             }
             if (!inAppUrl.equals(url)) {
                 logActivityUrl("Normalized URL to ", inAppUrl);

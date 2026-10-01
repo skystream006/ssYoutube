@@ -20,6 +20,31 @@
     <string name="updates_install_denied">Update saved. Allow installs from ssYouTube and check for updates again to install.</string>
     <string name="updates_installer_unavailable">Could not open the Android package installer</string>
     <string name="default_language">Default language</string>
+    <string name="music_server">Music server</string>
+    <string name="music_login">Login to Music Server</string>
+    <string name="music_server_address">Music server HTTPS address</string>
+    <string name="music_server_hint">https://music.example.com:4123</string>
+    <string name="music_login_help">Enter your ssYTDLP_Server passkey origin, including its HTTPS port. Sign in with your passkey in the browser, then return here. The certificate must be trusted by Android.</string>
+    <string name="music_invalid_address">Enter an HTTPS origin only, without a path, query or credentials.</string>
+    <string name="music_send_playlist">Send playlist</string>
+    <string name="music_send_media">Send media</string>
+    <string name="music_forget">Forget music server login</string>
+    <string name="music_cancel_login">Cancel music server login</string>
+    <string name="music_forget_confirmation">Forget the saved music server login and cancel any pending login on this device? The browser stays signed in.</string>
+    <string name="music_connecting">Connecting to music server…</string>
+    <string name="music_waiting">Complete login in your browser, then return here. Tap Login to retry, or × to cancel.</string>
+    <string name="music_connected">Logged in to music server.</string>
+    <string name="music_login_expired">Music server login expired or was revoked. Please log in again.</string>
+    <string name="music_storage_failed">Could not read the saved login. Please log in again.</string>
+    <string name="music_login_failed">Login failed. Check the server address, connection and trusted certificate, then retry login.</string>
+    <string name="music_callback_invalid">Login response is invalid or expired. Retry the login you started from this app.</string>
+    <string name="music_browser_unavailable">No browser could open the login page. Install or enable a browser and retry.</string>
+    <string name="music_sending">Sending job…</string>
+    <string name="music_job_started">Music server job started.</string>
+    <string name="music_forbidden">This account cannot create jobs. Ask the server administrator for access.</string>
+    <string name="music_duplicate">This URL already has a job on the music server.</string>
+    <string name="music_rate_limited">The server is busy. Wait before trying again.</string>
+    <string name="music_job_failed">Could not confirm the job. Check the server job list before retrying to avoid duplicates.</string>
     <string-array name="language_options">
         <item>English</item>
         <item>Arabic</item>
