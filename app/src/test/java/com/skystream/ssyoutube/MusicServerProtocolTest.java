@@ -349,6 +349,7 @@ public class MusicServerProtocolTest {
                 "https://www.youtube.com/watch?v=" + VIDEO + "&%76=" + VIDEO,
                 "https://www.youtube.com/shorts/" + VIDEO + "/extra",
                 "https://www.youtube.com/embed/videoseries?list=PL_fixture",
+                "https://www.youtube.com/embed/videoseries/",
                 "http://www.youtube.com/watch?v=" + VIDEO,
                 "https://www.youtube.com.evil.example/watch?v=" + VIDEO,
                 "https://user@www.youtube.com/watch?v=" + VIDEO,
