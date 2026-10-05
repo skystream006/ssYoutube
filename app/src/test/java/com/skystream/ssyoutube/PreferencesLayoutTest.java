@@ -175,8 +175,21 @@ public class PreferencesLayoutTest {
             assertTrue(id + " must be inside Advanced", isInside(byId(layout, id), advanced));
         }
         for (String id : new String[] {"language_spinner", "theme_spinner", "site_mode_spinner",
-                "related_videos_toggle", "header_toggle", "check_updates_button", "navigation_bar"}) {
+                "related_videos_toggle", "header_toggle", "mpv_toggle", "check_updates_button",
+                "navigation_bar"}) {
             assertFalse(id + " must stay outside Advanced", isInside(byId(layout, id), advanced));
+        }
+    }
+
+    @Test
+    public void mpvToggleIsLabeledAndAlwaysVisible() throws Exception {
+        Element toggle = byId(resource("layout/dialog_preferences.xml"), "mpv_toggle");
+        assertEquals("Switch", toggle.getTagName());
+        assertEquals("@string/enable_mpv", toggle.getAttributeNS(ANDROID, "text"));
+        assertEquals("48dp", toggle.getAttributeNS(ANDROID, "minHeight"));
+        for (Node node = toggle; node instanceof Element; node = node.getParentNode()) {
+            String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
+            assertTrue(visibility.isEmpty() || "visible".equals(visibility));
         }
     }
 

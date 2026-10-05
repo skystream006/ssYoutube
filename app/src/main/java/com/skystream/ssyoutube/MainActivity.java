@@ -51,6 +51,7 @@ import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.FileProvider;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
+import androidx.webkit.ScriptHandler;
 import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
@@ -67,7 +68,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Keeps browsing and sign-in in a single WebView while native playback owns all media.
+ * Keeps browsing and sign-in in a single WebView with optional native playback.
  */
 @androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 public class MainActivity extends AppCompatActivity {
@@ -76,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_THEME = "theme";
     private static final String KEY_DEFAULT_LANGUAGE = "default_language";
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
+    private static final String KEY_MPV_ENABLED = "mpv_enabled";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
     private static final String KEY_HEADER_HIDDEN = "header_hidden";
     private static final String KEY_LOGGING_ENABLED = "logging_enabled";
@@ -562,6 +564,8 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private NativePlayerView nativePlayer;
+    private ScriptHandler nativePlaybackScript;
+    private boolean mpvEnabled;
     private boolean playerFullscreen;
     private boolean playerMinimized;
     private boolean activityResumed;
@@ -590,6 +594,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
+        mpvEnabled = prefs.getBoolean(KEY_MPV_ENABLED, true);
         relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
         headerHidden = prefs.getBoolean(KEY_HEADER_HIDDEN, false);
         loggingEnabled = prefs.getBoolean(KEY_LOGGING_ENABLED, false);
@@ -667,16 +672,18 @@ public class MainActivity extends AppCompatActivity {
         setStatsForNerdsEnabled(statsForNerdsEnabled);
 
         if (savedInstanceState != null) {
-            closedVideoId = savedInstanceState.getString(STATE_CLOSED_VIDEO);
-            lastPlaybackKey = savedInstanceState.getString(STATE_PLAYBACK_KEY);
-            lastRouteKey = savedInstanceState.getString(STATE_ROUTE_KEY);
-            Bundle playerState = savedInstanceState.getBundle(STATE_PLAYER);
-            if (playerState != null) {
-                nativePlayer.restoreState(playerState);
+            if (mpvEnabled) {
+                closedVideoId = savedInstanceState.getString(STATE_CLOSED_VIDEO);
+                lastPlaybackKey = savedInstanceState.getString(STATE_PLAYBACK_KEY);
+                lastRouteKey = savedInstanceState.getString(STATE_ROUTE_KEY);
+                Bundle playerState = savedInstanceState.getBundle(STATE_PLAYER);
+                if (playerState != null) {
+                    nativePlayer.restoreState(playerState);
+                }
+                playerMinimized = savedInstanceState.getBoolean(STATE_MINIMIZED);
+                setPlayerFullscreen(savedInstanceState.getBoolean(STATE_FULLSCREEN)
+                        && nativePlayer.hasVideo());
             }
-            playerMinimized = savedInstanceState.getBoolean(STATE_MINIMIZED);
-            setPlayerFullscreen(savedInstanceState.getBoolean(STATE_FULLSCREEN)
-                    && nativePlayer.hasVideo());
             if (webView.restoreState(savedInstanceState) == null) {
                 webView.loadUrl(startUrl(getIntent()));
             }
@@ -883,15 +890,37 @@ public class MainActivity extends AppCompatActivity {
                 logActivity("Playback messages unavailable", error);
             }
         }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+        updateNativePlaybackScript(view);
+    }
+
+    private void updateNativePlaybackScript(WebView view) {
+        if (nativePlaybackScript != null) {
+            nativePlaybackScript.remove();
+            nativePlaybackScript = null;
+        }
+        if (mpvEnabled && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
-                WebViewCompat.addDocumentStartJavaScript(view,
-                        NativePlaybackScript.SCRIPT + ";" + NativeWatchHistoryScript.SCRIPT,
+                nativePlaybackScript = WebViewCompat.addDocumentStartJavaScript(view,
+                        NativePlaybackScript.forPreference(mpvEnabled),
                         NativePlaybackScript.ORIGIN_RULES);
             } catch (IllegalArgumentException | UnsupportedOperationException error) {
                 logActivity("Document start script unavailable", error);
             }
         }
+    }
+
+    private void setMpvEnabled(boolean enabled) {
+        if (mpvEnabled == enabled) {
+            return;
+        }
+        mpvEnabled = enabled;
+        prefs.edit().putBoolean(KEY_MPV_ENABLED, enabled).apply();
+        closeNativePlayback(false);
+        closedVideoId = null;
+        lastRouteKey = null;
+        updateNativePlaybackScript(webView);
+        // Reload all frames to discard the previous media hooks and hidden-player styles.
+        webView.reload();
     }
 
     static boolean isTrustedPlaybackMessage(boolean mainFrame, String sourceOrigin,
@@ -948,7 +977,7 @@ public class MainActivity extends AppCompatActivity {
         if (url == null || nativePlayer == null || isDestroyed()) {
             return;
         }
-        if (!PlaybackRequest.isYouTubePage(url) || PlaybackRequest.isShortsPage(url)) {
+        if (!mpvEnabled || !PlaybackRequest.isYouTubePage(url) || PlaybackRequest.isShortsPage(url)) {
             closedVideoId = null;
             closeNativePlayback(false);
             lastRouteKey = null;
@@ -1288,6 +1317,7 @@ public class MainActivity extends AppCompatActivity {
         });
         ToggleButton relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
         ToggleButton headerToggle = content.findViewById(R.id.header_toggle);
+        Switch mpvToggle = content.findViewById(R.id.mpv_toggle);
         Switch loggingToggle = content.findViewById(R.id.logging_toggle);
         Switch statsForNerdsToggle = content.findViewById(R.id.stats_for_nerds_toggle);
 
@@ -1304,6 +1334,7 @@ public class MainActivity extends AppCompatActivity {
         siteModeSpinner.setSelection(desktopMode ? 1 : 0);
         relatedVideosToggle.setChecked(relatedHidden);
         headerToggle.setChecked(headerHidden);
+        mpvToggle.setChecked(mpvEnabled);
         loggingToggle.setChecked(loggingEnabled);
         statsForNerdsToggle.setChecked(statsForNerdsEnabled);
 
@@ -1365,6 +1396,8 @@ public class MainActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> parent) {
             }
         });
+
+        mpvToggle.setOnCheckedChangeListener((buttonView, isChecked) -> setMpvEnabled(isChecked));
 
         relatedVideosToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -1850,7 +1883,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             view.evaluateJavascript(
-                    NativePlaybackScript.SCRIPT + ";" + NativeWatchHistoryScript.SCRIPT, null);
+                    NativePlaybackScript.forPreference(mpvEnabled), null);
             applyRelatedVisibility(view);
             applyHeaderVisibility(view);
             view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
