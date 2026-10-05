@@ -201,6 +201,19 @@ app/src/main/java/com/skystream/ssyoutube/
 app/src/test/java/... JUnit coverage for URL routing, page scripts, preferences and app services
 ```
 
+## App icons
+
+`file_00000000c28481f6bff0eb7c51226dbd.png` is the source artwork for the launcher
+and monochrome icons. `@mipmap/ic_launcher` supplies density-specific legacy icons,
+adaptive icons on Android 8+, and a monochrome layer for Android 13+ themed icons.
+The adaptive foreground is inset to keep the artwork inside launcher masks.
+
+`@drawable/ic_notification` provides 24 dp small-notification icons at mdpi through
+xxxhdpi, derived from the same artwork as white shapes on a transparent background
+(not an opaque grayscale image). Use it for notification small icons rather than
+the full-color launcher icon. The app does not currently post Android notifications.
+The WebView's light/dark header logos are separate and unchanged.
+
 ## Build and test
 
 Requires JDK 17 and the Android SDK (compileSdk 34); minSdk is 21.
