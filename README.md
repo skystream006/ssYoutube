@@ -70,7 +70,7 @@ playback extraction is separate and anonymous.
   from the same row. The × button forgets the local session, not the browser's login;
   it does not revoke the session on the server.
   After login, **Send playlist** submits the current page URL to `POST /api/jobs`
-  as an audio job; this button is hidden unless the page has a nonempty `list` parameter.
+  as a video job; this button is hidden unless the page has a nonempty `list` parameter.
   **Send media** removes playlist parameters before submitting just the current video
   (including Shorts). When browsing elsewhere with a native miniplayer, it sends that
   player's video instead. It is disabled when no media is selected.
@@ -194,7 +194,7 @@ app/src/main/java/com/skystream/ssyoutube/
   NavigationHistory.java  Browser-like back/forward step calculation (pure Java, unit tested)
   MusicServer.java    Lifecycle-aware browser login and music job coordination
   MusicServerProtocol.java  PKCE, callback validation and playlist/media URL selection
-  MusicServerClient.java    Bounded HTTPS token exchange and audio job submission
+  MusicServerClient.java    Bounded HTTPS token exchange and video job submission
   MusicServerStore.java     Keystore-protected, backup-excluded login/session storage
   MusicServerCallbackActivity.java  Routes browser returns to the existing app task
   StatsMonitor.java  Lifecycle-aware background resource sampling

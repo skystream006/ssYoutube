@@ -74,7 +74,7 @@ public class MusicServerClientTest {
     }
 
     @Test
-    public void postsAudioJobsWithOnlyBearerAuthenticationAndChosenUrl() throws Exception {
+    public void postsVideoJobsWithOnlyBearerAuthenticationAndChosenUrl() throws Exception {
         for (String url : new String[] {
                 VIDEO_URL + "&t=30&si=a%2Bb",
                 "https://music.youtube.com/playlist?list=PL_fixture_123",
@@ -88,7 +88,7 @@ public class MusicServerClientTest {
             Map<?, ?> payload = connection.json.encodedValues;
             assertEquals(2, payload.size());
             assertEquals(url, payload.get("url"));
-            assertEquals("audio", payload.get("downloadType"));
+            assertEquals("video", payload.get("downloadType"));
             assertEquals(FakeJson.ENCODED_BODY, connection.requestBody());
             assertEquals("Bearer " + token(), connection.getRequestProperty("Authorization"));
             assertFalse(connection.requestBody().contains(token()));

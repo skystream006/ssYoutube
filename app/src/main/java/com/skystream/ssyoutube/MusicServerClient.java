@@ -103,7 +103,7 @@ public final class MusicServerClient {
         }
         Map<String, String> body = new LinkedHashMap<>();
         body.put("url", target);
-        body.put("downloadType", "audio");
+        body.put("downloadType", "video");
         post(session.origin, "/api/jobs", session.token, json.encode(body), 202);
     }
 
