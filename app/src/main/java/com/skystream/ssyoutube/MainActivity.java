@@ -78,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_DEFAULT_LANGUAGE = "default_language";
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_MPV_ENABLED = "mpv_enabled";
+    private static final String KEY_ADBLOCKING_ENABLED = "adblocking_enabled";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
     private static final String KEY_HEADER_HIDDEN = "header_hidden";
     private static final String KEY_LOGGING_ENABLED = "logging_enabled";
@@ -566,6 +567,8 @@ public class MainActivity extends AppCompatActivity {
     private NativePlayerView nativePlayer;
     private ScriptHandler nativePlaybackScript;
     private boolean mpvEnabled;
+    private boolean adBlockingEnabled;
+    private WebAdBlocker adBlocker;
     private boolean playerFullscreen;
     private boolean playerMinimized;
     private boolean activityResumed;
@@ -595,6 +598,7 @@ public class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         mpvEnabled = prefs.getBoolean(KEY_MPV_ENABLED, true);
+        adBlockingEnabled = prefs.getBoolean(KEY_ADBLOCKING_ENABLED, false);
         relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
         headerHidden = prefs.getBoolean(KEY_HEADER_HIDDEN, false);
         loggingEnabled = prefs.getBoolean(KEY_LOGGING_ENABLED, false);
@@ -608,6 +612,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         webView = findViewById(R.id.webview);
+        adBlocker = new WebAdBlocker(this);
         rootContainer = findViewById(R.id.root_container);
         settingsButton = findViewById(R.id.settings_button);
         statsOverlay = findViewById(R.id.stats_overlay);
@@ -795,6 +800,7 @@ public class MainActivity extends AppCompatActivity {
         watchHistoryHandler.removeCallbacksAndMessages(null);
         watchHistoryState.reset();
         nativePlayer.release();
+        adBlocker.destroy();
         if (webView != null) {
             webView.stopLoading();
             rootContainer.removeView(webView);
@@ -869,6 +875,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         installPlaybackRouting(view);
+        updateAdBlocking(view);
         view.setWebViewClient(new YouTubeWebViewClient());
         view.setWebChromeClient(new WebChromeClient());
     }
@@ -919,7 +926,23 @@ public class MainActivity extends AppCompatActivity {
         closedVideoId = null;
         lastRouteKey = null;
         updateNativePlaybackScript(webView);
+        updateAdBlocking(webView);
         // Reload all frames to discard the previous media hooks and hidden-player styles.
+        webView.reload();
+    }
+
+    private void updateAdBlocking(WebView view) {
+        adBlocker.setEnabled(view,
+                Preferences.isAdBlockingEnabled(mpvEnabled, adBlockingEnabled));
+    }
+
+    private void setAdBlockingEnabled(boolean enabled) {
+        if (mpvEnabled || adBlockingEnabled == enabled) {
+            return;
+        }
+        adBlockingEnabled = enabled;
+        prefs.edit().putBoolean(KEY_ADBLOCKING_ENABLED, enabled).apply();
+        updateAdBlocking(webView);
         webView.reload();
     }
 
@@ -1318,6 +1341,8 @@ public class MainActivity extends AppCompatActivity {
         ToggleButton relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
         ToggleButton headerToggle = content.findViewById(R.id.header_toggle);
         Switch mpvToggle = content.findViewById(R.id.mpv_toggle);
+        View adBlockingSettings = content.findViewById(R.id.adblocking_settings);
+        Switch adBlockingToggle = content.findViewById(R.id.adblocking_toggle);
         Switch loggingToggle = content.findViewById(R.id.logging_toggle);
         Switch statsForNerdsToggle = content.findViewById(R.id.stats_for_nerds_toggle);
 
@@ -1335,6 +1360,8 @@ public class MainActivity extends AppCompatActivity {
         relatedVideosToggle.setChecked(relatedHidden);
         headerToggle.setChecked(headerHidden);
         mpvToggle.setChecked(mpvEnabled);
+        adBlockingSettings.setVisibility(mpvEnabled ? View.GONE : View.VISIBLE);
+        adBlockingToggle.setChecked(adBlockingEnabled);
         loggingToggle.setChecked(loggingEnabled);
         statsForNerdsToggle.setChecked(statsForNerdsEnabled);
 
@@ -1397,7 +1424,12 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        mpvToggle.setOnCheckedChangeListener((buttonView, isChecked) -> setMpvEnabled(isChecked));
+        mpvToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            setMpvEnabled(isChecked);
+            adBlockingSettings.setVisibility(isChecked ? View.GONE : View.VISIBLE);
+        });
+        adBlockingToggle.setOnCheckedChangeListener((buttonView, isChecked) ->
+                setAdBlockingEnabled(isChecked));
 
         relatedVideosToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -1796,7 +1828,7 @@ public class MainActivity extends AppCompatActivity {
                 logActivityUrl("Serving app logo ", url);
                 return appLogoResponse();
             }
-            return super.shouldInterceptRequest(view, request);
+            return adBlocker.intercept(request);
         }
 
         @SuppressWarnings("deprecation")
@@ -1849,6 +1881,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             super.onPageStarted(view, url, favicon);
+            adBlocker.onPage(view, url);
             logActivityUrl("onPageStarted ", url);
             logoInjectionHandler.removeCallbacksAndMessages(null);
             if (handleUrl(view, url)) {
@@ -1862,6 +1895,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageFinished(WebView view, String url) {
             super.onPageFinished(view, url);
+            adBlocker.onPage(view, view.getUrl());
             logActivityUrl("onPageFinished ", url);
             updateSettingsButton(view.getUrl());
             applyPageScripts(view);
@@ -1873,6 +1907,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
             super.doUpdateVisitedHistory(view, url, isReload);
+            adBlocker.onPage(view, url);
             updateSettingsButton(url);
             applyPageScripts(view);
             routePage(url);

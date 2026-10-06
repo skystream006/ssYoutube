@@ -194,6 +194,22 @@ public class PreferencesLayoutTest {
     }
 
     @Test
+    public void adblockingHasAHiddenPanelBelowMpvOutsideAdvancedSettings() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        Element panel = byId(layout, "adblocking_settings");
+        Element toggle = byId(layout, "adblocking_toggle");
+        assertEquals("gone", panel.getAttributeNS(ANDROID, "visibility"));
+        assertEquals(panel, toggle.getParentNode());
+        assertEquals("Switch", toggle.getTagName());
+        assertEquals("@string/enable_adblocking", toggle.getAttributeNS(ANDROID, "text"));
+        assertEquals("48dp", toggle.getAttributeNS(ANDROID, "minHeight"));
+        assertFalse(isInside(panel, byId(layout, "advanced_settings")));
+        assertEquals(byId(layout, "mpv_toggle").getParentNode(), panel.getParentNode());
+        assertTrue((byId(layout, "mpv_toggle").compareDocumentPosition(panel)
+                & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
+    }
+
+    @Test
     public void hideRelatedVideosIsVisibleWithoutHeading() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         Element toggle = byId(layout, "related_videos_toggle");

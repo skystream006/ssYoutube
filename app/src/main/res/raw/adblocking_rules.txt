@@ -1,0 +1,21 @@
+# ssYouTube bundled advertising rules, revision 1.
+# Format: action|domain (including subdomains)|literal path prefix or CSS selector.
+# These app-maintained rules are not EasyList/ABP subscriptions.
+allow|accounts.google.com|/
+allow|accounts.youtube.com|/
+block|doubleclick.net|/
+block|googlesyndication.com|/
+block|googleadservices.com|/
+block|youtube.com|/pagead/
+block|youtube.com|/api/stats/ads
+hide|youtube.com|ytd-ad-slot-renderer
+hide|youtube.com|ytd-display-ad-renderer
+hide|youtube.com|ytd-promoted-sparkles-web-renderer
+hide|youtube.com|ytd-promoted-video-renderer
+hide|youtube.com|ytd-in-feed-ad-layout-renderer
+hide|youtube.com|ytd-banner-promo-renderer
+hide|youtube.com|ytd-companion-slot-renderer
+hide|youtube.com|ytm-ad-slot-renderer
+hide|youtube.com|ytm-promoted-sparkles-web-renderer
+hide|youtube.com|ytm-promoted-video-renderer
+hide|youtube.com|ytm-companion-ad-renderer

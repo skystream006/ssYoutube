@@ -34,6 +34,10 @@ public final class Preferences {
     private Preferences() {
     }
 
+    public static boolean isAdBlockingEnabled(boolean mpvEnabled, boolean adBlockingEnabled) {
+        return !mpvEnabled && adBlockingEnabled;
+    }
+
     public static String languageAt(int index) {
         return index >= 0 && index < LANGUAGE_CODES.length
                 ? LANGUAGE_CODES[index] : DEFAULT_LANGUAGE;

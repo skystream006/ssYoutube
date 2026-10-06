@@ -11,6 +11,23 @@ import java.util.Locale;
 public class PreferencesTest {
 
     @Test
+    public void adblockingRequiresWebPlaybackAndTheSavedOptIn() {
+        assertFalse(Preferences.isAdBlockingEnabled(true, true));
+        assertFalse(Preferences.isAdBlockingEnabled(true, false));
+        assertFalse(Preferences.isAdBlockingEnabled(false, false));
+        assertTrue(Preferences.isAdBlockingEnabled(false, true));
+    }
+
+    @Test
+    public void switchingPlaybackDoesNotDiscardTheAdblockingChoice() {
+        for (boolean savedChoice : new boolean[] {false, true}) {
+            assertEquals(savedChoice, Preferences.isAdBlockingEnabled(false, savedChoice));
+            assertFalse(Preferences.isAdBlockingEnabled(true, savedChoice));
+            assertEquals(savedChoice, Preferences.isAdBlockingEnabled(false, savedChoice));
+        }
+    }
+
+    @Test
     public void languageDefaultsToEnglishRegardlessOfDeviceLocale() {
         Locale previous = Locale.getDefault();
         try {
