@@ -110,7 +110,7 @@
     <string name="enable_mpv">Enable mpv player</string>
     <string name="mpv_summary">On by default. Turn off to use YouTube’s web player. Changing this setting stops native playback and reloads the current page.</string>
     <string name="enable_adblocking">Enable adblocking</string>
-    <string name="adblocking_summary">Blocks known advertising requests and page ads. Disabled while mpv is enabled. Your choice is saved; changing it reloads the page. YouTube video ads may still appear.</string>
+    <string name="adblocking_summary">Blocks page ads and YouTube video-ad scheduling, with automatic skipping when available. Disabled while mpv is enabled. Your choice is saved; changing it reloads the page. YouTube changes can affect blocking.</string>
     <string name="adblocking_unavailable">Adblocking could not start. Turn it off and on to retry.</string>
     <string name="debugging">Debugging</string>
     <string name="enable_logging">Enable debug logging</string>

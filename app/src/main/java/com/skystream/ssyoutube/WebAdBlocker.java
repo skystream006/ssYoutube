@@ -53,6 +53,10 @@ final class WebAdBlocker {
         removeScript();
         updateServiceWorker();
         if (!value) {
+            if (script != null) {
+                target.evaluateJavascript("if(window.__ssyoutubeVideoAdBlocking){"
+                        + "window.__ssyoutubeVideoAdBlocking.stop();}", null);
+            }
             return;
         }
         if (engine != null) {
@@ -61,14 +65,18 @@ final class WebAdBlocker {
             loading = true;
             loader.execute(() -> {
                 AdBlockEngine loaded = null;
+                String loadedScript = null;
                 try (InputStreamReader input = new InputStreamReader(
                         context.getResources().openRawResource(R.raw.adblocking_rules),
                         StandardCharsets.UTF_8)) {
                     loaded = AdBlockEngine.read(input);
+                    loadedScript = videoScript() + ";\n" + AdBlockingScript.create(loaded);
                 } catch (IOException | RuntimeException ignored) {
                     // Filtering is optional; a bad bundled resource must not break browsing.
+                    loaded = null;
                 }
                 AdBlockEngine result = loaded;
+                String resultScript = loadedScript;
                 main.post(() -> {
                     if (destroyed) {
                         return;
@@ -76,7 +84,7 @@ final class WebAdBlocker {
                     loading = false;
                     engine = result;
                     if (result != null) {
-                        script = AdBlockingScript.create(result);
+                        script = resultScript;
                     }
                     WebView current = view.get();
                     if (enabled && current != null) {
@@ -91,6 +99,20 @@ final class WebAdBlocker {
                     }
                 });
             });
+        }
+    }
+
+    private String videoScript() throws IOException {
+        try (InputStreamReader input = new InputStreamReader(
+                context.getResources().openRawResource(R.raw.youtube_video_adblock),
+                StandardCharsets.UTF_8)) {
+            StringBuilder result = new StringBuilder();
+            char[] buffer = new char[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                result.append(buffer, 0, count);
+            }
+            return result.toString();
         }
     }
 

@@ -39,8 +39,11 @@ playback extraction is separate and anonymous.
   current page so disabling it also removes filters already applied to the document.
   This is a lightweight, bundled rule-based engine, not uBlock Origin or a full
   EasyList/Adblock Plus implementation. It blocks selected advertising requests and hides
-  page ad containers; **YouTube in-video ads may still appear**. It does not modify player
-  responses, bypass anti-adblock checks, or remove creator sponsorships.
+  page ad containers. A bundled YouTube script also removes known pre-roll, mid-roll and
+  post-roll ad scheduling from player data before the web player consumes it, filters
+  explicitly marked Shorts ad entries, and clicks available skip buttons in an ad-playing
+  player as a fallback. It does not bypass anti-adblock checks or remove creator sponsorships.
+  YouTube changes and server-stitched ads can still defeat these filters.
   **Hide related videos** and **Hide header** are independent button toggles on the same
   row, always available regardless of site mode or page. **Hide header** hides the desktop
   masthead or mobile header bar and collapses its reserved vertical space. Both choices
@@ -115,8 +118,9 @@ playback extraction is separate and anonymous.
   the playback bridge. With mpv enabled, adblocking is entirely inactive, including on
   Shorts, so feed ads and shopping promotions may appear. With mpv disabled, optional
   adblocking filters WebView requests (and service-worker requests where supported) and
-  applies cosmetic styles only on supported HTTPS YouTube pages. Google sign-in pages,
-  main-frame navigation, native extraction and media transport are not filtered.
+  applies cosmetic styles and video-ad filtering only on supported HTTPS YouTube pages.
+  Google sign-in pages, main-frame navigation, native extraction and media transport
+  are not filtered.
 - **Playback limitations** – extracting a content stream avoids the web player's ad
   scheduling; it does not guarantee that YouTube will always supply a playable stream.
   YouTube changes, region restrictions, bot checks, and unavailable videos can prevent
@@ -222,9 +226,11 @@ app/src/test/java/... JUnit coverage for URL routing, page scripts, preferences 
 ### Bundled adblocking rules
 
 `app/src/main/res/raw/adblocking_rules.txt` is an app-maintained, versioned rule resource,
-loaded off the UI thread only when adblocking is first enabled. There are no downloaded
-lists or executable scriptlets, proxy requests, certificate changes, or additional
-permissions/dependencies. Allowed requests remain with WebView's normal networking;
+loaded off the UI thread only when adblocking is first enabled. No filter lists or
+executable scripts are downloaded. There are no proxy requests, certificate changes,
+or additional permissions/runtime dependencies. The bundled `youtube_video_adblock.js`
+is loaded with the rules and installed at document start. Allowed requests remain with
+WebView's normal networking;
 blocked requests receive an empty, non-cacheable response. No browsing URLs or cookies
 are logged or persisted by the engine.
 
@@ -239,9 +245,18 @@ Rules use `action|domain|value`, with blank lines and `#` comments ignored:
 This intentionally small format is **not** ABP/uBO filter syntax. Only bundled rules
 are accepted; rule updates ship with app updates. Keep player/media, account, thumbnail,
 comment and watch-history endpoints working, and add regression coverage when changing
-rules. No broad Googlevideo blocking or ad-JSON rewriting is performed. Document-start
-injection and service-worker interception depend on WebView support; page callbacks
-provide cosmetic filtering when document-start injection is unavailable. WebView does
+rules. No broad Googlevideo blocking is performed. Video-ad filtering operates on
+in-page initial player data, parsed player-response envelopes, and JSON results from
+YouTube's player/playlist/Shorts APIs. It removes known ad-scheduling fields, not content
+stream URLs, captions, live metadata, account details or watch-history reporting. Requests
+are not replayed and response status/headers remain unchanged. The skip fallback acts only
+on a visible, enabled skip button inside a player with an explicit ad-playing state; it
+never seeks, accelerates, mutes or starts the content video. Hooks and timers are removed
+when adblocking is disabled; the existing reload clears already-filtered page data.
+
+Document-start injection and service-worker interception depend on WebView support; page
+callbacks provide late video-ad and cosmetic filtering when document-start injection is
+unavailable. Late injection may miss an ad already scheduled by the player. WebView does
 not expose every redirect, cached response or media request to interception.
 
 ## App icons
@@ -282,6 +297,13 @@ When updating the library, update the versioned CA cache filename in `MpvPlayer`
 ./gradlew lintDebug       # Android lint
 ```
 
+The video-ad JUnit test executes the actual bundled JavaScript using Node.js's built-in
+test runner (Node 18+; no npm packages). It skips that executable test if Node is absent.
+To run those fixtures directly: `node --test app/src/test/js/youtube_video_adblock.test.cjs`.
+Fixtures cover initial/SPA player responses, playlists, live metadata, Shorts, JSON/XHR/
+Response behavior, origin checks, hook removal, and guarded skipping. They do not substitute
+for testing against YouTube's changing live site.
+
 Device verification should cover muxed/adaptive audio and video, live HLS/DASH, timestamp
 links, seek/replay, rapid video changes, pause/resume, audio-focus/headphone interruptions,
 fullscreen/miniplayer resizing, activity recreation, network failure/retry and close while
@@ -296,6 +318,9 @@ enabled: its entire settings row must disappear and filtering must stop, includi
 Shorts. Toggle mpv off again and verify the saved choice is restored. Also check sign-in,
 normal playback, comments, thumbnails, watch history and the app logo with filtering on
 and off; disabling filtering must restore the unmodified page after the reload.
+With adblocking on, also verify pre-roll and mid-roll videos, a second video reached through
+SPA navigation, playlist autoplay and Shorts. Confirm video-ad filtering stops when mpv is
+enabled and that normal seeking, playback speed, captions and live streams remain intact.
 
 For Music Server, device-check browser authorization, cancellation/retry, return after
 activity/process recreation, persistence after restart, and expired/revoked logins.
