@@ -33,6 +33,14 @@ playback extraction is separate and anonymous.
   **Enable mpv player** is on by default and saved across restarts. Turn it off to use
   YouTube's web player instead. Switching stops native playback (including the miniplayer
   and pending extraction) and reloads the current page; turn it back on to use mpv again.
+  **Enable adblocking** is available only with mpv off and starts off. The choice is saved
+  across restarts. Enabling mpv disables all adblocking and hides its controls, without
+  forgetting that choice; turning mpv off restores it. Changing adblocking reloads the
+  current page so disabling it also removes filters already applied to the document.
+  This is a lightweight, bundled rule-based engine, not uBlock Origin or a full
+  EasyList/Adblock Plus implementation. It blocks selected advertising requests and hides
+  page ad containers; **YouTube in-video ads may still appear**. It does not modify player
+  responses, bypass anti-adblock checks, or remove creator sponsorships.
   **Hide related videos** and **Hide header** are independent button toggles on the same
   row, always available regardless of site mode or page. **Hide header** hides the desktop
   masthead or mobile header bar and collapses its reserved vertical space. Both choices
@@ -104,9 +112,11 @@ playback extraction is separate and anonymous.
   reserved height are collapsed in mobile and desktop layouts outside Shorts, leaving the
   native player as the only video area on those pages. Only validated
   YouTube main-frame navigation can select native playback; sign-in pages do not receive
-  the playback bridge. The request blocklist, ad-JSON pruning, ad-hiding/cleanup scripts,
-  and adblock-warning bypass have been removed. Feed ads and shopping promotions may
-  therefore appear; this is not a network/tracker blocker.
+  the playback bridge. With mpv enabled, adblocking is entirely inactive, including on
+  Shorts, so feed ads and shopping promotions may appear. With mpv disabled, optional
+  adblocking filters WebView requests (and service-worker requests where supported) and
+  applies cosmetic styles only on supported HTTPS YouTube pages. Google sign-in pages,
+  main-frame navigation, native extraction and media transport are not filtered.
 - **Playback limitations** – extracting a content stream avoids the web player's ad
   scheduling; it does not guarantee that YouTube will always supply a playable stream.
   YouTube changes, region restrictions, bot checks, and unavailable videos can prevent
@@ -115,7 +125,8 @@ playback extraction is separate and anonymous.
   Website playlist autoplay and web-player-specific controls are not provided by the native player.
   There is no automatic fallback to YouTube's web player for native playback; disable
   **Enable mpv player** in Preferences to switch manually. Shorts and mpv-disabled playback use
-  the website's playback behavior, including its ads. Creator-embedded sponsorships
+  the website's playback behavior; optional adblocking does not guarantee ad-free playback.
+  Creator-embedded sponsorships
   are part of the video and are not removed.
   Extracted URLs are restricted to HTTPS YouTube/Googlevideo hosts before opening.
   libmpv/FFmpeg handles media redirects and manifest requests, rather than the former Java
@@ -177,6 +188,9 @@ playback extraction is separate and anonymous.
 ```
 app/src/main/java/com/skystream/ssyoutube/
   MainActivity.java   Browsing WebView, trusted playback routing, native player presentation
+  WebAdBlocker.java   Optional WebView/service-worker filtering and cosmetic-script lifecycle
+  AdBlockEngine.java  Immutable scoped network, exception and cosmetic rules (pure Java)
+  AdBlockingScript.java  Idempotent YouTube-only stylesheet injection
   NativePlayerView.java     Controls, lifecycle and extraction coordination
   MpvPlayer.java              Embedded libmpv and Media3 controls/timeline adapter
   MpvPlaybackRequest.java     Validated network-URL commands and restricted mpv options
@@ -204,6 +218,31 @@ app/src/main/java/com/skystream/ssyoutube/
   LogStore.java      Bounded rotation and export snapshots (pure Java, unit tested)
 app/src/test/java/... JUnit coverage for URL routing, page scripts, preferences and app services
 ```
+
+### Bundled adblocking rules
+
+`app/src/main/res/raw/adblocking_rules.txt` is an app-maintained, versioned rule resource,
+loaded off the UI thread only when adblocking is first enabled. There are no downloaded
+lists or executable scriptlets, proxy requests, certificate changes, or additional
+permissions/dependencies. Allowed requests remain with WebView's normal networking;
+blocked requests receive an empty, non-cacheable response. No browsing URLs or cookies
+are logged or persisted by the engine.
+
+Rules use `action|domain|value`, with blank lines and `#` comments ignored:
+
+- `block` / `allow`: the value is a literal, case-sensitive URL path prefix. Domains
+  match themselves and subdomains at a dot boundary, never URL/query substrings.
+  Allow rules take precedence regardless of order.
+- `hide`: the value is an ordinary CSS selector, scoped to that document domain.
+  The stylesheet follows dynamically inserted elements and is repaired after navigation.
+
+This intentionally small format is **not** ABP/uBO filter syntax. Only bundled rules
+are accepted; rule updates ship with app updates. Keep player/media, account, thumbnail,
+comment and watch-history endpoints working, and add regression coverage when changing
+rules. No broad Googlevideo blocking or ad-JSON rewriting is performed. Document-start
+injection and service-worker interception depend on WebView support; page callbacks
+provide cosmetic filtering when document-start injection is unavailable. WebView does
+not expose every redirect, cached response or media request to interception.
 
 ## App icons
 
@@ -250,6 +289,13 @@ loading. Verify the mpv toggle persists after restart/recreation, stops a playin
 miniplayer when disabled, restores web playback on mobile/desktop and after navigation,
 and resumes native routing when re-enabled. Native rendering/decoding and ABI compatibility
 cannot be verified by JVM tests alone.
+
+With mpv off, verify the adblocking toggle persists after restart and works on mobile,
+desktop, Shorts, reloads, and single-page navigation. Toggle mpv on while adblocking is
+enabled: its entire settings row must disappear and filtering must stop, including on
+Shorts. Toggle mpv off again and verify the saved choice is restored. Also check sign-in,
+normal playback, comments, thumbnails, watch history and the app logo with filtering on
+and off; disabling filtering must restore the unmodified page after the reload.
 
 For Music Server, device-check browser authorization, cancellation/retry, return after
 activity/process recreation, persistence after restart, and expired/revoked logins.
