@@ -8,6 +8,24 @@ import org.junit.Test;
 
 public class NativePlaybackScriptTest {
     @Test
+    public void enablingMpvIncludesSuppressionRoutingAndNativeHistory() {
+        assertEquals(NativePlaybackScript.SCRIPT + ";" + NativeWatchHistoryScript.SCRIPT,
+                NativePlaybackScript.forPreference(true));
+    }
+
+    @Test
+    public void disablingMpvLeavesWebPlaybackAndHistoryUntouched() {
+        assertEquals("", NativePlaybackScript.forPreference(false));
+    }
+
+    @Test
+    public void switchingBackToMpvRestoresTheOriginalScripts() {
+        String enabled = NativePlaybackScript.forPreference(true);
+        assertEquals("", NativePlaybackScript.forPreference(false));
+        assertEquals(enabled, NativePlaybackScript.forPreference(true));
+    }
+
+    @Test
     public void usesOnlyExplicitYouTubeOrigins() {
         assertEquals(4, NativePlaybackScript.ORIGIN_RULES.size());
         assertTrue(NativePlaybackScript.ORIGIN_RULES.contains("https://m.youtube.com"));

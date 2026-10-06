@@ -30,6 +30,9 @@ playback extraction is separate and anonymous.
   If that language is unavailable, playback falls back to the original or available audio.
   This does not translate videos or change the app UI; changing it does not interrupt a
   video that is already playing.
+  **Enable mpv player** is on by default and saved across restarts. Turn it off to use
+  YouTube's web player instead. Switching stops native playback (including the miniplayer
+  and pending extraction) and reloads the current page; turn it back on to use mpv again.
   **Hide related videos** and **Hide header** are independent button toggles on the same
   row, always available regardless of site mode or page. **Hide header** hides the desktop
   masthead or mobile header bar and collapses its reserved vertical space. Both choices
@@ -74,7 +77,7 @@ playback extraction is separate and anonymous.
   Both actions show success/failure inline and disable repeat submissions while busy.
   On a network failure, check the server's job list before retrying: the request may
   have arrived even when its response did not.
-- **Native video playback** – watch links, live-video links, embedded-video links,
+- **Native video playback** – with **Enable mpv player** on, watch links, live-video links, embedded-video links,
   and `youtu.be` links open in an embedded libmpv player, using the same `loadfile` network-URL
   operation as mpv-android's **Open URL**. No external player app is launched or required.
   NewPipeExtractor resolves the media directly, off the UI thread, without a third-party
@@ -96,7 +99,7 @@ playback extraction is separate and anonymous.
   incoming Shorts links and single-page navigation. Entering Shorts closes any native
   playback so the two players do not play together.
 - **Browsing WebView** – the site remains available for search, channels, comments,
-  and account interactions. Outside Shorts, media playback and previews are disabled,
+  and account interactions. With mpv enabled, outside Shorts, web media playback and previews are disabled,
   including after single-page navigation. Web player containers, placeholders, and their
   reserved height are collapsed in mobile and desktop layouts outside Shorts, leaving the
   native player as the only video area on those pages. Only validated
@@ -110,7 +113,8 @@ playback extraction is separate and anonymous.
   extraction. Signed-in cookies are never passed to the extractor: private, purchased,
   members-only, or age-restricted content may not play even when accessible in the website.
   Website playlist autoplay and web-player-specific controls are not provided by the native player.
-  There is no automatic fallback to YouTube's web player for native playback. Shorts use
+  There is no automatic fallback to YouTube's web player for native playback; disable
+  **Enable mpv player** in Preferences to switch manually. Shorts and mpv-disabled playback use
   the website's playback behavior, including its ads. Creator-embedded sponsorships
   are part of the video and are not removed.
   Extracted URLs are restricted to HTTPS YouTube/Googlevideo hosts before opening.
@@ -239,7 +243,10 @@ When updating the library, update the versioned CA cache filename in `MpvPlayer`
 Device verification should cover muxed/adaptive audio and video, live HLS/DASH, timestamp
 links, seek/replay, rapid video changes, pause/resume, audio-focus/headphone interruptions,
 fullscreen/miniplayer resizing, activity recreation, network failure/retry and close while
-loading. Native rendering/decoding and ABI compatibility cannot be verified by JVM tests alone.
+loading. Verify the mpv toggle persists after restart/recreation, stops a playing or loading
+miniplayer when disabled, restores web playback on mobile/desktop and after navigation,
+and resumes native routing when re-enabled. Native rendering/decoding and ABI compatibility
+cannot be verified by JVM tests alone.
 
 For Music Server, device-check browser authorization, cancellation/retry, return after
 activity/process recreation, persistence after restart, and expired/revoked logins.

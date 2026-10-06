@@ -202,6 +202,20 @@
                     android:textOff="@string/hide_header" />
             </LinearLayout>
 
+            <Switch
+                android:id="@+id/mpv_toggle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="@string/enable_mpv" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mpv_summary"
+                android:textSize="12sp" />
+
             <LinearLayout
                 android:id="@+id/music_server_panel"
                 android:layout_width="match_parent"
