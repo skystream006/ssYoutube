@@ -210,7 +210,9 @@ app/src/test/java/... JUnit coverage for URL routing, page scripts, preferences 
 `file_00000000c28481f6bff0eb7c51226dbd.png` is the source artwork for the launcher
 and monochrome icons. `@mipmap/ic_launcher` supplies density-specific legacy icons,
 adaptive icons on Android 8+, and a monochrome layer for Android 13+ themed icons.
-The adaptive foreground is inset to keep the artwork inside launcher masks.
+The adaptive foreground and monochrome artwork fill the launcher's visible area
+without an extra inset. Only Android's off-screen adaptive-icon buffer remains;
+the launcher still applies its circle, squircle, or other shape mask.
 
 `@drawable/ic_notification` provides 24 dp small-notification icons at mdpi through
 xxxhdpi, derived from the same artwork as white shapes on a transparent background
