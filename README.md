@@ -361,3 +361,8 @@ It runs the tests, builds with the same signing key as the normal APK workflow,
 and uploads the APK as a workflow artifact. If the version's GitHub Release does
 not exist, it publishes one as the latest release for in-app updates; existing
 releases and their assets are left unchanged. Runs on other branches are skipped.
+
+To remove old releases, open **Actions → Cleanup Releases → Run workflow**.
+This manual-only workflow keeps the five newest releases by publication time
+(creation time for drafts) and deletes all older releases and their assets.
+Prereleases and drafts count toward the five-release limit; Git tags are preserved.
