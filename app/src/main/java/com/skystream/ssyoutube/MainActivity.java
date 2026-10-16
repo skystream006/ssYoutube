@@ -1124,6 +1124,13 @@ public class MainActivity extends AppCompatActivity {
                 (FrameLayout.LayoutParams) settingsButton.getLayoutParams();
         int settingsBottom = visible && playerMinimized
                 ? playerParams.height + 2 * margin : margin;
+        if (playerFullscreen) {
+            // Keep the button clear of playback controls and the seek bar's touch target.
+            settingsBottom += getResources().getDimensionPixelSize(
+                    androidx.media3.ui.R.dimen.exo_styled_progress_margin_bottom)
+                    + getResources().getDimensionPixelSize(
+                    androidx.media3.ui.R.dimen.exo_styled_progress_layout_height);
+        }
         if (settingsParams.bottomMargin != settingsBottom) {
             settingsParams.bottomMargin = settingsBottom;
             settingsButton.setLayoutParams(settingsParams);
