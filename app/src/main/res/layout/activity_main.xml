@@ -38,6 +38,6 @@
         android:contentDescription="@string/settings"
         android:scaleType="centerInside"
         android:src="@drawable/ic_settings"
-        android:visibility="gone" />
+        android:visibility="visible" />
 
 </FrameLayout>

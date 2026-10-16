@@ -118,11 +118,8 @@ public final class Preferences {
     }
 
     /**
-     * The floating settings button is only shown on the YouTube home page, i.e. the page
-     * that carries the bottom navigation bar.
-     *
      * @param url the currently loaded URL
-     * @return true when the settings button should be visible
+     * @return true when the URL is a YouTube home page
      */
     public static boolean isHomePage(String url) {
         String path = youTubePath(url);

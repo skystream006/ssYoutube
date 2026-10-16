@@ -18,6 +18,25 @@ public class PreferencesLayoutTest {
     private static final String ANDROID = "http://schemas.android.com/apk/res/android";
 
     @Test
+    public void settingsButtonStartsVisibleAboveWebContent() throws Exception {
+        Document layout = resource("layout/activity_main.xml");
+        Element button = byId(layout, "settings_button");
+        Element webView = byId(layout, "webview");
+        assertEquals(layout.getDocumentElement(), button.getParentNode());
+        assertEquals(webView.getParentNode(), button.getParentNode());
+        assertTrue((webView.compareDocumentPosition(button)
+                & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
+        assertEquals("@string/settings", button.getAttributeNS(ANDROID, "contentDescription"));
+        assertEquals("@drawable/ic_settings", button.getAttributeNS(ANDROID, "src"));
+        assertEquals("48dp", button.getAttributeNS(ANDROID, "layout_width"));
+        assertEquals("48dp", button.getAttributeNS(ANDROID, "layout_height"));
+        for (Node node = button; node instanceof Element; node = node.getParentNode()) {
+            String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
+            assertTrue(visibility.isEmpty() || "visible".equals(visibility));
+        }
+    }
+
+    @Test
     public void defaultLanguageIsALabeledDropdownAboveAppearance() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         assertDropdown(layout, "language_spinner", "@array/language_options");

@@ -1128,7 +1128,6 @@ public class MainActivity extends AppCompatActivity {
             settingsParams.bottomMargin = settingsBottom;
             settingsButton.setLayoutParams(settingsParams);
         }
-        updateSettingsButton(webView.getUrl());
     }
 
     private boolean goBack() {
@@ -1179,13 +1178,6 @@ public class MainActivity extends AppCompatActivity {
             mode = AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
         }
         AppCompatDelegate.setDefaultNightMode(mode);
-    }
-
-    private void updateSettingsButton(String url) {
-        logActivityUrl("updateSettingsButton url=", url);
-        boolean show = !playerFullscreen && (Preferences.isHomePage(url)
-                || (desktopMode && Preferences.isVideoPage(url)));
-        settingsButton.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void setStatsForNerdsEnabled(boolean enabled) {
@@ -1887,7 +1879,6 @@ public class MainActivity extends AppCompatActivity {
             if (handleUrl(view, url)) {
                 return;
             }
-            updateSettingsButton(url);
             applyPageScripts(view);
             routePage(url);
         }
@@ -1897,7 +1888,6 @@ public class MainActivity extends AppCompatActivity {
             super.onPageFinished(view, url);
             adBlocker.onPage(view, view.getUrl());
             logActivityUrl("onPageFinished ", url);
-            updateSettingsButton(view.getUrl());
             applyPageScripts(view);
             routePage(view.getUrl());
             CookieManager.getInstance().flush();
@@ -1908,7 +1898,6 @@ public class MainActivity extends AppCompatActivity {
         public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
             super.doUpdateVisitedHistory(view, url, isReload);
             adBlocker.onPage(view, url);
-            updateSettingsButton(url);
             applyPageScripts(view);
             routePage(url);
         }

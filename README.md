@@ -19,8 +19,9 @@ playback extraction is separate and anonymous.
 - **Persistent sign-in** – cookies are accepted (including third-party cookies needed by
   the Google account flow) and flushed to disk on pause, and DOM storage is enabled, so
   the session survives app restarts.
-- **Preferences** – a floating settings button appears on the YouTube home page (the page
-  with the bottom navigation bar). It opens a preferences dialog with icon buttons for
+- **Preferences** – a floating settings button is always visible on every page in mobile
+  and desktop modes, including during fullscreen playback and above the miniplayer.
+  It opens a preferences dialog with icon buttons for
   back/forward/reload/home navigation, plus **Default language** above **Appearance**,
   the theme (system/light/dark) and the site mode
   (mobile or desktop, `Preferences`), mirroring a browser's "desktop site" toggle.
