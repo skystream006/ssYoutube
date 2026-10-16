@@ -1124,11 +1124,17 @@ public class MainActivity extends AppCompatActivity {
                 (FrameLayout.LayoutParams) settingsButton.getLayoutParams();
         int settingsBottom = visible && playerMinimized
                 ? playerParams.height + 2 * margin : margin;
+        if (playerFullscreen) {
+            // Keep the button clear of playback controls and the seek bar's touch target.
+            settingsBottom += getResources().getDimensionPixelSize(
+                    androidx.media3.ui.R.dimen.exo_styled_progress_margin_bottom)
+                    + getResources().getDimensionPixelSize(
+                    androidx.media3.ui.R.dimen.exo_styled_progress_layout_height);
+        }
         if (settingsParams.bottomMargin != settingsBottom) {
             settingsParams.bottomMargin = settingsBottom;
             settingsButton.setLayoutParams(settingsParams);
         }
-        updateSettingsButton(webView.getUrl());
     }
 
     private boolean goBack() {
@@ -1179,13 +1185,6 @@ public class MainActivity extends AppCompatActivity {
             mode = AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
         }
         AppCompatDelegate.setDefaultNightMode(mode);
-    }
-
-    private void updateSettingsButton(String url) {
-        logActivityUrl("updateSettingsButton url=", url);
-        boolean show = !playerFullscreen && (Preferences.isHomePage(url)
-                || (desktopMode && Preferences.isVideoPage(url)));
-        settingsButton.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void setStatsForNerdsEnabled(boolean enabled) {
@@ -1887,7 +1886,6 @@ public class MainActivity extends AppCompatActivity {
             if (handleUrl(view, url)) {
                 return;
             }
-            updateSettingsButton(url);
             applyPageScripts(view);
             routePage(url);
         }
@@ -1897,7 +1895,6 @@ public class MainActivity extends AppCompatActivity {
             super.onPageFinished(view, url);
             adBlocker.onPage(view, view.getUrl());
             logActivityUrl("onPageFinished ", url);
-            updateSettingsButton(view.getUrl());
             applyPageScripts(view);
             routePage(view.getUrl());
             CookieManager.getInstance().flush();
@@ -1908,7 +1905,6 @@ public class MainActivity extends AppCompatActivity {
         public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
             super.doUpdateVisitedHistory(view, url, isReload);
             adBlocker.onPage(view, url);
-            updateSettingsButton(url);
             applyPageScripts(view);
             routePage(url);
         }
