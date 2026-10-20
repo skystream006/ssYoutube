@@ -60,4 +60,10 @@ sign-in still work. JVM string assertions do not execute the live site's DOM.
 Consult [playback](../../playback/SKILL.md) for bridge acceptance changes and
 [music-server](../../music-server/SKILL.md) for changed playlist semantics.
 Do not load their extraction, credentials, or transport references for a visual
-header change. The corresponding README feature sections describe user behavior.
+header change.
+
+## Documentation
+
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features):
+**YouTube link handling**, **Persistent sign-in**, **No Playables**, **No Posts
+shelf**, and **Subscriber counts** describe the user-facing contracts.

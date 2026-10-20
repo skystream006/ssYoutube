@@ -31,6 +31,8 @@ Resources and executable tests:
 - Filter only subrequests of supported HTTPS YouTube documents. Main-frame
   navigation and Google sign-in remain outside filtering. Return null for allowed
   requests so WebView retains cookies, TLS, and transport; never proxy or replay.
+  Document scope is not an HTTPS-only requirement for every subresource:
+  `AdBlockEngine.webUri` accepts HTTP or HTTPS request URLs.
 - Preserve media, captions, live metadata, comments, thumbnails, history, account
   flows, and app-logo handling. Avoid broad Googlevideo rules.
 - Video filtering removes known ad scheduling and explicitly marked ad entries;
@@ -57,3 +59,10 @@ saved-choice restoration. Fixtures cannot establish live-site compatibility.
 playback-owned consumers' contracts, not reasons to read the whole player.
 Consult shell only for affected activity wiring. Keep transport/authentication
 and release code out of scope.
+
+## Documentation
+
+[Bundled adblocking rules](/home/runner/work/ssYoutube/ssYoutube/README.md#bundled-adblocking-rules)
+defines supported syntax and limitations.
+[Build and test](/home/runner/work/ssYoutube/ssYoutube/README.md#build-and-test)
+describes Node coverage and web-player device scenarios.

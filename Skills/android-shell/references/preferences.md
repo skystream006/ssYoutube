@@ -60,3 +60,9 @@ XML tests do not establish runtime observer or lifecycle correctness.
 Consult [shared ownership](../../repo-router/references/shared-contracts.md)
 before changing playback language/routing, adblocking gating, music login, update
 events, or diagnostics. Leave unrelated listeners and feature internals unloaded.
+
+## Documentation
+
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features):
+**Preferences** and **Player presentation** describe control visibility,
+persistence, language behavior, and fullscreen/miniplayer settings access.

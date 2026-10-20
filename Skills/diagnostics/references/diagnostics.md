@@ -61,3 +61,9 @@ Use synthetic diagnostic data, not real credentials or browsing logs.
 Consult shell for lifecycle/UI/export integration, and the calling domain for
 new instrumentation. Do not explore extractor, music credential, or updater
 implementations merely to change formatting or the stats overlay.
+
+## Documentation
+
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features):
+**Stats for nerds** and **Debug logging** describe measurement limits, opt-in
+logging, retention, redaction, and export behavior.

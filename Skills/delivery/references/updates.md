@@ -57,3 +57,10 @@ incompatible APKs for affected changes.
 Consult shell for UI wiring, diagnostics for safe error detail, and
 [build/release](build-release.md) only when versioning/signing/publication contracts
 change. Ignore music authentication, playback streams, and ad filters.
+
+## Documentation
+
+The **In-app updates** entry in
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features)
+describes startup/manual checks, download progress, compatibility checks, and
+user-confirmed installation.

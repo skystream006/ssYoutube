@@ -56,3 +56,9 @@ Read [player](player.md) only if result consumption changes. Consult shell for
 language-code/preference changes and delivery for NewPipe/desugaring/dependency
 changes. Native libmpv media redirects are not the downloader's redirects; do not
 claim this Java policy applies to all requests made inside the native engine.
+
+## Documentation
+
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features):
+**Preferences**, **Native video playback**, and **Playback limitations** describe
+language selection, anonymous extraction, and native transport limitations.

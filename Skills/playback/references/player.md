@@ -61,3 +61,10 @@ transitions on a device. Native/ABI changes require broader device coverage.
 Consult shell for layout/preference contracts, delivery for library/CA-cache/ABI
 changes, and diagnostics for error reporting. Leave extraction selection and
 web-history implementation unloaded unless the observed failure crosses there.
+
+## Documentation
+
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features):
+**Native video playback** and **Player presentation** describe player behavior;
+[Build and test](/home/runner/work/ssYoutube/ssYoutube/README.md#build-and-test)
+lists device/native compatibility scenarios.

@@ -65,11 +65,19 @@ Register/discover `/home/runner/work/ssYoutube/ssYoutube/Skills/*/SKILL.md` thro
 the intended agent host's supported mechanism. Do not assume this custom root is
 automatically discovered or claim installation from file creation alone.
 
+GitHub Copilot's [documented project locations](https://docs.github.com/en/copilot/concepts/customizations/agent-skills)
+include `.github/skills`, `.claude/skills`, and `.agents/skills`, with support
+depending on the host; this custom root is not one of those locations. These
+documents do not install host configuration. If the host cannot register a custom
+location, explicitly direct the agent to the selected `SKILL.md` or router.
+
 Expose only `name` and `description` during selection. For a clear request, load
 the matching domain directly. For an ambiguous request, load the router, select
 the domain, then load one reference section and its source/tests. Avoid duplicating
 these files into other discovery directories or injecting this map into every
 prompt. Confirm registration with the host before relying on automatic invocation.
+Check that the host lists all seven Skills, then replay the examples below;
+successful Markdown reads alone do not establish automatic invocation.
 
 ## Routing acceptance examples
 

@@ -55,3 +55,10 @@ For UI changes include light/dark, narrow widths, and large fonts.
 Consult shell for link normalization and controls. Using a native player's video
 ID does not require loading extractor/mpv internals. Server-side API changes require
 separate confirmed contract information; do not edit an external repository here.
+
+## Documentation
+
+The **Music server** entry in
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features)
+describes playlist/media selection, miniplayer fallback, and the warning to check
+the server's job list before retrying an uncertain submission.

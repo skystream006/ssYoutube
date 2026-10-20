@@ -60,3 +60,11 @@ authorization, cancel/retry, expired/revoked session, callback after process/act
 recreation, restart persistence, and local forgetting on affected API levels.
 Read [jobs](jobs.md) only when session changes affect submission; consult shell for
 actual UI/callback wiring changes, not for a protocol-only fix.
+
+## Documentation
+
+The **Music server** entry in
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features)
+describes external authorization and session behavior.
+[Build and test](/home/runner/work/ssYoutube/ssYoutube/README.md#build-and-test)
+documents Keystore compatibility and device checks.

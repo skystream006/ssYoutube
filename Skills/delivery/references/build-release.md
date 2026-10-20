@@ -66,3 +66,10 @@ full-history checkout, version/artifact naming, and release-retention semantics.
 If investigating a reported CI failure, inspect actual workflow runs and job logs.
 Native upgrades need playback device/ABI checks; update contract changes need the
 tests in [updates](updates.md). Keep unrelated runtime implementations unloaded.
+
+## Documentation
+
+[Build and test](/home/runner/work/ssYoutube/ssYoutube/README.md#build-and-test)
+documents toolchain, native packaging, Git versioning, and publication.
+[Third-party licensing](/home/runner/work/ssYoutube/ssYoutube/README.md#third-party-licensing)
+explains why the wrapper license alone does not cover native redistribution.

@@ -59,3 +59,9 @@ mpv toggle and reload, and close/miniplayer transitions. For history changes,
 check pause/seek/video switch/account switch/reload without inspecting or
 persisting private tracking values. Consult shell for integration and adblocking
 only when shared page rules or effective enablement change.
+
+## Documentation
+
+[README features](/home/runner/work/ssYoutube/ssYoutube/README.md#features):
+**Shorts in the WebView**, **Browsing WebView**, and **Native watch history**
+describe routing exceptions, suppression, and best-effort synchronization.
