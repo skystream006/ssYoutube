@@ -1,70 +1,68 @@
-# Build, dependencies, and release
+# Build, dependencies, and releases
 
-## Locate the change
+Use the actual absolute checkout root if different from the paths below.
 
-| Source | Responsibility |
+## Configuration map
+
+| Absolute path | Purpose |
 | --- | --- |
-| `/home/runner/work/ssYoutube/ssYoutube/build.gradle` | Android application plugin version |
-| `/home/runner/work/ssYoutube/ssYoutube/settings.gradle` | Single `:app` module; Google, Maven Central, restricted JitPack resolution |
-| `/home/runner/work/ssYoutube/ssYoutube/gradle.properties` | JVM/AndroidX/resource configuration |
-| `/home/runner/work/ssYoutube/ssYoutube/gradle/wrapper/gradle-wrapper.properties` | Wrapper distribution |
+| `/home/runner/work/ssYoutube/ssYoutube/build.gradle` | Android application plugin |
+| `/home/runner/work/ssYoutube/ssYoutube/settings.gradle` | Single `:app` module and dependency repository restrictions |
+| `/home/runner/work/ssYoutube/ssYoutube/gradle.properties` | JVM, AndroidX, resource settings |
+| `/home/runner/work/ssYoutube/ssYoutube/gradle/wrapper/gradle-wrapper.properties` | Gradle distribution |
 | `/home/runner/work/ssYoutube/ssYoutube/gradlew` | Existing build entry point |
-| `/home/runner/work/ssYoutube/ssYoutube/app/build.gradle` | SDK levels, Git version, signing, Java/desugaring, dependencies, packaging, `printVersionName` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/proguard-rules.pro` | mpv wrapper preservation |
-| `/home/runner/work/ssYoutube/ssYoutube/.github/workflows/manual-release.yml` | Manual main-branch APK build/publication |
-| `/home/runner/work/ssYoutube/ssYoutube/.github/workflows/cleanup-releases.yml` | Scheduled/manual retention of five newest releases and associated tag cleanup |
+| `/home/runner/work/ssYoutube/ssYoutube/app/build.gradle` | SDK/Java settings, versions, signing configuration, dependencies, packaging, `printVersionName` |
+| `/home/runner/work/ssYoutube/ssYoutube/app/proguard-rules.pro` | mpv wrapper keep rule |
+| `/home/runner/work/ssYoutube/ssYoutube/.github/workflows/manual-release.yml` | Explicit main-branch APK build/test/publication |
+| `/home/runner/work/ssYoutube/ssYoutube/.github/workflows/cleanup-releases.yml` | Scheduled/manual release and tag retention |
+| `/home/runner/work/ssYoutube/ssYoutube/README.md` | Build prerequisites, native packaging caveats, distribution licensing |
 
-## Build contracts
+## Toolchain and dependency boundaries
 
-The checked-in toolchain is Gradle 8.7, AGP 8.5.2, JDK 17, Java 8 source/target
-with core-library desugaring, compile/target SDK 34, and minimum API 21.
-Re-read build declarations before an upgrade rather than treating these pins as
-permanent. AppCompat/WebKit support shell behavior; Media3 common/UI provide
-controls; the mpv library supplies JNI/libmpv/FFmpeg and CA data; NewPipeExtractor
-supplies extraction. Coroutines support the native wrapper. JUnit 4 is the JVM
-test dependency. Do not widen JitPack beyond the required extractor dependencies.
+Current configuration uses Gradle 8.7 / AGP 8.5.2 / JDK 17, Java 8 source/target
+with desugaring, compile/target API 34, and minimum API 21. Read configuration
+before changing these; do not use this reference as a version lockfile.
 
-`revision` counts first-parent commits on HEAD. `versionCode` is revision + 1;
-`versionName` formats revision as `1.0.%02d`. Full history is mandatory; do not
-work around the shallow-clone guard or manually bump a version file.
-`printVersionName` is the workflow's source of truth.
+- Shell: AppCompat and AndroidX WebKit.
+- Playback: Media3 common/UI controls, mpv Android library, NewPipeExtractor;
+  Kotlin coroutines support the mpv wrapper. There is no ExoPlayer dependency.
+- Core-library desugaring preserves use of newer Java APIs on old Android.
+- Tests: JUnit 4 and built-in Node test runner; no npm package tree.
+- Dependencies resolve through Google Maven, Maven Central, and restricted JitPack
+  for NewPipe/nanojson. Preserve repository scoping and license notices.
 
-The manual workflow checks out full main history, uses JDK 17, runs `test
-assembleDebug`, uploads the renamed APK artifact, and creates a missing stable
-release. Existing releases/assets remain unchanged. The distributed APK uses
-the configured debug signing identity; do not substitute `assembleRelease` or a
-new key without considering installed-app update compatibility. Never copy
-keystore contents or signing material into Skills.
+The mpv dependency packages JNI/native libraries and CA material for supported
+ABIs. Consult playback before upgrading it: `MpvPlayer.prepareCertificates` uses
+a versioned cache filename that must stay aligned, and native behavior needs
+device verification. Do not copy upstream library implementations into the app.
 
-Cleanup includes drafts/prereleases, deletes releases by ID, and preserves tags
-referenced by retained releases. Reviewing it is not permission to run it.
-The README mentions automatic main/PR builds, but the inspected workflow
-directory contains only these two definitions; verify actual workflows before
-claiming automatic publication or checks.
+## Version and release contract
 
-## Consumers and validation
+- Let N be the first-parent commit count at HEAD: versionCode is N + 1 and
+  versionName is `1.0.%02d` formatted with N. Full Git history is required even
+  for Gradle configuration. Versions are not manually bumped.
+- `printVersionName` exposes the name to automation. Manual release checks out
+  full main history, uses JDK 17, runs `test assembleDebug`, names the APK from that
+  task, and publishes a missing stable release tagged with `v` plus the version.
+- The workflow distributes the debug APK using the configured debug signing key.
+  Do not silently change identity/signing: installed applications validate signers.
+  Do not load, copy, or document keystore contents.
+- Existing releases/assets are left unchanged by manual publication. Workflow
+  artifacts alone are not visible to the in-app GitHub Releases updater.
+- Cleanup retains the five newest releases, deletes older releases by ID, and
+  removes tags only when not shared by a retained release and the exact ref exists.
+- The checked-in workflow set has manual release and cleanup. README references
+  to automatic main/PR builds do not establish a corresponding workflow here.
 
-Version, package, signing, or release-asset changes require
-[updater contract](updates.md) review and `UpdateChecksTest` /
-`GitHubUpdateClientTest` as relevant. Native dependency changes require
-[playback](../../playback/SKILL.md), ABI/device checks, and the affected playback
-tests. An mpv library upgrade must also review `prepareCertificates` and its
-versioned CA-cache filename in
-`/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MpvPlayer.java`.
-Packaged ABIs currently include ARMv7, ARM64, x86, and x86_64.
+## Validation and scope
 
-Use [common commands/prerequisites](../../repo-router/references/validation.md)
-for build, lint, and full tests after build/dependency changes. Confirm version
-output with:
+Use [validation commands](../../repo-router/references/validation.md).
+Build/dependency changes warrant full JVM tests, debug build, and lint; also check
+`printVersionName` when version calculation changes. Do not execute destructive
+release cleanup or publish a release just to validate a workflow edit.
 
-```sh
-/home/runner/work/ssYoutube/ssYoutube/gradlew -p /home/runner/work/ssYoutube/ssYoutube -q :app:printVersionName
-```
-
-Workflow-only changes need review of triggers, permissions, branch guards, and
-asset/tag handling, not an unauthorized publication run. No dedicated workflow
-test harness is checked in.
-
-Documentation: [Build and test](/home/runner/work/ssYoutube/ssYoutube/README.md#build-and-test)
-and [Third-party licensing](/home/runner/work/ssYoutube/ssYoutube/README.md#third-party-licensing).
-Native redistribution obligations are not covered by the wrapper license alone.
+There is no dedicated workflow test suite. Review event/branch guards, permissions,
+full-history checkout, version/artifact naming, and release-retention semantics.
+If investigating a reported CI failure, inspect actual workflow runs and job logs.
+Native upgrades need playback device/ABI checks; update contract changes need the
+tests in [updates](updates.md). Keep unrelated runtime implementations unloaded.

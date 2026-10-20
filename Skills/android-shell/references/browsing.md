@@ -1,69 +1,63 @@
-# Browsing, navigation, and page scripts
+# Browsing, links, and page customization
 
-## Locate the change
+Java directory: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
+Tests: `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
+Class names identify files in those directories; resolve against the actual
+checkout root if different.
 
-| Source | Search anchors |
+## Find the smallest entry point
+
+| Request | Source symbols |
 | --- | --- |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MainActivity.java` | `configureWebView`, `startUrl`, `onNewIntent`, `YouTubeWebViewClient.handleUrl`, `applyPageScripts`, `navigate` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/SiteScope.java` | `normalizeInAppUrl`, `isInAppUrl` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/NavigationHistory.java` | `backSteps`, `forwardSteps`, `sameEntry` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/Preferences.java` | `userAgent`, `homeUrl`, `siteModeUrl`, `isVideoPage` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml` | `MainActivity`, `singleTop`, YouTube `VIEW` intent filters |
+| In-app URL scope / Google sign-in | `SiteScope.normalizeInAppUrl`, `MainActivity.configureWebView`, `YouTubeWebViewClient.handleUrl` |
+| Incoming/shared YouTube links | `MainActivity.onNewIntent`, `startUrl`, `canonicalPlaybackUrl`; `PlaybackRequest.fromUrl`; `MusicServerProtocol.preservePlaylist` |
+| Back/forward skips duplicate SPA entries | `NavigationHistory.backSteps`, `forwardSteps`; `MainActivity.navigate`, `historyUrls` |
+| Header/related visibility | `MainActivity.headerVisibilityScript`, `relatedVisibilityScript`, `applyHeaderVisibility`, `applyRelatedVisibility` |
+| Playables, posts, subscriber counts | `COMMENTS_SELECTOR`, `COMMENTS_HELPER_SCRIPT`, `PLAYABLES_CLEANUP_SCRIPT`, `POSTS_CLEANUP_SCRIPT`, `SUBSCRIBER_COUNT_SCRIPT` |
+| Branding / reinjection | `APP_LOGO_SCRIPT`, `isAppLogoRequest`, `appLogoBytes`, `scheduleAppLogoReinjection`, `appLogoResponse` |
+| Reload / SPA integration | `YouTubeWebViewClient.onPageStarted`, `onPageFinished`, `doUpdateVisitedHistory`, `applyPageScripts` |
 
-For page appearance, search `relatedVisibilityScript`, `headerVisibilityScript`,
-`COMMENTS_SELECTOR`, `PLAYABLES_CLEANUP_SCRIPT`, `POSTS_CLEANUP_SCRIPT`,
-`SUBSCRIBER_COUNT_SCRIPT`, or `APP_LOGO_SCRIPT` inside MainActivity. Logo serving
-uses `isAppLogoRequest`, `appLogoBytes`, and `scheduleAppLogoReinjection`; image
-resources are under `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/drawable`.
-Read images only for an image-related request.
+Registration lives in
+`/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml`
+(`MainActivity` launcher and YouTube intent filters). Branding assets live in
+`/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/drawable` and density-specific
+drawable/mipmap directories; do not open binary assets for unrelated behavior.
 
-## Behavior to preserve
+## Architecture and invariants
 
-- The WebView retains sign-in cookies and DOM storage. Cookie flushing occurs on
-  pause/page completion. JavaScript is enabled, but file/content access and
-  automatic JavaScript windows are disabled.
-- `SiteScope` limits navigation and normalizes supported HTTP links to HTTPS.
-  It is not interchangeable with the stricter playback bridge's origin checks.
-  Do not broaden one allowlist merely to satisfy a different domain.
-- Only main-frame-aware routing may normalize by calling `loadUrl`; the legacy
-  URL callback cannot distinguish frames. Incoming links are canonicalized
-  without losing timestamps or playlist context.
-- YouTube is a single-page application. Scripts must tolerate repeated injection
-  and late DOM changes. Playables/Posts cleanup and subscriber decoration must
-  preserve comment renderers/engagement panels.
-- Header visibility uses a removable stylesheet and site-mode-specific spacing.
-  Toggling it off must restore YouTube's layout, not leave destructive inline edits.
-- Browser back/forward skips duplicate normalized entries; do not replace this
-  with one-step navigation that can appear stuck.
+- One browsing WebView retains sign-in through accepted cookies and DOM storage;
+  pause/page completion flush cookies. Do not replace WebView networking with
+  native requests or loosen file/content access restrictions.
+- `SiteScope` governs broad browsing/sign-in scope. Native playback and injected
+  scripts have stricter page/origin checks; these policies are not interchangeable.
+- Only trusted main-document routing may select native playback. The legacy URL
+  callback cannot identify frames and must not normalize subframes with `loadUrl`.
+- Preserve timestamp and playlist information through link canonicalization.
+  Playlist preservation is owned by music; playback URL parsing is owned by playback.
+- YouTube is a single-page application: navigation/history/page callbacks and
+  idempotent reinjection matter, not just the first document load.
+- Cleanup/decorating scripts exclude comments and engagement panels; broad DOM
+  selectors can otherwise remove comment content.
+- Subscriber lookups remain limited and queued. Logo interception is distinct
+  from adblocking and serves the selected theme's local image.
 
-## Consumers and expansion
+## Targeted validation and escalation
 
-Playback owns `PlaybackRequest` and trusted native routing: consult
-[web bridge](../../playback/references/web-bridge.md) only if those contracts
-change. Music owns `MusicServerProtocol.preservePlaylist`, consumed by `startUrl`
-and `handleUrl`; consult [jobs](../../music-server/references/jobs.md) for URL
-selection changes. Adblocking owns request filtering, not unrelated page cleanup.
-Use [preferences](preferences.md) only when state/control wiring changes.
-Leave native transport, update networking, and workflows unloaded otherwise.
-
-## Targeted validation
-
-Tests are classes under
-`/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
-
-| Changed behavior | Tests |
+| Changed behavior | Tests to start with |
 | --- | --- |
-| Navigation allowlist/normalization | `SiteScopeTest` |
-| Duplicate history handling | `NavigationHistoryTest` |
-| Site mode/home/watch-page decisions | `PreferencesTest` |
-| Cleanup, header/related styles, logo injection | Matching `MainActivityPageScriptTest` methods |
-| Native link canonicalization/trust | Playback-related `MainActivityPageScriptTest` methods plus `PlaybackRequestTest` |
+| URL scope | `SiteScopeTest` |
+| Navigation history | `NavigationHistoryTest` |
+| Theme/site-mode URLs or page predicates | `PreferencesTest` |
+| Cleanup, header/related, logo, trusted routing | Relevant `MainActivityPageScriptTest` methods |
+| Playback link acceptance/canonicalization | `PlaybackRequestTest` plus routing cases in `MainActivityPageScriptTest` |
+| Playlist preservation | Relevant `MusicServerProtocolTest` cases |
 
-Use [common commands](../../repo-router/references/validation.md). Script-text
-assertions do not prove real DOM behavior. Device-check mobile/desktop navigation,
-SPA transitions, back/forward, comments, theme/logo changes, sign-in, and incoming
-links as relevant. Do not run unrelated music/release tests for a cosmetic script.
+Use [validation commands](../../repo-router/references/validation.md).
+Device-check the affected mobile/desktop pages, SPA transitions, reloads, incoming
+links, and back/forward behavior. For selector/scope changes, verify comments and
+sign-in still work. JVM string assertions do not execute the live site's DOM.
 
-Documentation: the **YouTube link handling**, **Persistent sign-in**, **No
-Playables**, **No Posts shelf**, and **Subscriber counts** entries in
-[/home/runner/work/ssYoutube/ssYoutube/README.md](/home/runner/work/ssYoutube/ssYoutube/README.md#features).
+Consult [playback](../../playback/SKILL.md) for bridge acceptance changes and
+[music-server](../../music-server/SKILL.md) for changed playlist semantics.
+Do not load their extraction, credentials, or transport references for a visual
+header change. The corresponding README feature sections describe user behavior.

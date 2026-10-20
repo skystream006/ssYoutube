@@ -1,20 +1,25 @@
 ---
 name: playback
-description: Use for NewPipe extraction and audio-language selection, anonymous native transport, mpv playback and Media3 controls, gestures, live positioning, retry/lifecycle races, trusted YouTube routing, Shorts transitions, or native watch-history synchronization.
+description: >-
+  Handles ssYouTube NewPipe extraction, stream and audio-language selection,
+  embedded mpv playback, controls, gestures, live/retry lifecycle, native
+  routing, fullscreen/miniplayer behavior, and YouTube watch-history sync.
+  Use for playback changes, not optional web ad filtering.
 ---
 
-# Playback
+# Native playback
 
-Open only the reference matching the failing boundary, then inspect its named methods before changing behavior:
-
-- [Extraction](references/extraction.md): NewPipe localization, stream/audio selection, cancellation, HTTPS policy, and anonymous request headers.
-- [Player](references/player.md): libmpv commands and handles, Media3 controls, gestures, live timelines, retries, and lifecycle state.
-- [Web bridge](references/web-bridge.md): validated page routing, web-media suppression, Shorts, and page-scoped watch history.
-
-Keep browsing credentials separate from anonymous extraction and media playback. Media3 supplies controls, not an ExoPlayer engine. Preserve one native handle per selected video across presentation changes; reject stale asynchronous work.
-
-All test classes named in these references live under `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube/`.
-
-Escalate only when the change crosses boundaries: [android-shell](../android-shell/SKILL.md) for activity layout, preferences, and incoming links; [delivery](../delivery/SKILL.md) for dependency or packaged-native-library changes; [diagnostics](../diagnostics/SKILL.md) for safe failure evidence. Consult [validation](../repo-router/references/validation.md) when selecting checks and [shared contracts](../repo-router/references/shared-contracts.md) when changing cross-feature ownership or privacy.
-
-Do not load music-server, adfilter internals, or updater context for ordinary playback work.
+- Start with the named playback class, not all of `MainActivity`.
+- Choose [extraction](references/extraction.md),
+  [player](references/player.md), or [web bridge](references/web-bridge.md);
+  read only the subsection needed for the request.
+- Preserve anonymous extraction, request/handle identity, and page-scoped history.
+  Detailed constraints and test maps live in the chosen reference.
+- Consult [shell](../android-shell/SKILL.md) for preference/presentation contracts,
+  [delivery](../delivery/SKILL.md) for native dependencies, or
+  [diagnostics](../diagnostics/SKILL.md) for logging changes.
+- Normally ignore music integration, ad-filter implementation, updater internals,
+  release workflows, and unrelated preference sections.
+- Run the mapped tests using
+  [validation commands](../repo-router/references/validation.md), then the relevant
+  native-player device scenarios. JVM checks do not prove native rendering.

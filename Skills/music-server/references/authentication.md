@@ -1,33 +1,62 @@
-# Browser login and credential persistence
+# Browser login and encrypted sessions
 
-## Source and consumers
+Java directory: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
+Tests: `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
+Use the actual absolute checkout root if different.
 
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MusicServer.java`: `login`, `acceptCallback`, `refresh`, `forget`, `takeBrowserUrl`, `onCleared`; lifecycle-aware owner, single worker, main-thread `Status` publication.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MusicServerProtocol.java`: `normalizeOrigin`, `newLogin`, `authorizationUrl`, `callbackCode`, `Pending`, `Session`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MusicServerClient.java`: `exchange`, `post`, `requireNoCookieHandler`, `parseResponse`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MusicServerStore.java`: `session`, `pending`, overloaded `save`, `read`, `write`, `wrappingCipher`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MusicServerCallbackActivity.java`: `onCreate` forwards browser returns with `CLEAR_TOP | SINGLE_TOP`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MainActivity.java`: `showMusicServerLogin`, `openMusicServerBrowser`, `handleMusicServerCallback`, `showPreferences`; callback handling also runs from `onCreate`/`onNewIntent`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/dialog_preferences.xml`: `music_login`, `music_forget`, and inline `music_status` consume login/busy/pending state.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml`: exported, browsable, no-history callback activity; scheme-only `com.ssytdlp.app` filter; cleartext remains disabled.
-- `/home/runner/work/ssYoutube/ssYoutube/app/build.gradle`: `minSdk 21`, core-library desugaring for `Instant`.
+## Entry points and flow
 
-## Contracts to preserve
+| Concern | Source anchors |
+| --- | --- |
+| Origin/PKCE/callback/expiry rules | `MusicServerProtocol.normalizeOrigin`, `newLogin`, `authorizationUrl`, `callbackCode`, `requirePending`, `Pending`, `Session` |
+| Login, restoration, cancellation | `MusicServer` constructor, `login`, `acceptCallback`, `forget`, `refresh`, `onCleared` |
+| Token exchange | `MusicServerClient.exchange`, `post`, `requireNoCookieHandler` |
+| Durable credentials | `MusicServerStore.session`, `pending`, `save`, `read`, `write`, `wrappingCipher` |
+| Browser return | `MusicServerCallbackActivity.onCreate`; `MainActivity.handleMusicServerCallback`, `openMusicServerBrowser`, `showMusicServerLogin` |
 
-Accept an HTTPS origin only: no credentials, query, fragment, or non-root path. Normalize host/default port while preserving a configured nondefault port. The server is external; approved accounts, passkeys, and certificates trusted by Android/browser are deployment prerequisites, not features implemented here.
+Flow: validated HTTPS origin → persist pending state/verifier → external browser
+`/app-login` → `com.ssytdlp.app:/oauth/callback` → validate pending state/age →
+`POST /api/auth/app/token` → encrypted session → published UI status.
 
-`newLogin` generates independent 32-byte verifier/state values. Persist pending login before launching external `ACTION_VIEW` authorization at `/app-login`, sending only S256 challenge, state, and `com.ssytdlp.app:/oauth/callback`. The private-use scheme is shared, not a verified app link. `callbackCode` requires the exact path/scheme, no authority/fragment, exactly one code/state, matching state, and a pending login younger than ten minutes; future-dated state fails.
+Callback registration is in
+`/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml`.
+The external ssYTDLP_Server implementation is not in this checkout. Do not infer
+new endpoints or server-side authorization behavior from Android UI requirements.
 
-Bind exchange to the stored pending origin, never callback input. `exchange` posts `code`, `codeVerifier`, `redirectUri` to `/api/auth/app/token`, requires HTTP 200 and an unexpired session with `tokenType` equal to `Bearer`. API transport is HTTPS-only, nonredirecting, nonretrying, and cookie-free; refuse ambient `CookieHandler` rather than changing global state. Keep 15-second connection/read timeouts, elapsed-time checks, 32-KiB request/128-KiB response bounds, and strict UTF-8/JSON validation. Preserve sanitized failures without credentials, response bodies, or unsafe exception causes.
+## Invariants and configuration
 
-`acceptCallback` queues a cold-start callback during restoration, then consumes pending state before exchange. `handleMusicServerCallback` clears the launch intent so authorization codes are not retained. `forget` clears local pending/session files, not browser login or server authorization.
+- User supplies the server's HTTPS passkey origin, including a nondefault port
+  when needed. Reject credentials, paths, query/fragment, and cleartext origins.
+  Keep platform certificate verification; there is no certificate-bypass mode.
+- Generate random state/verifier and S256 PKCE. Bind both to the saved origin;
+  validate exact callback shape, state, code, and pending age before exchange.
+- The private-use callback scheme is shared, not a verified app link. Manifest
+  routing alone does not authenticate a callback.
+- Persist pending login before launching the external browser. A cold-start
+  callback can arrive during restoration and must be handled by the coordinator.
+  Remove authorization data from the retained launch intent after handoff.
+- `MusicServer` is an AndroidViewModel with background IO and main-thread state.
+  Respect busy/restoring/cleared state; dismissing Preferences must not own session
+  lifetime. `forget` clears local session/pending data, not remote browser login.
+- Keep WebView cookies out of token/job networking. Requests are bounded,
+  interruptible, and do not follow redirects; a process-wide CookieHandler is
+  rejected rather than temporarily mutated.
+- `MusicServerStore` uses AtomicFile in no-backup storage with AES-GCM and a fresh
+  wrapped key/IV per write. Preserve versioned reads and Android 5 compatibility;
+  its legacy RSA wrapping differs from Android 6+ OAEP. Do not expose this
+  app-private compatibility path as a remote decryption interface.
+- Never log tokens, verifier/state, callback URLs, or raw server/parser failures.
 
-`music-login`/`music-session` are `AtomicFile`s under `getNoBackupFilesDir()`, encrypted with AES-GCM and fresh wrapped keys. API 23+ uses Keystore RSA-OAEP; API 21/22 uses legacy PKCS#1 wrapping, still readable after upgrade. Restoration failures discard credentials. Keep the local Base64url implementation/API compatibility; do not introduce API-26-only encoding or plaintext preferences.
+## Validation
 
-## Validation and escalation
+- Protocol/origin/PKCE/callback rules: `MusicServerProtocolTest`.
+- Exchange/HTTP/response isolation: `MusicServerClientTest` (fake connections/codec).
+- Callback/cleartext registration: `MusicServerManifestTest`.
+- Changed preference controls: relevant `PreferencesLayoutTest` cases.
 
-Tests live in `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`. Target `MusicServerProtocolTest` (`authorizationUrlContainsOnlyChallengeStateAndExactRedirect`, `rejectsMissingUnknownDuplicateAndMalformedCallbackParameters`, `rejectsUnsolicitedExpiredAndFutureDatedLogins`), `MusicServerClientTest` (`exchangesOnlyAtPendingOriginWithExactPayloadAndNoAuthentication`, `refusesAmbientCookieHandlersWithoutChangingGlobalState`), and `MusicServerManifestTest`. Use [shared validation](../../repo-router/references/validation.md) for commands.
-
-Device-check browser cancellation/retry, unavailable browser, warm/cold returns, process recreation, restart persistence, expiry/revocation, and API 21/modern Keystore behavior. JVM transport tests substitute a JSON codec; real Android JSON, Keystore, and passkeys need device coverage. Follow [jobs](jobs.md) only for submission/UI selection; escalate Preferences/intent changes to [android-shell](../../android-shell/SKILL.md).
-
-User promises: [README Music server feature](/home/runner/work/ssYoutube/ssYoutube/README.md#features) and [device/compatibility checks](/home/runner/work/ssYoutube/ssYoutube/README.md#build-and-test).
+Use [validation commands](../../repo-router/references/validation.md).
+No JVM test proves Android Keystore or passkey/browser interaction. Device-check
+authorization, cancel/retry, expired/revoked session, callback after process/activity
+recreation, restart persistence, and local forgetting on affected API levels.
+Read [jobs](jobs.md) only when session changes affect submission; consult shell for
+actual UI/callback wiring changes, not for a protocol-only fix.

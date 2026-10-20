@@ -1,31 +1,57 @@
-# Playlist and media jobs
+# Playlist and media job submission
 
-## Source and consumers
+Java directory: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
+Tests: `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
+Resolve against the actual absolute checkout root if different.
 
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MusicServerProtocol.java`: `playlistUrl`, `mediaUrl`, `preservePlaylist`, `youtubeUri`, `playlistParameter`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MusicServerClient.java`: `createJob` validates the chosen URL/session and calls bounded `post`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MusicServer.java`: `send`, `refresh`, `forget`, `Status`; serial worker work survives activity recreation.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MainActivity.java`: `currentMusicMediaUrl`, `showPreferences`, `startUrl`, `YouTubeWebViewClient.handleUrl`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/dialog_preferences.xml`: `music_server_panel`, `music_server_actions`, `music_login`, `music_send_playlist`, `music_send_media`, `music_forget`, `music_status`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/strings.xml`: `music_job_started`, `music_job_failed`, `music_login_expired`, `music_forbidden`, `music_duplicate`, `music_rate_limited`.
-- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/drawable/bg_music_server.xml`: compact shaded-panel background.
+## Source map
 
-## Selection and submission
+| Concern | Source anchors |
+| --- | --- |
+| Playlist validation/preservation | `MusicServerProtocol.playlistUrl`, `preservePlaylist` |
+| Single video/Shorts/miniplayer fallback | `MusicServerProtocol.mediaUrl`; `MainActivity.currentMusicMediaUrl` |
+| Busy/session/status coordination | `MusicServer.send`, `refresh`, `status`, `publish` |
+| HTTP contract and bounds | `MusicServerClient.createJob`, `post`, response parsing |
+| Controls and selected page | Music observers/listeners in `MainActivity.showPreferences`; incoming-link normalization in `startUrl`, `YouTubeWebViewClient.handleUrl` |
 
-`playlistUrl` returns the original validated HTTPS YouTube URL unchanged only with one valid nonempty `list` parameter. Accept supported YouTube hosts/`youtu.be`, default HTTPS port, and no userinfo; reject lookalikes, ambiguous list parameters, and malformed encoding. Do not replace playlist selection with a bare video ID.
+Relevant UI:
+- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/dialog_preferences.xml`:
+  `music_server_panel`, `music_send_playlist`, `music_send_media`, `music_status`.
+- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/strings.xml`:
+  music status and action labels.
+- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/drawable/bg_music_server.xml`:
+  music row background.
 
-`preservePlaylist` carries validated `list` and an optional numeric `index` through canonicalization; an invalid/duplicate optional index does not discard a valid playlist. Preserve canonical timestamps, other query parameters, and fragments. Its consumers include incoming links in `startUrl` and shortlink normalization in `handleUrl`; changing it can silently remove the playlist button.
+## Contract
 
-`currentMusicMediaUrl` passes the current WebView URL and `nativePlayer.getVideoId()` only when `hasVideo()`. `mediaUrl` handles watch, Shorts, live, embed, and shortlink videos. Strip `list`, `listType`, `list_type`, `playlist`, `index`, `start_radio`, `radio`, `playnext`, and `shuffle` case-insensitively while retaining unrelated raw query/fragment data. If the native video differs from the page or browsing moved elsewhere, select its canonical watch URL; an invalid native ID never overrides valid page media. No selection returns null.
+- This client submits video jobs to the saved origin's `POST /api/jobs`, expecting
+  HTTP 202, with `url` and `downloadType` set by `createJob`. It is not a local job
+  runner or a server implementation.
+- “Send playlist” requires a validated nonempty list parameter. Preserve playlist
+  parameters when shell navigation canonicalizes a supported incoming video link.
+- “Send media” strips playlist context and selects the current video, including
+  Shorts; eligible browsing pages can fall back to the active native miniplayer.
+  Keep the protocol helper authoritative for supported URL/path combinations.
+- Disable repeated submissions while busy. Expired sessions require login; map
+  unauthorized/forbidden/duplicate/rate-limited statuses without exposing response
+  bodies or credentials.
+- Do not automatically retry job creation: a failed response may follow an
+  accepted job. Preserve the user-facing uncertainty rather than creating duplicates.
+- Keep bounded HTTPS, no redirect/cookie sharing, and sanitized failures. Read
+  [authentication](authentication.md) only when changing those shared client rules
+  or session semantics.
 
-`createJob` posts exactly `url` and `downloadType: "video"` to the authenticated origin's `/api/jobs`, using the session token in the `Authorization` header (scheme `Bearer`) and expecting HTTP 202. This is external-server job creation, not local download, extraction, or native playback. Never share YouTube cookies, follow API redirects, proxy requests, or automatically retry. Even a timeout or invalid response may follow an accepted job: tell users to inspect the server job list first.
+## Validation
 
-`showPreferences` shows playlist only when logged in with valid playlist context; media is visible when logged in but disabled without selection. Busy status disables repeat actions. The dialog removes its observer on dismissal; keep state in the ViewModel, not dialog views. `send` maps 401 to session clearing/login expiry, 403 to permission denial, 409 to duplicate, and 429 to rate limiting; other failures stay generic and inline. Server authorization/queue behavior belongs to ssYTDLP_Server, not this repository.
+Start with relevant `MusicServerProtocolTest` URL-selection/preservation cases and
+`MusicServerClientTest` payload/status/network cases. Add `PreferencesLayoutTest`
+only for control/resource changes.
 
-## Validation and escalation
+Use [validation commands](../../repo-router/references/validation.md).
+Device-check playlist versus single video, Shorts, miniplayer fallback, disabled
+actions with no selection, repeated taps, failure messaging, and expired login.
+For UI changes include light/dark, narrow widths, and large fonts.
 
-Tests live in `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`. Target `MusicServerProtocolTest` (`preservesExternalPlaylistAndIndexWhenCanonicalizingVideoLinks`, `stripsPlaylistParametersButPreservesIndependentRawQueryAndFragment`, `supportsShortsLiveEmbedAndShortlinks`, `usesNativeVideoWhileBrowsingElsewhere`), `MusicServerClientTest` (`postsVideoJobsWithOnlyBearerAuthenticationAndChosenUrl`, `propagatesHttpStatusWithoutReadingBodyFollowingRedirectOrRetrying`), and `PreferencesLayoutTest.musicServerUsesCompactShadedHorizontalControls`. Commands: [shared validation](../../repo-router/references/validation.md).
-
-Device-check playlist-only pages, watch-with-list, Shorts, incoming shortlinks, miniplayer browsing, no selection, rapid taps, recreation while busy, expiry, and lost responses. Inspect light/dark, narrow widths, large fonts, and inline accessibility announcements. Use [authentication](authentication.md) only for session/transport failures; use [android-shell](../../android-shell/SKILL.md) for panel/intent changes.
-
-User promises: [README Music server feature](/home/runner/work/ssYoutube/ssYoutube/README.md#features) and [device checks](/home/runner/work/ssYoutube/ssYoutube/README.md#build-and-test).
+Consult shell for link normalization and controls. Using a native player's video
+ID does not require loading extractor/mpv internals. Server-side API changes require
+separate confirmed contract information; do not edit an external repository here.

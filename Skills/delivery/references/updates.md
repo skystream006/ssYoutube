@@ -1,66 +1,59 @@
-# In-app updates
+# In-app update discovery and installation
 
-## Locate the change
+Java directory: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
+Tests: `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
+Resolve against the actual absolute checkout root if different.
 
-| Source | Search anchors |
+## Source map
+
+| Concern | Source anchors |
 | --- | --- |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/AppUpdater.java` | `checkOnStartup`, `check`, `dispatch`, `install`, `isCompatible`, `onInstallPermissionResult`, `publishProgress`, `onCleared` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/GitHubUpdateClient.java` | `LATEST_URL`, `fetchLatest`, `parseRelease`, `download`, `openDownload`, `ConnectionFactory` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/UpdateChecks.java` | `releaseVersion`, `validateAsset`, `assetUri`, `redirectUri`, `copy`, `verifyDigest` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MainActivity.java` | Updater creation, `updatesResumed`, `showPreferences`, `updateObserver`, dialog dismissal |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml` | `REQUEST_INSTALL_PACKAGES`, non-exported `FileProvider` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/xml/file_paths.xml` | `app_updates` cache path |
+| Lifecycle, checking, progress/events | `AppUpdater.checkOnStartup`, `check`, `downloadProgress`, `dispatch`, `publishProgress`, `complete`, `onCleared` |
+| Installer permission/resume and APK identity | `AppUpdater.install`, `onInstallPermissionResult`, `isCompatible`, `sameSigners` |
+| Latest release / download | `GitHubUpdateClient.fetchLatest`, `parseRelease`, `download`, `openDownload` |
+| Version, asset, redirect, length/digest rules | `UpdateChecks.compareVersions`, `releaseVersion`, `validateAsset`, `assetUri`, `redirectUri`, `copy`, `verifyDigest` |
+| UI integration | `MainActivity.showPreferences` update controls/observer; lifecycle dispatch and `onActivityResult` |
 
-UI anchors are `check_updates_button`, `update_progress_panel`,
-`update_download_status`, `update_download_progress`, and `update_download_bytes`
-in `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/dialog_preferences.xml`;
-matching `updates_` strings are in
-`/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/strings.xml`.
+Relevant configuration/resources:
+- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml`:
+  installation permission and FileProvider.
+- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/xml/file_paths.xml`:
+  `app_updates` cache path.
+- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/dialog_preferences.xml`:
+  `check_updates_button`, `update_progress_panel`, download status/progress/bytes.
+- `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/strings.xml`:
+  update status messages.
 
-## Behavior and invariants
+## Invariants
 
-- Startup checks notify but do not download. A manual Preferences check can
-  download a newer stable release from this repository's GitHub Releases.
-- `AppUpdater` is an activity-retained AndroidViewModel. Progress is persistent
-  LiveData, distinct from consumable installer/toast events; dialog dismissal
-  removes its progress observer. `dispatch` only opens UI while resumed.
-- Validate uploaded APK metadata, repository asset path, bounded size, allowed
-  HTTPS redirects, response lengths, and any provided SHA-256 digest. The digest
-  is optional upstream; do not describe it as always available.
-- Downloads go to private update cache via a temporary partial file. Rename
-  publishes a complete download; failures clean partials. Progress counts written
-  bytes and uses release size even when response length is absent.
-- Before installation, require the installed package name/signers, expected
-  version name, and a strictly higher versionCode. Revalidate after returning
-  from unknown-source permission settings, including process recreation.
-- Android installation needs user confirmation. Grant read access only to the
-  intended APK, not all cache/private files. Cancel outstanding work when cleared.
+- Fetch the latest stable GitHub Release from this repository. Startup announces
+  availability without downloading; manual checking can download and open installation.
+- Restrict initial APK URLs to this repository's release assets and redirects to
+  accepted HTTPS GitHub hosts. Preserve metadata/body bounds, expected length,
+  optional digest verification, interruption checks, and complete-file publication.
+- Cache downloads privately; never expose partial APKs as complete downloads.
+- Candidate package, expected version name, greater versionCode, and signing
+  certificates must match requirements. Revalidate after installer permission
+  round trips, including process recreation.
+- Keep progress in LiveData separate from one-shot toast/installer events.
+  Preferences removes its observer on dismissal; reopening displays current progress.
+- Background work must not launch UI while the activity is not resumed. Android
+  installation always requires platform/user confirmation.
+- FileProvider sharing grants only the needed read access to the update file.
+  Do not broaden the provider to arbitrary app storage.
 
-## Consumers and expansion
+## Validation
 
-Consult [shell](../../android-shell/SKILL.md) for progress/presentation or observer
-wiring; [diagnostics](../../diagnostics/SKILL.md) for new failure details.
-Load [build/release](build-release.md) only for version, package, signing, release,
-or packaging contracts. Do not load music authentication, page scripts, ad
-filtering, or playback for a transport/progress fix.
+- Version/asset/redirect/copy/digest rules: `UpdateChecksTest`.
+- HTTP/download/progress behavior: `GitHubUpdateClientTest`.
+- Preference progress/control changes: relevant `PreferencesLayoutTest` methods.
 
-## Targeted validation
+Use [validation commands](../../repo-router/references/validation.md).
+There is no direct JVM test of PackageManager signatures or the installer UI.
+Device-check newer/current/no-release responses, failure/retry, progress through
+dialog reopen/activity recreation, unknown-source permission return, and rejected
+incompatible APKs for affected changes.
 
-Classes under
-`/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`:
-
-| Changed behavior | Tests |
-| --- | --- |
-| Version, URL, asset, size, digest, copy/cancellation rules | `UpdateChecksTest` |
-| Download/progress, redirects, partial cleanup, response bounds | `GitHubUpdateClientTest` |
-| Preference update row/resources | Affected `PreferencesLayoutTest` methods |
-
-Use [common commands](../../repo-router/references/validation.md). JVM client
-fixtures do not exercise all Android JSON parsing, PackageManager/signature
-checks, LiveData lifecycle, or installer flows. Device-check startup versus manual
-checks, network failure/retry, progress after reopening/recreation, permission
-denial/return, incompatible APK rejection, and installer confirmation as relevant.
-Do not publish a release merely to validate client logic.
-
-Documentation: **In-app updates** in
-[/home/runner/work/ssYoutube/ssYoutube/README.md](/home/runner/work/ssYoutube/ssYoutube/README.md#features).
+Consult shell for UI wiring, diagnostics for safe error detail, and
+[build/release](build-release.md) only when versioning/signing/publication contracts
+change. Ignore music authentication, playback streams, and ad filters.

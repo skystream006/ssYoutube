@@ -1,25 +1,24 @@
 ---
 name: android-shell
 description: >-
-  Handles Android browsing UI, WebView navigation and sign-in behavior,
-  deep links, preferences, themes, page customization, accessibility,
-  and activity integration. Use for user-interface or browsing changes.
+  Handles ssYouTube Android browsing UI, WebView navigation and Google sign-in
+  behavior, deep links, preferences, themes, page customization, accessibility,
+  and activity integration. Use for interface or browsing changes, not native
+  decoding or external music-server authentication internals.
 ---
 
-# Start at the visible behavior
+# Android shell
 
-- Inspect the affected method in
-  `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MainActivity.java`,
-  preference key, or resource ID; do not read the whole activity.
+- Start with the named `MainActivity` method, preference key, or resource ID.
+  Do not read the whole activity.
 - Choose [browsing](references/browsing.md) for navigation/page scripts or
-  [preferences](references/preferences.md) for controls/resources. These map
-  architecture anchors, conventions, tests, and device checks.
-- Preserve browser sessions, comment protection, and lifecycle cleanup.
-- Consult [playback](../playback/SKILL.md) for routing/player contracts. For other
-  feature controls, use [shared ownership](../repo-router/references/shared-contracts.md)
-  to select only the affected neighbor.
-- Normally ignore native extraction/decoding, music credential storage, updater
-  networking, ad-filter internals, release workflows, and unrelated panels.
-- Run the mapped JVM/resource tests with
-  [validation](../repo-router/references/validation.md); add Android build/lint
-  and affected device scenarios for UI/platform changes.
+  [preferences](references/preferences.md) for controls, resources, and lifecycle.
+- Preserve browser-session behavior, comment protection, and cleanup. Follow the
+  referenced value/resource mappings rather than inventing parallel settings.
+- Consult [shared contracts](../repo-router/references/shared-contracts.md) when a
+  feature contract changes; load only that adjacent domain's relevant reference.
+- Normally ignore extractor/mpv internals, music credential storage, updater
+  networking, ad-filter implementation, release workflows, and unrelated tests.
+- Use the selected reference's test map and
+  [validation commands](../repo-router/references/validation.md). Validate affected
+  Android integration and device interactions, not every feature by default.

@@ -1,71 +1,62 @@
-# Preferences and Android presentation
+# Preferences, resources, and activity integration
 
-## Locate the change
+Java directory: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
+Tests: `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
+Resolve paths against the actual absolute checkout root if different.
 
-| Source | Search anchors |
+## Entry points
+
+- `MainActivity.showPreferences`: controls, listeners, LiveData observers,
+  advanced-panel expansion, and dismissal cleanup. Search by resource ID before
+  reading this large method.
+- `Preferences`: stable theme/site-mode/language values, URL/user-agent decisions,
+  and effective adblocking predicate; this class has no Android dependencies.
+- `MainActivity.onCreate`, `onSaveInstanceState`, `onPause`, `onResume`,
+  `onStart`, `onStop`, `onDestroy`: feature construction and lifecycle wiring.
+- `openPreferencePanel`, `closePreferencePanel`, `applyTheme`,
+  `openSupportedLinkSettings`: panel, appearance, and OS settings integration.
+- `updatePlayerLayout`, `setPlayerFullscreen`: shell placement of the existing
+  player, WebView, settings button, and statistics overlay.
+
+## Resource map
+
+| Absolute path | Responsibility |
 | --- | --- |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MainActivity.java` | `PREFS_NAME`, relevant `KEY_` constant, `showPreferences`, `openPreferencePanel`, `closePreferencePanel`, `applyTheme`, `updatePlayerLayout` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/Preferences.java` | Theme constants, language mapping, user agents/home URLs, `isAdBlockingEnabled` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/activity_main.xml` | `root_container`, `webview`, `stats_overlay`, `settings_button` |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/dialog_preferences.xml` | `language_spinner`, `theme_spinner`, `site_mode_spinner`, `advanced_settings`, affected feature row |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/strings.xml` | Matching labels, content descriptions, and option arrays |
+| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/activity_main.xml` | Root container, browsing WebView, stats overlay, persistent settings button |
+| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/dialog_preferences.xml` | Navigation, language/appearance, feature controls, update progress, music row, advanced controls |
+| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/strings.xml` | Labels, status messages, ordered spinner arrays |
+| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/themes.xml` | App theme |
+| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/colors.xml` | Theme/overlay colors |
+| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/dimens.xml` | Player and shell dimensions |
+| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/anim` | Preference-panel animation |
 
-Styles/dimensions are under
-`/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values`; panel animations
-and backgrounds are under `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/anim`
-and `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/drawable`. Open only
-resources referenced by the affected control.
+## Conventions
 
-## Conventions and state
+- `ssyoutube_prefs` stores choices via activity keys; `Preferences` defines pure
+  value/URL rules, not a second persistence mechanism.
+- Spinner array order must match value mappings, especially language codes.
+- Settings stay reachable above the WebView and native fullscreen/miniplayer.
+  Preserve accessible labels, touch targets, narrow layouts, and large-font behavior.
+- Keep one WebView and one NativePlayerView; resizing does not reconstruct them.
+  Destroying the activity releases extraction/player resources and script handlers.
+- Remove preference-dialog observers on dismissal. Feature ViewModels own their
+  state; UI listeners must not duplicate authentication or updater logic.
+- Feature toggles are not interchangeable: native playback, adblocking,
+  logging, and stats have different stop/reload/lifecycle contracts.
 
-- `MainActivity` reads/writes SharedPreferences; `Preferences` keeps reusable
-  values and decisions free of Android dependencies. Preserve persisted keys
-  and option ordering unless deliberately migrating their contract.
-- Default playback language is English, not device locale. `language_options`
-  and `Preferences` language codes must remain index-aligned. A language change
-  affects future extraction/retry, not the already playing video's language.
-- The settings button remains reachable above web content, fullscreen playback,
-  and miniplayer. `updatePlayerLayout` owns stacking and placement; do not
-  instantiate a replacement player for a presentation change.
-- Keep dropdown labels, content descriptions, 48dp interactive targets, theme
-  support, and narrow/large-font layouts. Advanced controls start collapsed;
-  feature controls outside that panel must not accidentally move into it.
-- `showPreferences` subscribes to update/music state and removes those observers
-  on dismissal. Activity destruction dismisses the dialog before releasing views.
-- Site-mode changes update the user agent/zoom, clear browser history, and load
-  the corresponding page host. Header/related visibility is independently saved.
+## Test selection
 
-## Feature boundaries
+- Value/default/order/URL changes: `PreferencesTest`.
+- Resource IDs, visibility, order, accessible labels, or feature rows:
+  relevant `PreferencesLayoutTest` methods.
+- Page-facing preference scripts: relevant `MainActivityPageScriptTest` methods.
+- Add the owning domain's tests only when changing its behavior, not for spacing.
 
-Use [shared ownership](../../repo-router/references/shared-contracts.md) only at
-these seams:
+Use [validation commands](../../repo-router/references/validation.md).
+Device-check light/dark/system themes, narrow widths, large fonts, persisted
+choices, dialog reopen, and relevant recreation/fullscreen/miniplayer interactions.
+XML tests do not establish runtime observer or lifecycle correctness.
 
-- `setMpvEnabled` stops native work, updates document-start scripts and effective
-  filtering, then reloads to remove existing document hooks. Consult
-  [playback](../../playback/SKILL.md), not just the preference label.
-- `adblocking_settings` is hidden with mpv on, but the saved adblocking choice is
-  retained. Consult [adblocking](../../adblocking/SKILL.md) for gating/reload changes.
-- `music_server_panel`, `update_progress_panel`, logging controls, and
-  `stats_overlay` delegate behavior to their owning Skills. A label/spacing
-  change alone does not require those implementations.
-
-Do not load all feature classes merely because their controls share this dialog.
-
-## Targeted validation
-
-Tests are under
-`/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`:
-
-- `PreferencesTest`: defaults, language indexing, site-mode decisions, mpv/adblock gating.
-- `PreferencesLayoutTest`: matching row/control assertions; language-array alignment,
-  visibility/order, accessibility properties, and diagnostic/feature controls.
-- `MainActivityPageScriptTest`: only if header/related/page-script behavior changes.
-- Add consumer tests from the relevant Skill when changing behavior, not just layout.
-
-Use [common commands](../../repo-router/references/validation.md). Device-check
-light/dark themes, large fonts/narrow screens, fullscreen/miniplayer settings
-access, restart/recreation persistence, and dismissal/reopening for affected rows.
-XML tests cannot validate rendered geometry or lifecycle observers.
-
-Documentation: **Preferences** and **Player presentation** in
-[/home/runner/work/ssYoutube/ssYoutube/README.md](/home/runner/work/ssYoutube/ssYoutube/README.md#features).
+Consult [shared ownership](../../repo-router/references/shared-contracts.md)
+before changing playback language/routing, adblocking gating, music login, update
+events, or diagnostics. Leave unrelated listeners and feature internals unloaded.

@@ -1,42 +1,61 @@
-# Web routing and watch history
+# Native routing, web suppression, and history
 
-## Source anchors
+Java directory: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
+Tests: `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
+Resolve against the actual absolute checkout root if different.
 
-- [PlaybackRequest.java](/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/PlaybackRequest.java): `fromUrl`, `trustedUri`, `queryParameters`, `timestampMs`, `isYouTubePage`, `isShortsPage`.
-- [NativePlaybackScript.java](/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/NativePlaybackScript.java): `ORIGIN_RULES`, `SCRIPT`, `forPreference`; JavaScript `update`, `silence`, `restore`.
-- [NativeWatchHistoryScript.java](/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/NativeWatchHistoryScript.java): `TRUSTED_PAGE`, `SCRIPT`, `update`; JavaScript `tracking`, `endpoint`, `account`, `valid`, `drain`.
-- [NativeWatchHistoryState.java](/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/NativeWatchHistoryState.java): `sample`, `onContinuityToken`, `reset`, `SAMPLE_MS`, `REPORT_MS`.
-- [MainActivity.java](/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube/MainActivity.java): `installPlaybackRouting`, `isTrustedPlaybackMessage`, `routePage`, `updateWatchHistory`, `closeNativePlayback`, `setMpvEnabled`; `YouTubeWebViewClient.applyPageScripts`.
+## Choose one slice
 
-## Routing invariants
-
-`PlaybackRequest` accepts exact supported YouTube/shortlink hosts and valid eleven-character video IDs from watch/live/embed/share paths, not Shorts or playlist embeds. Its link parser accepts HTTP/HTTPS default ports; the JavaScript bridge is stricter: four explicit HTTPS YouTube origins, never Google sign-in. Reject ambiguous authorities and duplicate `v`/`t`/`start` parameters. Timestamp precedence is `t`, then `start`, then fragment; malformed or over-seven-day values become zero.
-
-`isTrustedPlaybackMessage` requires the main frame, matching source/current/reported origins, and matching video plus timestamp; nonvideo messages must match the exact current URL. Messages notify about the current page, not clicked targets. `startUrl`, `canonicalPlaybackUrl`, and `YouTubeWebViewClient.handleUrl` normalize incoming links without losing timestamps.
-
-`routePage` closes native playback for Shorts, non-YouTube pages, or disabled mpv; nonvideo YouTube browsing minimizes the existing player. `closedVideoForPage` prevents reopening a dismissed video until leaving its page. Duplicate route keys preserve presentation and playback intent.
-
-`updateNativePlaybackScript` installs document-start suppression when supported; `applyPageScripts` also runs through `onPageStarted`, `onPageFinished`, and `doUpdateVisitedHistory`. Keep installation idempotent and SPA-aware. Outside main-frame Shorts, suppress web media/previews and collapse only player placeholders, not comments/watch content. Restore saved media flags and remove suppression styling on Shorts. `setMpvEnabled` closes pending/native playback, replaces script registration, and reloads all frames; an empty script alone cannot undo old hooks.
-
-## History invariants
-
-`updateWatchHistory` samples native progress each second; `sample` reports observed ranges about every ten seconds and flushes existing ranges on pause/close/video change. Continuity tokens split seeks, playback-state changes, and speed changes; paused, buffering, jumped, or unobserved time is not watched time.
-
-Java sends only validated ID, session number, and measured progress. Tracking URLs/tokens and account context remain page-scoped JavaScript state, never Java persistence, extraction/media inputs, or logs. `tracking` requires matching, nonstale player metadata; `endpoint` validates HTTPS hosts, endpoint paths, and video identity. Requests use the WebView session with redirects rejected.
-
-Same-document miniplayer browsing needs previously validated metadata and unchanged, known account context. Reloads lose that context; account changes invalidate it. Preserve bounded pending reports and revalidation before outgoing final reports. History/resume synchronization is best-effort, especially live/DVR; do not promise server acknowledgment.
-
-## Checks and escalation
-
-Use [shared validation](../../repo-router/references/validation.md):
-
-| Change | Existing tests |
+| Slice | Source anchors |
 | --- | --- |
-| URLs, timestamps, main-frame/origin validation | `PlaybackRequestTest`, `MainActivityPageScriptTest` |
-| Suppression, Shorts, preference gating | `NativePlaybackScriptTest` |
-| Cadence, seeks, pauses, outgoing ranges | `NativeWatchHistoryStateTest` |
-| Metadata/account isolation, serialized reports | `NativeWatchHistoryScriptTest` |
+| Link parsing/timestamps/Shorts | `PlaybackRequest.fromUrl`, `isYouTubePage`, `isShortsPage` |
+| Trusted web-to-native notification | `MainActivity.installPlaybackRouting`, `isTrustedPlaybackMessage`, `playbackOrigin`, `routePage` |
+| Web-player suppression and SPA notifications | `NativePlaybackScript.SCRIPT`, `ORIGIN_RULES`, `forPreference` |
+| mpv toggle transition | `MainActivity.updateNativePlaybackScript`, `setMpvEnabled`, `closeNativePlayback` |
+| Watch-range sampling | `NativeWatchHistoryState.sample`, `onContinuityToken`; `MainActivity.updateWatchHistory` |
+| Page-scoped reporting | `NativeWatchHistoryScript.SCRIPT`, `update` |
 
-On device, exercise incoming/SPA watch↔Shorts navigation, forged iframe messages, close/revisit, mpv toggling, and miniplayer browsing. Check signed-in history across pause, account switch, reload, and network failure; script-string tests cannot verify YouTube endpoints.
+## Routing and suppression
 
-Use [android-shell](../../android-shell/SKILL.md) for broader navigation changes, [player](player.md) for progress continuity, and [shared contracts](../../repo-router/references/shared-contracts.md) for trust-boundary changes. [README Features](/home/runner/work/ssYoutube/ssYoutube/README.md#features): **Shorts in the WebView**, **Browsing WebView**, **Native watch history**.
+- Only validated YouTube main-frame messages may route native playback. Validate
+  current and reported pages/origins; broad browsing scope is not bridge permission.
+- Shorts remain on the web player and close native playback. Other browsing can
+  retain the current video as a miniplayer.
+- Duplicate SPA notifications must not restart or unpause playback; explicit close
+  suppresses the current video until the route changes appropriately.
+- Document-start support is capability-checked; page callbacks provide fallback
+  injection. Keep script installation idempotent.
+- Toggling mpv stops native work, updates document-start registration, and reloads
+  the page. Removing a ScriptHandler alone does not undo existing media overrides.
+- `ORIGIN_RULES` and page predicates have shell/adblocking consumers. Check those
+  consumers when changing their acceptance contract.
+
+## History privacy and semantics
+
+- `NativeWatchHistoryState` samples actual watched ranges; seeks, buffering, and
+  paused time are not watched time. Reports are periodic with best-effort final flush.
+- Tracking URLs are obtained only from metadata matching the current video's page.
+  Keep URLs/tokens in page memory, bound to video, native session, and account.
+- Recheck account/context identity before queued delivery. SPA navigation, account
+  changes, reloads, stale metadata, and outgoing sessions must not cross contexts.
+- Use the WebView's signed-in requests for history; do not transfer browser cookies
+  or tracking URLs into extraction, native transport, logs, or persistent storage.
+- History is best-effort against undocumented endpoints, especially for live/DVR.
+  Do not promise successful synchronization from unit assertions alone.
+
+## Validation
+
+| Changed slice | Tests |
+| --- | --- |
+| Parsing | `PlaybackRequestTest` |
+| Bridge acceptance/canonicalization/close suppression | Relevant `MainActivityPageScriptTest` cases |
+| Web suppression/toggle script | `NativePlaybackScriptTest`; preferences tests if gating changes |
+| History ranges and continuity | `NativeWatchHistoryStateTest` |
+| Page context, origin, and account checks | `NativeWatchHistoryScriptTest` |
+
+Use [validation commands](../../repo-router/references/validation.md).
+Device-check affected watch/Shorts/SPA/incoming-link routes, sign-in pages,
+mpv toggle and reload, and close/miniplayer transitions. For history changes,
+check pause/seek/video switch/account switch/reload without inspecting or
+persisting private tracking values. Consult shell for integration and adblocking
+only when shared page rules or effective enablement change.

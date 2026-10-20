@@ -1,88 +1,86 @@
 # Targeted validation
 
-All features share `:app`; there are no independently buildable domain modules.
-Choose test classes from the affected domain reference, not a repository-wide
-test inventory.
+Domain references map behavior to existing test classes and device scenarios.
+Use those maps first; do not load the entire test suite to choose a test.
 
-## Prerequisites
+## Prerequisites and source of truth
 
-- JDK 17 and Android SDK platform 34; Gradle wrapper and dependency repository
-  network access for an uncached build. SDK location comes from the environment
-  or `/home/runner/work/ssYoutube/ssYoutube/local.properties`, not committed
-  machine-specific settings.
-- Full Git history: `/home/runner/work/ssYoutube/ssYoutube/app/build.gradle`
-  rejects shallow clones because versions use first-parent commit counts.
-  Inspect with `git -C /home/runner/work/ssYoutube/ssYoutube rev-parse --is-shallow-repository`;
-  if shallow, obtain history with
-  `git -C /home/runner/work/ssYoutube/ssYoutube fetch --unshallow` before Gradle.
-- Node 18+ for executable video-ad JavaScript coverage; no npm dependencies.
-  `YouTubeVideoAdBlockingTest` skips its executable test when Node is absent.
-  Report that skip explicitly; it is not successful JavaScript validation.
+- `/home/runner/work/ssYoutube/ssYoutube/app/build.gradle`: Android API levels,
+  dependencies, desugaring, test dependency, and full-Git-history requirement.
+- `/home/runner/work/ssYoutube/ssYoutube/gradle/wrapper/gradle-wrapper.properties`:
+  Gradle distribution.
+- `/home/runner/work/ssYoutube/ssYoutube/README.md`, “Build and test”: JDK 17,
+  Android SDK compile API 34, minimum API 21, Node 18+ for JavaScript fixtures.
+- `/home/runner/work/ssYoutube/ssYoutube/settings.gradle`: Google Maven, Maven
+  Central, and restricted JitPack resolution; fresh builds need network access.
 
-## Select and run
+All features compile in `:app`. There is no independently buildable frontend,
+backend, or JVM-only domain module. Even a filtered Gradle test invocation needs
+the Android toolchain and full Git history because project configuration checks it.
+Report missing prerequisites instead of presenting a blocked check as passed.
 
-JUnit files are in
-`/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
-Tests use package `com.skystream.ssyoutube`. Start with the mapped class or method:
+## Commands
 
-```sh
-/home/runner/work/ssYoutube/ssYoutube/gradlew -p /home/runner/work/ssYoutube/ssYoutube :app:testDebugUnitTest --tests 'com.skystream.ssyoutube.PreferencesTest'
-```
-
-Replace the class with the affected test. Repeat `--tests` for multiple classes;
-use a fully qualified `ClassName.methodName` for a focused regression during
-iteration. Expand to the class and affected consumers before completing the change.
-Resource/manifest tests read paths relative to the app module, so use Gradle
-rather than an ad hoc Java invocation.
-
-For the bundled video-ad script:
+Use the actual absolute checkout root if different. Replace `<TestClass>` with a
+class named by the selected reference; repeat `--tests` for additional classes.
 
 ```sh
-node --test /home/runner/work/ssYoutube/ssYoutube/app/src/test/js/youtube_video_adblock.test.cjs
+/home/runner/work/ssYoutube/ssYoutube/gradlew -p /home/runner/work/ssYoutube/ssYoutube :app:testDebugUnitTest --tests 'com.skystream.ssyoutube.<TestClass>'
 ```
 
-For Android source/resources/manifest integration:
+A method filter can narrow an existing class further, for example
+`com.skystream.ssyoutube.PreferencesLayoutTest.updateProgressIsInlineBelowHeaderAndHiddenWhenIdle`.
+Expand to the whole relevant class when shared behavior changes.
+
+For Android source/resource integration:
 
 ```sh
 /home/runner/work/ssYoutube/ssYoutube/gradlew -p /home/runner/work/ssYoutube/ssYoutube :app:assembleDebug :app:lintDebug
 ```
 
-For broad shared-contract or build/dependency changes, or final broad regression:
+For shared build/contract changes or broad final regression:
 
 ```sh
 /home/runner/work/ssYoutube/ssYoutube/gradlew -p /home/runner/work/ssYoutube/ssYoutube test
 ```
 
-These are existing Gradle/Node facilities, not new test infrastructure. Do not
-start with full test execution or `clean` merely to discover the responsible
-component. Build configuration and release checks are in
-[build/release](../../delivery/references/build-release.md).
+For the actual bundled video-ad JavaScript:
 
-## Coverage limits
+```sh
+node --test /home/runner/work/ssYoutube/ssYoutube/app/src/test/js/youtube_video_adblock.test.cjs
+```
 
-Pure decision/state classes are JVM-tested. Some Java tests assert generated
-script text rather than execute a browser. Layout/manifest tests parse XML;
-they do not prove rendering, accessibility, or Android intent behavior.
-The Node fixtures execute the actual ad script but simulate the page environment.
-No checked-in instrumented Android test suite substitutes for device checks.
+`YouTubeVideoAdBlockingTest` invokes the same Node suite but skips if Node cannot
+be started. A skipped wrapper is not JavaScript coverage. No npm packages are
+required. Avoid running both forms redundantly unless diagnosing the wrapper.
 
-Use the affected domain's device scenarios for native decoding/ABI/audio focus,
-WebView SPA behavior, lifecycle recreation, browser/Keystore authentication,
-or installer permissions. Do not report live-service or device checks as passed
-when only JVM fixtures ran.
+## Selection and coverage limits
+
+1. Start with the changed class's named tests; inspect only relevant test methods.
+2. Add consumer tests for changed shared predicates, data shapes, resources, or
+   lifecycle contracts. Deduplicate when multiple Skills name the same test.
+3. Keep tests in their existing domain and preserve unrelated assertions.
+4. Run build/lint for Android changes; broaden JVM coverage for build/dependency
+   changes or evidence of cross-domain regressions.
+5. Report executed, skipped, blocked, and manual checks separately.
+
+JVM tests cover pure decisions, fake HTTP connections, script strings, and parsed
+XML. They do not prove WebView DOM behavior, native rendering/decoding, Android
+Keystore, browser/passkey interaction, or installation permissions. There is no
+checked-in instrumentation suite; follow the relevant domain's device checklist.
 
 ## Skill-documentation changes
 
-No documentation-specific test/lint task is defined. Review YAML frontmatter
-(`name` matches the directory, actionable `description`), reference links,
-source symbols, and named tests against the current checkout. Replay the five
-[routing examples](architecture.md#routing-acceptance-examples), checking both
-selected and deliberately excluded context. Verify host discovery separately;
-reading Markdown successfully does not prove automatic invocation.
+No application build is needed for Markdown-only edits. There is no dedicated
+Skill linter/test framework in this repository; do not add one just for these
+documents.
 
-Use `git -C /home/runner/work/ssYoutube/ssYoutube diff --check` for whitespace.
-Documentation-only edits do not require APK compilation or application tests.
-Keep reference maintenance scoped; do not add a new framework to validate Skills.
-
-Source guidance:
-[/home/runner/work/ssYoutube/ssYoutube/README.md](/home/runner/work/ssYoutube/ssYoutube/README.md#build-and-test).
+- Check front matter for a unique `name` matching the folder and a task-specific
+  `description`; verify that each control plane stays compact.
+- Follow every local Markdown link and confirm source paths, symbols, resource
+  IDs, and test classes against the checkout.
+- Replay the five routing examples in the architecture reference; unrelated
+  domains should remain unloaded.
+- Check that shared knowledge has one owner, references are loaded conditionally,
+  and discovery requirements are not mistaken for installed host configuration.
+- Review the diff for whitespace, unintended application changes, and secrets.

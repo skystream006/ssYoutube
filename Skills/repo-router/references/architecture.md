@@ -1,96 +1,94 @@
-# Architecture and routing
+# Architecture and routing index
 
-Read only for orientation or ambiguous ownership. For a clear feature request,
-go directly to its Skill and one relevant reference.
+Read the matching row first. This is the single repository map, not a prerequisite
+for loading a clearly matched domain Skill.
 
-## Discovery and path convention
+## Source roots
 
-The canonical Skill collection is
-`/home/runner/work/ssYoutube/ssYoutube/Skills`. Each immediate child has one
-`SKILL.md` with `name` and `description` metadata; detailed knowledge is under its
-`references` directory. Source paths in these references use this checkout's
-absolute root, `/home/runner/work/ssYoutube/ssYoutube`. In another checkout,
-substitute its absolute root; Skill-to-reference links remain relative.
+The current repository root is `/home/runner/work/ssYoutube/ssYoutube`. When using
+another checkout, resolve these paths against that checkout's absolute root.
 
-Root `Skills` is **not automatically discovered by GitHub Copilot** under its
-[documented project locations](https://docs.github.com/en/copilot/concepts/customizations/agent-skills).
-Those locations include `.github/skills`, `.claude/skills`, and `.agents/skills`,
-with support depending on the host. This collection does not install a loader
-or claim automatic activation. Before automated use, configure a host that
-supports this custom location or explicitly register the collection using that
-host's supported mechanism. If unavailable, explicitly direct the agent to the
-chosen `SKILL.md` (or router for ambiguity).
+- Java: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
+- Resources: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res`.
+- JVM tests: `/home/runner/work/ssYoutube/ssYoutube/app/src/test/java/com/skystream/ssyoutube`.
+- Manifest: `/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml`.
+- Build/dependencies: `/home/runner/work/ssYoutube/ssYoutube/app/build.gradle` and
+  `/home/runner/work/ssYoutube/ssYoutube/settings.gradle`.
+- User-facing behavior/build documentation: `/home/runner/work/ssYoutube/ssYoutube/README.md`.
 
-The loader should index only names/descriptions initially, then load the selected
-body, then a relevant reference section. Confirm discovery by checking that the
-host lists the seven Skills and routes the examples below without loading every
-reference. Do not duplicate full reference trees into multiple locations.
+Class names below identify Java files in the Java root. Use symbols as search
+anchors; line numbers drift. These are behavioral boundaries within one package,
+not independent Gradle modules.
 
-## Application map
+## Domain map
 
-One Android Gradle module, `:app`, is declared in
-`/home/runner/work/ssYoutube/ssYoutube/settings.gradle`. Production Java lives in
-`/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`;
-the package is flat, so feature boundaries are **symbols**, not Java subfolders.
-Resources live in `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res`.
+| Skill | Responsibilities and first source anchors | Resources/configuration |
+| --- | --- | --- |
+| [android-shell](../../android-shell/SKILL.md) | `MainActivity`, `Preferences`, `SiteScope`, `NavigationHistory`: WebView browsing, Google sign-in, deep links, settings, page customization, accessibility | Main activity/application manifest sections; layouts, themes, navigation icons, animations, branding |
+| [playback](../../playback/SKILL.md) | `PlaybackRequest`, `NativePlayerView`, `NativePlaybackState`, `NativePlayerGestures`, `NativeStreamExtractor`, `ExtractorDownloader`, `NativeNetworkPolicy`, `MpvPlayer`, `MpvPlaybackRequest`, `NativePlaybackScript`, `NativeWatchHistoryState`, `NativeWatchHistoryScript` | Player strings, miniplayer dimensions/drawables; playback-related activity methods |
+| [adblocking](../../adblocking/SKILL.md) | `WebAdBlocker`, `AdBlockEngine`, `AdBlockingScript`: optional web request, cosmetic, and video-ad filtering | Bundled rules and video-ad JavaScript; filter toggle wiring |
+| [music-server](../../music-server/SKILL.md) | `MusicServer`, `MusicServerProtocol`, `MusicServerClient`, `MusicServerStore`, `MusicServerCallbackActivity`: external login, encrypted session, remote jobs | Callback manifest entry; music preference row, strings, background |
+| [delivery](../../delivery/SKILL.md) | `AppUpdater`, `GitHubUpdateClient`, `UpdateChecks`: update client plus Gradle, dependencies, APK versions/packaging, release automation | Build/wrapper files, release workflows, installer permission, update FileProvider path and preference controls |
+| [diagnostics](../../diagnostics/SKILL.md) | `Logger`, `LogFormat`, `LogStore`, `StatsMonitor`, `StatsValues`: logs, exports, resource statistics | Diagnostic controls, overlay, log FileProvider path |
+
+## Application flow
 
 ```text
-Android launcher / YouTube link → MainActivity
-  ├─ WebView → YouTube browsing / Google sign-in
-  │    ├─ page customization scripts
-  │    └─ optional WebAdBlocker
-  ├─ trusted playback routing → NativePlayerView
-  │    ├─ NativeStreamExtractor → NewPipeExtractor → ExtractorDownloader
-  │    └─ MpvPlayer → libmpv (Media3 provides controls/adapter, not decoding)
-  ├─ native watch-history samples → matching YouTube document → web requests
-  ├─ MusicServer → external browser / remote music API → MusicServerStore
-  ├─ AppUpdater → GitHub Releases → Android installer
-  └─ Logger / StatsMonitor
-Browser authorization return → MusicServerCallbackActivity → MainActivity
+Launcher / YouTube link → MainActivity → WebView → YouTube / Google sign-in
+                              ├─ optional WebAdBlocker → bundled filters/scripts
+                              ├─ validated route → NativePlayerView
+                              │                      ├─ NativeStreamExtractor
+                              │                      │    → NewPipeExtractor
+                              │                      │    → ExtractorDownloader
+                              │                      └─ MpvPlayer → libmpv
+                              ├─ watch ranges → matching WebView page → YouTube history
+                              ├─ MusicServer → external browser / remote music API
+                              │      └─ MusicServerStore → Android Keystore
+                              ├─ AppUpdater → GitHub Releases → Android installer
+                              └─ Logger / StatsMonitor
+Browser callback → MusicServerCallbackActivity → MainActivity → MusicServer
 ```
 
-| Domain | Entry symbols and resources | Selective knowledge |
-| --- | --- | --- |
-| [android-shell](../../android-shell/SKILL.md) | `MainActivity`, `Preferences`, `NavigationHistory`, `SiteScope`; activity/preferences layouts | Browsing or preferences |
-| [playback](../../playback/SKILL.md) | `NativePlayerView`, `NativeStreamExtractor`, `MpvPlayer`, `PlaybackRequest`; native playback/history scripts | Extraction, player, or web bridge |
-| [adblocking](../../adblocking/SKILL.md) | `WebAdBlocker`, `AdBlockEngine`, `AdBlockingScript`; bundled rules/video-ad script | Filtering |
-| [music-server](../../music-server/SKILL.md) | `MusicServer`, `MusicServerProtocol`, `MusicServerClient`, `MusicServerStore`, callback activity | Authentication or jobs |
-| [delivery](../../delivery/SKILL.md) | `AppUpdater`, `GitHubUpdateClient`, `UpdateChecks`; Gradle and release workflows | Build/release or updates |
-| [diagnostics](../../diagnostics/SKILL.md) | `Logger`, `LogFormat`, `LogStore`, `StatsMonitor`, `StatsValues` | Diagnostics |
+Media3 supplies controls and a player adapter, not an ExoPlayer engine. Browser
+authentication, anonymous extraction, music credentials, and updater networking
+are distinct trust boundaries.
 
-Persistence stays with its feature: SharedPreferences/browser storage in shell,
-encrypted credentials in music, files in diagnostics, and APK cache in delivery.
-Executors handle asynchronous work; there is no separate local backend, database
-schema/migration system, or independently deployed worker. Do not invent Skills
-for those layers. The music server is a separate repository and API contract.
+There is one Android `:app` module, no local API server, database/migrations,
+WorkManager service, or separately deployed worker. Preferences, browser storage,
+music credentials, logs, and update cache stay with their feature owners.
+Executors are feature-local. Tests belong to their behavior owners, not a separate
+testing Skill. Detailed constraints live only in the relevant domain reference.
 
-Runtime configuration comes from preferences, a user-entered HTTPS server origin,
-and Android/WebView capabilities. Build requirements and commands live only in
-[validation](validation.md) and [build/release](../../delivery/references/build-release.md).
-See [shared contracts](shared-contracts.md) for dependency/ownership decisions.
-The feature narrative is in
-[/home/runner/work/ssYoutube/ssYoutube/README.md](/home/runner/work/ssYoutube/ssYoutube/README.md#features).
+## Activation and progressive loading
+
+Register/discover `/home/runner/work/ssYoutube/ssYoutube/Skills/*/SKILL.md` through
+the intended agent host's supported mechanism. Do not assume this custom root is
+automatically discovered or claim installation from file creation alone.
+
+Expose only `name` and `description` during selection. For a clear request, load
+the matching domain directly. For an ambiguous request, load the router, select
+the domain, then load one reference section and its source/tests. Avoid duplicating
+these files into other discovery directories or injecting this map into every
+prompt. Confirm registration with the host before relying on automatic invocation.
 
 ## Routing acceptance examples
 
-| Request | First load and seed | Expand only if | Smallest initial validation |
+| Request | Initial context | Conditional expansion | Starting validation |
 | --- | --- | --- | --- |
-| Hide header only on watch pages | Shell → browsing; `headerVisibilityScript`, `applyHeaderVisibility` | Preference semantics change → preferences reference | Affected `MainActivityPageScriptTest` cases; `PreferencesTest` if needed |
-| Missing audio with separate video/audio | Playback → player; `MpvPlaybackRequest.load` | Wrong selected stream → extraction; library incompatibility → delivery | `MpvPlaybackRequestTest`; selection tests if changed; adaptive-playback device check |
-| Adblocking breaks captions after SPA navigation | Adblocking → filtering; bundled script | Reinjection/toggle wiring is responsible → shell | Node fixtures, affected ad-script tests, caption/SPA device check |
-| Change music-server address and sign in again | Music → authentication; `login`, `forget`, `normalizeOrigin` | Address/control flow changes → shell | Protocol/client tests; affected layout tests; restart/cancellation checks |
-| Privacy-safe updater failure details in Preferences | Delivery → updates; `AppUpdater.check` | Redaction → diagnostics; presentation → shell | Update tests, `LogFormatTest`, affected layout tests, failure/recreation device check |
+| Hide the YouTube header only on watch pages | Shell: `headerVisibilityScript`, page predicates | Playback only if a shared page predicate's contract changes | Relevant `MainActivityPageScriptTest` / `PreferencesTest` cases |
+| Fix missing audio for separate mpv audio/video streams | Playback: `MpvPlaybackRequest.load`, `MpvPlayer.handlePrepare` | Extraction reference for wrong stream selection; delivery for library compatibility | `MpvPlaybackRequestTest`; adaptive playback on device |
+| Adblocking breaks captions after SPA navigation | Adblocking: response filtering and reinjection | Shell only if page/toggle wiring is responsible | Node fixtures and relevant adblocking JVM tests; captions/SPA on device |
+| Change the music-server address and sign in again | Music authentication: origin, pending login, session | Shell for address input/control flow | Music protocol/client tests; device cancellation/restart checks |
+| Show privacy-safe updater failure details in Preferences | Delivery: updater failure/event model | Diagnostics for sanitization, shell for presentation | Updater tests, `LogFormatTest`, relevant layout cases |
 
-The final example flows from updater failure model to diagnostic sanitization to
-preference presentation. It does not require playback, music, or adblocking context.
+For the final example: updater contract → diagnostic formatting → UI → union of
+impacted tests. No native extraction, adblocking, or music credentials are needed.
 
 ## Outside normal context
 
-Exclude generated outputs/caches, IDE state, local SDK configuration, keystore
-contents, credentials, browser profiles, downloaded APKs, private logs, unrelated
-agent configuration, and third-party implementation sources. Read binary images
-only for appearance work. Release publication/deletion needs explicit task
-authorization; a request to inspect delivery does not authorize remote operations.
-
-Maintain this index when ownership changes. Keep exact source/test anchors in the
-owning reference rather than copying the whole map into each Skill.
+Ignore generated build outputs, caches, IDE state, local SDK configuration,
+keystore contents, credentials, browsing profiles, private logs, downloaded APKs,
+unrelated agent configuration, and binary images unless explicitly relevant.
+Third-party library implementations and the external music-server repository
+are not owned here. Release publication/deletion is an explicit operational task,
+not a validation step.

@@ -1,19 +1,23 @@
 ---
 name: music-server
-description: "Use when changing or debugging Music Server browser/passkey login, S256 PKCE callbacks, encrypted session persistence, or Send playlist/Send media job selection and submission."
+description: >-
+  Handles ssYouTube's external music-server login, HTTPS origins, PKCE browser
+  callbacks, encrypted sessions, and playlist/media job submission. Use for
+  music authentication, persistence, or remote-job integration changes, not
+  Google sign-in inside the browsing WebView.
 ---
 
 # Music-server integration
 
-Work on the Android client for the external ssYTDLP_Server service, not server implementation, YouTube sign-in, or media extraction.
-
-Choose the smallest reference:
-
-- [Authentication](references/authentication.md): HTTPS origins, browser authorization, callback validation, lifecycle restoration, and encrypted credentials.
-- [Jobs](references/jobs.md): playlist versus media selection, Shorts/miniplayer behavior, Preferences controls, and submission outcomes.
-
-Preserve origin-bound S256 PKCE, external-browser authorization, API 21 support, and backup-excluded credentials. Never share WebView cookies, follow API redirects, weaken certificate verification, or automatically retry an ambiguous job submission. Forgetting a login is local, not server revocation.
-
-Inspect the named source methods and tests before editing. Keep coordination in `MusicServer`, protocol decisions in `MusicServerProtocol`, and blocking transport/storage on the worker.
-
-Open [android-shell](../android-shell/SKILL.md) only for Preferences presentation or activity-intent integration changes. Consult [shared contracts](../repo-router/references/shared-contracts.md) when crossing trust/lifecycle boundaries and [validation](../repo-router/references/validation.md) when selecting commands. Do not load native extraction, updater, or adblocking implementation for routine music work.
+- Choose [authentication](references/authentication.md) for login/session work or
+  [jobs](references/jobs.md) for URL selection and submission.
+- Start with the matching `MusicServer` class/method and its named tests.
+- Preserve origin-bound authorization, cookie isolation, encrypted storage, and
+  non-retrying job-submission semantics.
+- Consult [shell](../android-shell/SKILL.md) only for callback, current-media, or
+  preference UI changes. The external server is an API contract, not local source.
+- Normally ignore native extraction, adblocking, GitHub update/release code, and
+  unrelated diagnostics implementation.
+- Run the mapped protocol/client/manifest tests using
+  [validation commands](../repo-router/references/validation.md); add device checks
+  for browser authorization, Keystore, and recreation behavior.

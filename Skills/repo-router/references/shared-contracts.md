@@ -1,60 +1,66 @@
-# Shared contracts and cross-domain work
+# Shared ownership and cross-domain changes
 
-Use only when a change crosses an ownership boundary. Calling an unchanged helper
-does not require loading its owner's entire Skill.
+Consult this only when changing a shared surface. The domain references remain
+authoritative for behavior; this file records ownership, not copies of their
+implementation rules.
+
+Java symbols refer to
+`/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
+Use the actual absolute checkout root if it differs.
 
 ## Shared surfaces
 
-Production classes below are symbols in
-`/home/runner/work/ssYoutube/ssYoutube/app/src/main/java/com/skystream/ssyoutube`.
-Search the named method before reading a range of a large file.
-
-| Surface | Authority and integration anchors |
+| Surface | Primary ownership and consultation |
 | --- | --- |
-| `MainActivity` | Shell owns activity structure and browser lifecycle. Playback owns contracts used by `routePage`, `installPlaybackRouting`, `updateWatchHistory`, `updatePlayerLayout`. Consult only the affected feature section. |
-| `Preferences` | Shell owns representation, language codes, site mode, and defaults. Playback consumes language normalization; adblocking consumes `isAdBlockingEnabled`. |
-| `PlaybackRequest`, `NativePlaybackScript.ORIGIN_RULES` | Playback owns supported page/link predicates and origin rules. Shell and adblocking consume them; changing their scope needs consumer tests. |
-| `MusicServerProtocol.preservePlaylist` | Music owns URL selection/preservation semantics; shell calls it from `startUrl` and `YouTubeWebViewClient.handleUrl`. |
-| `LogFormat` / `Logger` | Diagnostics owns formatting/export contracts; callers must not add credentials or sensitive data to messages. |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml` | Shell owns application/main activity; music owns callback registration; delivery owns installer permission. Provider changes must preserve both consumers. |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/xml/file_paths.xml` | Delivery owns `app_updates`; diagnostics owns `shared_logs`. Never broaden to all private files. |
-| `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/layout/dialog_preferences.xml` and `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/values/strings.xml` | Shell owns layout/accessibility; feature owners own their control semantics. Identify resource IDs rather than loading unrelated panels. |
-| `/home/runner/work/ssYoutube/ssYoutube/README.md` | Update the affected feature/build section only. Source and checked-in workflows take precedence over stale prose. |
+| `MainActivity` | Shell owns structure, navigation, and lifecycle wiring. Playback owns routing/player/history contracts; music, delivery, and diagnostics own their feature behavior. Read/edit named methods and relevant listeners, not the entire class. |
+| `Preferences` | Shell owns stored value representation and UI mapping. Playback owns language consumption; adblocking owns effective filtering behavior. |
+| `PlaybackRequest`, `NativePlaybackScript.ORIGIN_RULES` | Playback owns video/page/origin definitions. Shell and adblocking are consumers; changing acceptance rules requires their targeted tests. |
+| `MusicServerProtocol.preservePlaylist` | Music owns playlist URL rules; shell uses them while normalizing incoming and clicked links. |
+| Manifest | `/home/runner/work/ssYoutube/ssYoutube/app/src/main/AndroidManifest.xml`: shell owns application/main activity, music owns callback validation/registration, delivery owns installer requirements. |
+| Layouts and strings | `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res`: shell owns layout/accessibility; each feature owns the semantics of its controls and status text. Change only affected IDs/entries. |
+| FileProvider paths | `/home/runner/work/ssYoutube/ssYoutube/app/src/main/res/xml/file_paths.xml`: delivery owns `app_updates`; diagnostics owns `shared_logs`. Preserve narrow grants. |
+| Build and dependencies | Delivery owns configuration; consult the affected runtime domain for compatibility or contract changes. |
+| README | `/home/runner/work/ssYoutube/ssYoutube/README.md`: update only the relevant feature/build section. Source and checked-in configuration resolve stale documentation. |
 
-## Consultation edges
+## Conditional dependency map
 
-| Primary owner | Consult when the contract changes |
-| --- | --- |
-| [Shell](../../android-shell/SKILL.md) | Playback routing/placement; adblocking toggles; music callbacks/jobs; update UI; diagnostic controls |
-| [Playback](../../playback/SKILL.md) | Shell language/preferences/presentation; diagnostics logging; delivery native dependencies |
-| [Adblocking](../../adblocking/SKILL.md) | Shell effective enablement/reload; playback shared page/origin predicates |
-| [Music](../../music-server/SKILL.md) | Shell callback routing, current-media presentation, preference panel |
-| [Delivery](../../delivery/SKILL.md) | Shell update controls; playback native dependency changes; diagnostics logging |
-| [Diagnostics](../../diagnostics/SKILL.md) | Shell lifecycle/overlay/export wiring; the instrumented caller's behavior |
+- Shell → playback, adblocking, music, delivery, diagnostics for feature wiring.
+- Playback → shell for language preferences/presentation; diagnostics for logging;
+  delivery for native library/packaging changes.
+- Adblocking → shell for effective enablement; playback for origin/page predicates.
+- Music → shell for callbacks, current-media selection, and preference UI.
+- Delivery → shell for update controls; playback for native dependency upgrades.
+- Diagnostics → shell for lifecycle/overlay/export wiring; the domain being instrumented.
 
-## Trust boundaries
+These are consultation edges, not eager imports. A stable call to a helper or a
+resource shared by two features is not a reason to load both entire domains.
 
-- Browsing may remain signed in. Native extraction and music-server networking
-  do not receive browser cookies. Playback and music references define their
-  different transport policies; do not create a shared permissive HTTP policy.
-- Native history reporting runs inside the matching YouTube document. Its
-  credentials/tracking URLs must not move into extraction, native playback,
-  persisted state, or diagnostic messages.
-- WebView filtering is separate from native media/extraction and account pages.
-  Changing the mpv setting also changes effective adblocking; keep its saved
-  choice distinct from whether filtering is currently active.
+## Cooperation procedure
 
-## Cross-domain procedure
+1. Name the requested behavior and primary owner; locate its seed symbol/test.
+2. Identify exactly which input, output, lifecycle, resource, or trust contract
+   crosses into another domain.
+3. Load that domain's Skill and the relevant reference section only. Record the
+   contract, affected symbols, and expected tests rather than forwarding all context.
+4. Change provider and consumers together, keeping unrelated shared-file sections
+   untouched. Do not refactor the activity or split modules as incidental work.
+5. Run the deduplicated union of affected tests, then relevant device checks.
+   Escalate for changed shared predicates or evidence of broader impact.
+6. If a source/entry point moves, update its owning reference and the router mapping
+   in the same change; do not duplicate the knowledge into other Skills.
 
-1. Identify the behavior owner, changed contract, and direct consumers.
-2. Read that owner's relevant reference and seed symbols.
-3. Load an adjacent Skill only when implementation or validation crosses its
-   contract; ownership of a shared file is not permission to refactor it broadly.
-4. Change producer and consumers together, preserving unrelated behavior.
-5. Run the deduplicated union of affected tests using [validation](validation.md);
-   include device checks for lifecycle, networking, or platform behavior.
-6. Update the owning reference if source paths, anchors, or contracts moved.
+Examples:
+- New audio-language option: shell value/label mapping → playback language
+  normalization/extraction/mpv preference → preferences, layout, extractor, and
+  playback-request tests. No music authentication or release workflow context.
+- Updater error presentation: delivery failure contract → diagnostics redaction
+  if needed → shell UI → client/format/layout tests.
 
-Example: updater failure detail → delivery's failure model → diagnostics'
-sanitization → shell's preference row → relevant client, formatting, and layout
-tests. Each owner remains authoritative; unrelated domains stay unloaded.
+## Cross-cutting guardrails
+
+Keep browser sessions, music credentials, anonymous extraction, and update
+transport separate. Do not generalize their network policies into a single client
+without an explicit architectural task. Preserve API-level guards and WebView
+feature checks; Android lifecycle/UI work and background IO remain distinct.
+Use the existing pure-Java seams and fake network clients for targeted regression
+coverage. Detailed security and lifecycle rules live with each owning domain.
