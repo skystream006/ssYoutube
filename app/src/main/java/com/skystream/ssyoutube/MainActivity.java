@@ -58,10 +58,14 @@ import androidx.webkit.WebViewFeature;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -159,53 +163,6 @@ public class MainActivity extends AppCompatActivity {
                     + "if(el.closest&&el.closest(COMMENTS)){return true;}"
                     + "return !!(el.querySelector&&el.querySelector(COMMENTS));"
                     + "}";
-
-    /** Removes the "Playables" shelves and navigation entries from YouTube pages. */
-    static final String PLAYABLES_CLEANUP_SCRIPT =
-            "(function(){"
-                    + "if(window.__ssyoutubePlayablesCleanupInstalled){return;}"
-                    + "window.__ssyoutubePlayablesCleanupInstalled=true;"
-                    + COMMENTS_HELPER_SCRIPT
-                    + "var selector='ytm-rich-section-renderer,ytm-shelf-renderer,"
-                    + "ytm-item-section-renderer,ytm-rich-shelf-renderer,"
-                    + "ytd-rich-section-renderer,ytd-shelf-renderer,"
-                    + "ytm-pivot-bar-item-renderer,ytd-guide-entry-renderer,"
-                    + "ytd-mini-guide-entry-renderer,a[href*=\"playables\"]';"
-                    + "function textOf(el){return ((el.innerText||el.textContent||'')+' '+"
-                    + "(el.getAttribute&&el.getAttribute('aria-label')||'')+' '+"
-                    + "(el.getAttribute&&el.getAttribute('title')||''))"
-                    + ".replace(/\\s+/g,' ').trim().toLowerCase();}"
-                    + "function asArray(list){return Array.prototype.slice.call(list);}"
-                    + "function isPlayables(el){"
-                    + "if(inComments(el)){return false;}"
-                    + "var href=el.getAttribute&&el.getAttribute('href')||'';"
-                    + "if(href.indexOf('playables')!==-1){return true;}"
-                    + "return /\\bplayables?\\b/.test(textOf(el));"
-                    + "}"
-                    + "function removePlayables(root){"
-                    + "var nodes=(root&&root.querySelectorAll)?asArray(root.querySelectorAll(selector)):[];"
-                    + "if(root&&root.matches&&root.matches(selector)){nodes.push(root);}"
-                    + "for(var i=0;i<nodes.length;i++){"
-                    + "var el=nodes[i];"
-                    + "if(!isPlayables(el)){continue;}"
-                    + "var target=el.closest('ytm-rich-section-renderer,ytm-shelf-renderer,"
-                    + "ytm-item-section-renderer,ytm-rich-shelf-renderer,"
-                    + "ytd-rich-section-renderer,ytd-shelf-renderer,"
-                    + "ytm-pivot-bar-item-renderer,ytd-guide-entry-renderer,"
-                    + "ytd-mini-guide-entry-renderer')||el;"
-                    + "target.remove();"
-                    + "}"
-                    + "}"
-                    + "removePlayables(document);"
-                    + "new MutationObserver(function(mutations){"
-                    + "for(var i=0;i<mutations.length;i++){"
-                    + "for(var j=0;j<mutations[i].addedNodes.length;j++){"
-                    + "var node=mutations[i].addedNodes[j];"
-                    + "if(node.nodeType===1){removePlayables(node);}"
-                    + "}"
-                    + "}"
-                    + "}).observe(document.documentElement,{childList:true,subtree:true});"
-                    + "})()";
 
     /** Removes the "Posts" shelf from the YouTube home page as it appears. */
     static final String POSTS_CLEANUP_SCRIPT =
@@ -566,6 +523,11 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private NativePlayerView nativePlayer;
     private ScriptHandler nativePlaybackScript;
+    private ScriptHandler pageElementScriptHandler;
+    private String pageElementScriptSource;
+    private String pageElementScript;
+    private final EnumSet<PageElementBlockingScript.Option> blockedPageElements =
+            EnumSet.noneOf(PageElementBlockingScript.Option.class);
     private boolean mpvEnabled;
     private boolean adBlockingEnabled;
     private WebAdBlocker adBlocker;
@@ -599,6 +561,11 @@ public class MainActivity extends AppCompatActivity {
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         mpvEnabled = prefs.getBoolean(KEY_MPV_ENABLED, true);
         adBlockingEnabled = prefs.getBoolean(KEY_ADBLOCKING_ENABLED, false);
+        for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
+            if (prefs.getBoolean(option.preferenceKey, option.defaultEnabled)) {
+                blockedPageElements.add(option);
+            }
+        }
         relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
         headerHidden = prefs.getBoolean(KEY_HEADER_HIDDEN, false);
         loggingEnabled = prefs.getBoolean(KEY_LOGGING_ENABLED, false);
@@ -613,6 +580,14 @@ public class MainActivity extends AppCompatActivity {
 
         webView = findViewById(R.id.webview);
         adBlocker = new WebAdBlocker(this);
+        try (InputStreamReader input = new InputStreamReader(
+                getResources().openRawResource(R.raw.youtube_page_elements),
+                StandardCharsets.UTF_8)) {
+            pageElementScriptSource = PageElementBlockingScript.read(input);
+        } catch (IOException | android.content.res.Resources.NotFoundException error) {
+            logActivity("Page element blocking unavailable", error);
+            Toast.makeText(this, R.string.page_elements_unavailable, Toast.LENGTH_LONG).show();
+        }
         rootContainer = findViewById(R.id.root_container);
         settingsButton = findViewById(R.id.settings_button);
         statsOverlay = findViewById(R.id.stats_overlay);
@@ -801,6 +776,10 @@ public class MainActivity extends AppCompatActivity {
         watchHistoryState.reset();
         nativePlayer.release();
         adBlocker.destroy();
+        if (pageElementScriptHandler != null) {
+            pageElementScriptHandler.remove();
+            pageElementScriptHandler = null;
+        }
         if (webView != null) {
             webView.stopLoading();
             rootContainer.removeView(webView);
@@ -876,6 +855,7 @@ public class MainActivity extends AppCompatActivity {
 
         installPlaybackRouting(view);
         updateAdBlocking(view);
+        updatePageElementBlocking(view);
         view.setWebViewClient(new YouTubeWebViewClient());
         view.setWebChromeClient(new WebChromeClient());
     }
@@ -944,6 +924,34 @@ public class MainActivity extends AppCompatActivity {
         prefs.edit().putBoolean(KEY_ADBLOCKING_ENABLED, enabled).apply();
         updateAdBlocking(webView);
         webView.reload();
+    }
+
+    private void updatePageElementBlocking(WebView view) {
+        if (pageElementScriptSource == null) {
+            return;
+        }
+        if (pageElementScriptHandler != null) {
+            pageElementScriptHandler.remove();
+            pageElementScriptHandler = null;
+        }
+        pageElementScript = PageElementBlockingScript.create(
+                pageElementScriptSource, blockedPageElements);
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            try {
+                pageElementScriptHandler = WebViewCompat.addDocumentStartJavaScript(
+                        view, pageElementScript, NativePlaybackScript.ORIGIN_RULES);
+            } catch (IllegalArgumentException | UnsupportedOperationException error) {
+                logActivity("Page element document start script unavailable", error);
+            }
+        }
+        applyPageElementBlocking(view);
+    }
+
+    private void applyPageElementBlocking(WebView view) {
+        if (view == webView && pageElementScript != null
+                && AdBlockEngine.isSupportedPage(view.getUrl())) {
+            view.evaluateJavascript(pageElementScript, null);
+        }
     }
 
     static boolean isTrustedPlaybackMessage(boolean mainFrame, String sourceOrigin,
@@ -1337,6 +1345,30 @@ public class MainActivity extends AppCompatActivity {
             advancedToggle.setContentDescription(getString(expanded ? R.string.collapse_advanced
                     : R.string.expand_advanced));
         });
+        TextView adBlockerSectionToggle = content.findViewById(R.id.adblocker_section_toggle);
+        View adBlockerSection = content.findViewById(R.id.adblocker_section);
+        adBlockerSectionToggle.setOnClickListener(v -> {
+            boolean expanded = adBlockerSection.getVisibility() != View.VISIBLE;
+            adBlockerSection.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            adBlockerSectionToggle.setText(expanded ? R.string.adblocker_settings_expanded
+                    : R.string.adblocker_settings_collapsed);
+            adBlockerSectionToggle.setContentDescription(getString(expanded
+                    ? R.string.collapse_adblocker_settings : R.string.expand_adblocker_settings));
+        });
+        for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
+            Switch toggle = content.findViewWithTag(option.preferenceKey);
+            toggle.setChecked(blockedPageElements.contains(option));
+            toggle.setEnabled(pageElementScriptSource != null);
+            toggle.setOnCheckedChangeListener((button, checked) -> {
+                if (checked) {
+                    blockedPageElements.add(option);
+                } else {
+                    blockedPageElements.remove(option);
+                }
+                prefs.edit().putBoolean(option.preferenceKey, checked).apply();
+                updatePageElementBlocking(webView);
+            });
+        }
         ToggleButton relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
         ToggleButton headerToggle = content.findViewById(R.id.header_toggle);
         Switch mpvToggle = content.findViewById(R.id.mpv_toggle);
@@ -1917,7 +1949,7 @@ public class MainActivity extends AppCompatActivity {
                     NativePlaybackScript.forPreference(mpvEnabled), null);
             applyRelatedVisibility(view);
             applyHeaderVisibility(view);
-            view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
+            applyPageElementBlocking(view);
             view.evaluateJavascript(POSTS_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(SUBSCRIBER_COUNT_SCRIPT, null);
             view.evaluateJavascript(APP_LOGO_SCRIPT, null);

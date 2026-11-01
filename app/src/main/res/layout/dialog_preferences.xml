@@ -202,40 +202,134 @@
                     android:textOff="@string/hide_header" />
             </LinearLayout>
 
-            <Switch
-                android:id="@+id/mpv_toggle"
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:minHeight="48dp"
-                android:text="@string/enable_mpv" />
+                android:layout_marginTop="16dp"
+                android:text="@string/block_page_elements"
+                android:textStyle="bold" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/mpv_summary"
+                android:text="@string/block_page_elements_summary"
                 android:textSize="12sp" />
 
             <LinearLayout
-                android:id="@+id/adblocking_settings"
+                android:id="@+id/page_element_settings"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <Switch
+                    android:id="@+id/block_youtube_shorts"
+                    android:tag="block_youtube_shorts"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/block_youtube_shorts" />
+
+                <Switch
+                    android:id="@+id/block_youtube_playables"
+                    android:tag="block_youtube_playables"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/block_youtube_playables" />
+
+                <Switch
+                    android:id="@+id/block_youtube_recommended"
+                    android:tag="block_youtube_recommended"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/block_youtube_recommended" />
+
+                <Switch
+                    android:id="@+id/block_youtube_distracting"
+                    android:tag="block_youtube_distracting"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/block_youtube_distracting" />
+
+                <Switch
+                    android:id="@+id/block_youtube_thumbnails"
+                    android:tag="block_youtube_thumbnails"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/block_youtube_thumbnails" />
+
+                <Switch
+                    android:id="@+id/block_youtube_autodubbed"
+                    android:tag="block_youtube_autodubbed"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/block_youtube_autodubbed" />
+
+                <Switch
+                    android:id="@+id/block_youtube_members_only"
+                    android:tag="block_youtube_members_only"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/block_youtube_members_only" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/adblocker_section_toggle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:minHeight="48dp"
+                android:textAllCaps="false"
+                android:text="@string/adblocker_settings_collapsed"
+                android:contentDescription="@string/expand_adblocker_settings" />
+
+            <LinearLayout
+                android:id="@+id/adblocker_section"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:visibility="gone">
 
                 <Switch
-                    android:id="@+id/adblocking_toggle"
+                    android:id="@+id/mpv_toggle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:minHeight="48dp"
-                    android:text="@string/enable_adblocking" />
+                    android:text="@string/enable_mpv" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/adblocking_summary"
+                    android:text="@string/mpv_summary"
                     android:textSize="12sp" />
+
+                <LinearLayout
+                    android:id="@+id/adblocking_settings"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <Switch
+                        android:id="@+id/adblocking_toggle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:minHeight="48dp"
+                        android:text="@string/enable_adblocking" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/adblocking_summary"
+                        android:textSize="12sp" />
+                </LinearLayout>
             </LinearLayout>
 
             <LinearLayout

@@ -31,11 +31,13 @@ playback extraction is separate and anonymous.
   If that language is unavailable, playback falls back to the original or available audio.
   This does not translate videos or change the app UI; changing it does not interrupt a
   video that is already playing.
+  **Ad-Blocker Settings** starts collapsed each time Preferences opens. Expand it for
+  **Enable mpv player** and **Enable adblocking**.
   **Enable mpv player** is on by default and saved across restarts. Turn it off to use
   YouTube's web player instead. Switching stops native playback (including the miniplayer
   and pending extraction) and reloads the current page; turn it back on to use mpv again.
   **Enable adblocking** is available only with mpv off and starts off. The choice is saved
-  across restarts. Enabling mpv disables all adblocking and hides its controls, without
+  across restarts. Enabling mpv disables adblocking and hides its controls, without
   forgetting that choice; turning mpv off restores it. Changing adblocking reloads the
   current page so disabling it also removes filters already applied to the document.
   This is a lightweight, bundled rule-based engine, not uBlock Origin or a full
@@ -50,6 +52,8 @@ playback extraction is separate and anonymous.
   masthead or mobile header bar and collapses its reserved vertical space. Both choices
   are saved and reapplied after navigation or reloads; toggle them off to restore the
   hidden elements and their spacing.
+  **Block Page elements** provides seven independent YouTube switches, described below.
+  These page customizations remain active with either player and with adblocking off.
   Back and forward behave like a browser's buttons: repeated history entries for the same
   page (created by the YouTube single page app) are skipped so every press changes page
   (`NavigationHistory`).
@@ -107,17 +111,20 @@ playback extraction is separate and anonymous.
   Each selected video gets its own mpv handle; fullscreen/miniplayer transitions retain
   that handle and only change its surface size. Closing or replacing a video destroys its
   handle, and callbacks from that handle cannot update the replacement.
-- **Shorts in the WebView** – `/shorts` pages stay on YouTube's web player, including
+- **Shorts in the WebView** – direct `/shorts` pages stay on YouTube's web player, including
   incoming Shorts links and single-page navigation. Entering Shorts closes any native
   playback so the two players do not play together.
 - **Browsing WebView** – the site remains available for search, channels, comments,
-  and account interactions. With mpv enabled, outside Shorts, web media playback and previews are disabled,
+  and account interactions. Turn off **Block YouTube distracting elements** to show
+  comments, video info and sign-in/menu controls. With mpv enabled, outside Shorts, web media
+  playback and previews are disabled,
   including after single-page navigation. Web player containers, placeholders, and their
   reserved height are collapsed in mobile and desktop layouts outside Shorts, leaving the
   native player as the only video area on those pages. Only validated
   YouTube main-frame navigation can select native playback; sign-in pages do not receive
   the playback bridge. With mpv enabled, adblocking is entirely inactive, including on
-  Shorts, so feed ads and shopping promotions may appear. With mpv disabled, optional
+  Shorts, so feed ads and shopping promotions may appear; **Block Page elements** is
+  independent and still applies. With mpv disabled, optional
   adblocking filters WebView requests (and service-worker requests where supported) and
   applies cosmetic styles and video-ad filtering only on supported HTTPS YouTube pages.
   Google sign-in pages, main-frame navigation, native extraction and media transport
@@ -151,8 +158,8 @@ playback extraction is separate and anonymous.
   changes, network failures, and YouTube's history settings can prevent synchronization.
   These are undocumented YouTube endpoints: saving history/resume position is best-effort,
   not guaranteed, particularly for live/DVR timelines.
-- **No Playables** – the "Playables" shelves and navigation entries are removed from pages
-  as they appear.
+- **Optional Playables blocking** – Playables shelves, cards and navigation entries are
+  hidden by default. Turn off **Block YouTube Playables** to restore them immediately.
 - **No Posts shelf** – the "Posts" section is removed from the home page as it appears.
 - **Subscriber counts** – a page injection loads each video card channel's public subscriber
   count and displays it beside the channel avatar. Comment authors are skipped and the
@@ -276,6 +283,42 @@ xxxhdpi, derived from the same artwork as white shapes on a transparent backgrou
 the full-color launcher icon. The app does not currently post Android notifications.
 The WebView's light/dark header logos are separate and unchanged.
 
+## Block Page elements
+
+Preferences includes all seven **Block YouTube …** options from Brave's Android media
+settings, with these ssYouTube defaults:
+
+| Option | Default | Hidden page elements |
+| --- | --- | --- |
+| Block YouTube Shorts | On | Shorts shelves, cards, navigation entries and tabs |
+| Block YouTube Playables | On | Playables shelves, game cards and navigation entries |
+| Block YouTube recommended content | Off | Up next, end cards and the empty-feed search nudge; not the home feed or playlist controls |
+| Block YouTube distracting elements | On | Sign-in/menu controls, comment sections/previews and video information |
+| Block YouTube thumbnails | Off | Video/Shorts thumbnails and feed previews; not channel avatars or the playing video |
+| Block YouTube auto-dubbed videos | On | Video cards with an auto-dubbed badge |
+| Block YouTube members-only videos | On | Video cards with members-only badges |
+
+Choices persist across restarts, site-mode changes and activity recreation. They apply
+on mobile and desktop YouTube pages, including dynamically loaded content and single-page
+navigation. Changes update a removable stylesheet and app-owned DOM markers immediately,
+without reloading or deleting page content. Disabling an option restores its elements;
+another enabled option (including the existing **Hide related videos** or **Hide header**)
+may still hide overlapping content.
+
+These are cosmetic page filters, not access restrictions: direct Shorts/video links still
+work. They do not change audio-track selection, native extraction, network requests,
+account cookies, or web-player APIs. Auto-dubbed and members-only recognition depends on
+YouTube exposing a badge (English labels, the French members-only label, or the structural
+members-only badge). Translated/unmarked cards and future YouTube layout changes can
+prevent matching. Sign-in pages and subframes are not modified.
+
+The option inventory and behavior were checked against Brave's
+[Android media preferences](https://github.com/brave/brave-core/blob/master/android/java/brave-res/xml/media_preferences.xml)
+and its [filter-list catalog](https://github.com/brave/adblock-resources/blob/master/filter_lists/list_catalog.json).
+The `brave-browser` repository directs source development to `brave-core`. This is an
+independent WebView implementation of the page-element controls, not Brave's adblock engine
+or its player-response scriptlets.
+
 ## Build and test
 
 Requires JDK 17 and the Android SDK (compileSdk 34); minSdk is 21.
@@ -304,6 +347,20 @@ To run those fixtures directly: `node --test app/src/test/js/youtube_video_adblo
 Fixtures cover initial/SPA player responses, playlists, live metadata, Shorts, JSON/XHR/
 Response behavior, origin checks, hook removal, and guarded skipping. They do not substitute
 for testing against YouTube's changing live site.
+
+Page-element fixtures use Node 18+ and Chrome/Chromium (no npm dependencies):
+`node --test app/src/test/js/youtube_page_elements.test.cjs`. Set `CHROME_BIN` if the browser
+is not on PATH. They exercise the bundled script against a real DOM/CSS engine, covering
+all seven options, restoration, mobile/desktop renderers, dynamic/recycled content,
+navigation, origin/frame boundaries and preservation of playback/network APIs. The JVM
+suite invokes these fixtures too; they explicitly skip if Node or Chrome is missing.
+Layout and preference tests verify the seven controls, their defaults, persistence wiring,
+and the collapsed **Ad-Blocker Settings** group.
+
+On a device, verify both new sections in light/dark themes and small/landscape layouts,
+expand/collapse Ad-Blocker Settings, reopen Preferences, and check every choice after an
+app restart and a site-mode change. Confirm page-element blocking remains active with
+mpv on and adblocking off; disable distracting elements when checking comments and login.
 
 Device verification should cover muxed/adaptive audio and video, live HLS/DASH, timestamp
 links, seek/replay, rapid video changes, pause/resume, audio-focus/headphone interruptions,

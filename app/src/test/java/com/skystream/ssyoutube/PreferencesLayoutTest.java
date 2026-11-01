@@ -201,14 +201,46 @@ public class PreferencesLayoutTest {
     }
 
     @Test
-    public void mpvToggleIsLabeledAndAlwaysVisible() throws Exception {
-        Element toggle = byId(resource("layout/dialog_preferences.xml"), "mpv_toggle");
+    public void adBlockerSectionStartsCollapsedAndContainsMpvAndAdblocking() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        Element section = byId(layout, "adblocker_section");
+        assertEquals("gone", section.getAttributeNS(ANDROID, "visibility"));
+        Element expander = byId(layout, "adblocker_section_toggle");
+        assertEquals("Button", expander.getTagName());
+        assertEquals("@string/adblocker_settings_collapsed",
+                expander.getAttributeNS(ANDROID, "text"));
+        assertEquals("@string/expand_adblocker_settings",
+                expander.getAttributeNS(ANDROID, "contentDescription"));
+        assertEquals("48dp", expander.getAttributeNS(ANDROID, "minHeight"));
+        Element toggle = byId(layout, "mpv_toggle");
         assertEquals("Switch", toggle.getTagName());
         assertEquals("@string/enable_mpv", toggle.getAttributeNS(ANDROID, "text"));
         assertEquals("48dp", toggle.getAttributeNS(ANDROID, "minHeight"));
-        for (Node node = toggle; node instanceof Element; node = node.getParentNode()) {
-            String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
-            assertTrue(visibility.isEmpty() || "visible".equals(visibility));
+        assertTrue(isInside(toggle, section));
+        assertTrue(isInside(byId(layout, "adblocking_toggle"), section));
+        assertFalse(isInside(section, byId(layout, "advanced_settings")));
+    }
+
+    @Test
+    public void allBravePageElementSwitchesAreIndependentlyAccessible() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        Element section = byId(layout, "page_element_settings");
+        assertEquals(7, section.getElementsByTagName("Switch").getLength());
+        assertFalse(isInside(section, byId(layout, "adblocker_section")));
+        assertFalse(isInside(section, byId(layout, "adblocking_settings")));
+        assertFalse(isInside(section, byId(layout, "advanced_settings")));
+        for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
+            Element toggle = byId(layout, option.preferenceKey);
+            assertEquals(section, toggle.getParentNode());
+            assertEquals("Switch", toggle.getTagName());
+            assertEquals(option.preferenceKey, toggle.getAttributeNS(ANDROID, "tag"));
+            assertEquals("@string/" + option.preferenceKey,
+                    toggle.getAttributeNS(ANDROID, "text"));
+            assertEquals("48dp", toggle.getAttributeNS(ANDROID, "minHeight"));
+            for (Node node = toggle; node instanceof Element; node = node.getParentNode()) {
+                String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
+                assertTrue(visibility.isEmpty() || "visible".equals(visibility));
+            }
         }
     }
 
