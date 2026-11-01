@@ -10,7 +10,7 @@ final class PageElementBlockingScript {
         SHORTS("shorts", true),
         PLAYABLES("playables", true),
         RECOMMENDED("recommended", false),
-        DISTRACTING("distracting", true),
+        DISTRACTING("distracting", false),
         THUMBNAILS("thumbnails", false),
         AUTODUBBED("autodubbed", true),
         MEMBERS_ONLY("members_only", true),
