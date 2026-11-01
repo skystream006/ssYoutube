@@ -6,6 +6,9 @@ import android.content.ClipData;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.IntentFilter;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -19,6 +22,9 @@ import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
+import android.view.HapticFeedbackConstants;
+import android.view.ViewConfiguration;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -49,6 +55,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.FileProvider;
+import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.webkit.ScriptHandler;
@@ -58,10 +65,14 @@ import androidx.webkit.WebViewFeature;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -79,6 +90,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_MPV_ENABLED = "mpv_enabled";
     private static final String KEY_ADBLOCKING_ENABLED = "adblocking_enabled";
+    private static final String KEY_BACKGROUND_AUDIO_ENABLED = "background_audio_enabled";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
     private static final String KEY_HEADER_HIDDEN = "header_hidden";
     private static final String KEY_LOGGING_ENABLED = "logging_enabled";
@@ -159,53 +171,6 @@ public class MainActivity extends AppCompatActivity {
                     + "if(el.closest&&el.closest(COMMENTS)){return true;}"
                     + "return !!(el.querySelector&&el.querySelector(COMMENTS));"
                     + "}";
-
-    /** Removes the "Playables" shelves and navigation entries from YouTube pages. */
-    static final String PLAYABLES_CLEANUP_SCRIPT =
-            "(function(){"
-                    + "if(window.__ssyoutubePlayablesCleanupInstalled){return;}"
-                    + "window.__ssyoutubePlayablesCleanupInstalled=true;"
-                    + COMMENTS_HELPER_SCRIPT
-                    + "var selector='ytm-rich-section-renderer,ytm-shelf-renderer,"
-                    + "ytm-item-section-renderer,ytm-rich-shelf-renderer,"
-                    + "ytd-rich-section-renderer,ytd-shelf-renderer,"
-                    + "ytm-pivot-bar-item-renderer,ytd-guide-entry-renderer,"
-                    + "ytd-mini-guide-entry-renderer,a[href*=\"playables\"]';"
-                    + "function textOf(el){return ((el.innerText||el.textContent||'')+' '+"
-                    + "(el.getAttribute&&el.getAttribute('aria-label')||'')+' '+"
-                    + "(el.getAttribute&&el.getAttribute('title')||''))"
-                    + ".replace(/\\s+/g,' ').trim().toLowerCase();}"
-                    + "function asArray(list){return Array.prototype.slice.call(list);}"
-                    + "function isPlayables(el){"
-                    + "if(inComments(el)){return false;}"
-                    + "var href=el.getAttribute&&el.getAttribute('href')||'';"
-                    + "if(href.indexOf('playables')!==-1){return true;}"
-                    + "return /\\bplayables?\\b/.test(textOf(el));"
-                    + "}"
-                    + "function removePlayables(root){"
-                    + "var nodes=(root&&root.querySelectorAll)?asArray(root.querySelectorAll(selector)):[];"
-                    + "if(root&&root.matches&&root.matches(selector)){nodes.push(root);}"
-                    + "for(var i=0;i<nodes.length;i++){"
-                    + "var el=nodes[i];"
-                    + "if(!isPlayables(el)){continue;}"
-                    + "var target=el.closest('ytm-rich-section-renderer,ytm-shelf-renderer,"
-                    + "ytm-item-section-renderer,ytm-rich-shelf-renderer,"
-                    + "ytd-rich-section-renderer,ytd-shelf-renderer,"
-                    + "ytm-pivot-bar-item-renderer,ytd-guide-entry-renderer,"
-                    + "ytd-mini-guide-entry-renderer')||el;"
-                    + "target.remove();"
-                    + "}"
-                    + "}"
-                    + "removePlayables(document);"
-                    + "new MutationObserver(function(mutations){"
-                    + "for(var i=0;i<mutations.length;i++){"
-                    + "for(var j=0;j<mutations[i].addedNodes.length;j++){"
-                    + "var node=mutations[i].addedNodes[j];"
-                    + "if(node.nodeType===1){removePlayables(node);}"
-                    + "}"
-                    + "}"
-                    + "}).observe(document.documentElement,{childList:true,subtree:true});"
-                    + "})()";
 
     /** Removes the "Posts" shelf from the YouTube home page as it appears. */
     static final String POSTS_CLEANUP_SCRIPT =
@@ -546,6 +511,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String STATE_CLOSED_VIDEO = "closed_video";
     private static final String STATE_PLAYBACK_KEY = "playback_key";
     private static final String STATE_ROUTE_KEY = "route_key";
+    private static final String STATE_SETTINGS_HIDDEN_UNTIL = "settings_hidden_until";
 
     private final Map<Integer, byte[]> appLogoCache = new HashMap<>();
 
@@ -555,7 +521,7 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable watchHistoryTick = new Runnable() {
         @Override
         public void run() {
-            if (!activityResumed || isDestroyed()) {
+            if ((!activityResumed && !canKeepBackgroundPlayback()) || destroying || isDestroyed()) {
                 return;
             }
             updateWatchHistory(false);
@@ -563,9 +529,73 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private WebView webView;
+    private final Handler settingsHoldHandler = new Handler(Looper.getMainLooper());
+    private final SettingsButtonHold settingsHold = new SettingsButtonHold();
+    private final Runnable settingsHoldTick = () ->
+            applySettingsHold(settingsHold.tick(SystemClock.elapsedRealtime()));
+    private final Handler backgroundHandler = new Handler(Looper.getMainLooper());
+    private final Runnable backgroundPlaybackTick = new Runnable() {
+        @Override
+        public void run() {
+            if (destroying || webView == null) {
+                return;
+            }
+            if (!backgroundBridgeAvailable) {
+                sampleWebPlayback();
+            }
+            syncBackgroundPlayback();
+            if (activityResumed || backgroundServiceRequested) {
+                backgroundHandler.postDelayed(this, 1000);
+            }
+        }
+    };
+    private final BroadcastReceiver backgroundReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!backgroundServiceRequested || destroying
+                    || intent.getLongExtra(BackgroundPlaybackService.TOKEN, 0) != backgroundToken) {
+                return;
+            }
+            String state = intent.getStringExtra(BackgroundPlaybackService.STATE);
+            if (BackgroundPlaybackService.PAUSE.equals(state)) {
+                pauseBackgroundPlayback();
+            } else if (BackgroundPlaybackService.REPLACED.equals(state)) {
+                backgroundServiceRequested = false;
+                backgroundAudioAvailable = false;
+                syncBackgroundPlayback();
+            } else if (BackgroundPlaybackService.UNAVAILABLE.equals(state)
+                    || BackgroundPlaybackService.STOPPED.equals(state)) {
+                backgroundServiceRequested = false;
+                backgroundAudioAvailable = false;
+                logActivity("Background playback protection stopped");
+                Toast.makeText(MainActivity.this, R.string.background_audio_unavailable,
+                        Toast.LENGTH_LONG).show();
+                syncBackgroundPlayback();
+            }
+        }
+    };
+    private PlaybackWebView webView;
     private NativePlayerView nativePlayer;
     private ScriptHandler nativePlaybackScript;
+    private ScriptHandler pageElementScriptHandler;
+    private String pageElementScriptSource;
+    private String pageElementScript;
+    private String backgroundAudioScriptSource;
+    private String backgroundAudioScript;
+    private ScriptHandler backgroundScriptHandler;
+    private boolean backgroundAudioEnabled;
+    private boolean backgroundAudioAvailable = true;
+    private boolean webBackgroundAudioAvailable = true;
+    private boolean backgroundBridgeAvailable;
+    private boolean webAudioActive;
+    private boolean backgroundServiceRequested;
+    private boolean backgroundNotificationPlaying;
+    private boolean playbackKeptInBackground;
+    private long backgroundToken = SystemClock.elapsedRealtimeNanos();
+    private final BackgroundPlaybackState backgroundPlaybackState = new BackgroundPlaybackState();
+    private boolean destroying;
+    private final EnumSet<PageElementBlockingScript.Option> blockedPageElements =
+            EnumSet.noneOf(PageElementBlockingScript.Option.class);
     private boolean mpvEnabled;
     private boolean adBlockingEnabled;
     private WebAdBlocker adBlocker;
@@ -599,6 +629,13 @@ public class MainActivity extends AppCompatActivity {
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         mpvEnabled = prefs.getBoolean(KEY_MPV_ENABLED, true);
         adBlockingEnabled = prefs.getBoolean(KEY_ADBLOCKING_ENABLED, false);
+        backgroundAudioEnabled = prefs.getBoolean(KEY_BACKGROUND_AUDIO_ENABLED,
+                Preferences.DEFAULT_BACKGROUND_AUDIO);
+        for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
+            if (prefs.getBoolean(option.preferenceKey, option.defaultEnabled)) {
+                blockedPageElements.add(option);
+            }
+        }
         relatedHidden = prefs.getBoolean(KEY_RELATED_HIDDEN, false);
         headerHidden = prefs.getBoolean(KEY_HEADER_HIDDEN, false);
         loggingEnabled = prefs.getBoolean(KEY_LOGGING_ENABLED, false);
@@ -613,6 +650,25 @@ public class MainActivity extends AppCompatActivity {
 
         webView = findViewById(R.id.webview);
         adBlocker = new WebAdBlocker(this);
+        try (InputStreamReader input = new InputStreamReader(
+                getResources().openRawResource(R.raw.youtube_page_elements),
+                StandardCharsets.UTF_8)) {
+            pageElementScriptSource = PageElementBlockingScript.read(input);
+        } catch (IOException | android.content.res.Resources.NotFoundException error) {
+            logActivity("Page element blocking unavailable", error);
+            Toast.makeText(this, R.string.page_elements_unavailable, Toast.LENGTH_LONG).show();
+        }
+        try (InputStreamReader input = new InputStreamReader(
+                getResources().openRawResource(R.raw.youtube_background_audio),
+                StandardCharsets.UTF_8)) {
+            backgroundAudioScriptSource = PageElementBlockingScript.read(input);
+        } catch (IOException | android.content.res.Resources.NotFoundException error) {
+            webBackgroundAudioAvailable = false;
+            logActivity("Web background audio script unavailable", error);
+            Toast.makeText(this, R.string.web_background_audio_unavailable, Toast.LENGTH_LONG).show();
+        }
+        ContextCompat.registerReceiver(this, backgroundReceiver,
+                new IntentFilter(BackgroundPlaybackService.EVENT), ContextCompat.RECEIVER_NOT_EXPORTED);
         rootContainer = findViewById(R.id.root_container);
         settingsButton = findViewById(R.id.settings_button);
         statsOverlay = findViewById(R.id.stats_overlay);
@@ -672,6 +728,12 @@ public class MainActivity extends AppCompatActivity {
                 showPreferences();
             }
         });
+        installSettingsHold();
+        if (savedInstanceState != null && settingsHold.restore(
+                savedInstanceState.getLong(STATE_SETTINGS_HIDDEN_UNTIL, -1),
+                SystemClock.elapsedRealtime())) {
+            settingsButton.setVisibility(View.INVISIBLE);
+        }
 
         configureWebView(webView);
         setStatsForNerdsEnabled(statsForNerdsEnabled);
@@ -705,6 +767,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         logActivity("onNewIntent");
+        if (BackgroundPlaybackService.OPEN_PLAYER.equals(intent.getAction())) {
+            return;
+        }
         if (handleMusicServerCallback(intent)) {
             showPreferences();
             return;
@@ -731,19 +796,22 @@ public class MainActivity extends AppCompatActivity {
         outState.putString(STATE_CLOSED_VIDEO, closedVideoId);
         outState.putString(STATE_PLAYBACK_KEY, lastPlaybackKey);
         outState.putString(STATE_ROUTE_KEY, lastRouteKey);
+        outState.putLong(STATE_SETTINGS_HIDDEN_UNTIL, settingsHold.hiddenUntil());
         appUpdater.saveState(outState);
     }
 
     @Override
     protected void onPause() {
         updatesResumed = false;
-        updateWatchHistory(true);
+        // Start protection while the activity is still foreground (Android 12+ restriction).
+        syncBackgroundPlayback();
         activityResumed = false;
-        watchHistoryHandler.removeCallbacks(watchHistoryTick);
-        nativePlayer.onPause();
+        applyPausedPlaybackState();
+        settingsHold.cancelPress();
+        settingsButton.setPressed(false);
+        settingsHoldHandler.removeCallbacksAndMessages(null);
         super.onPause();
         logActivity("onPause");
-        webView.onPause();
         CookieManager.getInstance().flush();
     }
 
@@ -752,9 +820,15 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         logActivity("onResume");
         activityResumed = true;
+        playbackKeptInBackground = false;
+        backgroundAudioAvailable = true;
         webView.onResume();
+        applyBackgroundForeground();
         nativePlayer.onResume();
         routePage(webView.getUrl());
+        backgroundHandler.removeCallbacks(backgroundPlaybackTick);
+        backgroundHandler.post(backgroundPlaybackTick);
+        applySettingsHold(settingsHold.tick(SystemClock.elapsedRealtime()));
         watchHistoryHandler.removeCallbacks(watchHistoryTick);
         watchHistoryHandler.post(watchHistoryTick);
         updatesResumed = true;
@@ -791,6 +865,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        destroying = true;
         logActivity("onDestroy");
         if (preferenceDialog != null) {
             preferenceDialog.dismiss();
@@ -798,9 +873,21 @@ public class MainActivity extends AppCompatActivity {
         statsMonitor.onDestroy();
         logoInjectionHandler.removeCallbacksAndMessages(null);
         watchHistoryHandler.removeCallbacksAndMessages(null);
+        backgroundHandler.removeCallbacksAndMessages(null);
+        settingsHoldHandler.removeCallbacksAndMessages(null);
+        stopBackgroundService();
+        unregisterReceiver(backgroundReceiver);
         watchHistoryState.reset();
         nativePlayer.release();
         adBlocker.destroy();
+        if (pageElementScriptHandler != null) {
+            pageElementScriptHandler.remove();
+            pageElementScriptHandler = null;
+        }
+        if (backgroundScriptHandler != null) {
+            backgroundScriptHandler.remove();
+            backgroundScriptHandler = null;
+        }
         if (webView != null) {
             webView.stopLoading();
             rootContainer.removeView(webView);
@@ -876,6 +963,8 @@ public class MainActivity extends AppCompatActivity {
 
         installPlaybackRouting(view);
         updateAdBlocking(view);
+        updatePageElementBlocking(view);
+        installBackgroundAudio(view);
         view.setWebViewClient(new YouTubeWebViewClient());
         view.setWebChromeClient(new WebChromeClient());
     }
@@ -925,10 +1014,212 @@ public class MainActivity extends AppCompatActivity {
         closeNativePlayback(false);
         closedVideoId = null;
         lastRouteKey = null;
+        webAudioActive = false;
         updateNativePlaybackScript(webView);
         updateAdBlocking(webView);
         // Reload all frames to discard the previous media hooks and hidden-player styles.
         webView.reload();
+    }
+
+    private void installBackgroundAudio(WebView view) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            try {
+                WebViewCompat.addWebMessageListener(view, BackgroundAudioScript.MESSAGE_NAME,
+                        NativePlaybackScript.ORIGIN_RULES,
+                        (source, message, origin, mainFrame, reply) -> {
+                            if (source != webView || destroying
+                                    || message.getType() != WebMessageCompat.TYPE_STRING) {
+                                return;
+                            }
+                            String data = message.getData();
+                            int separator = data == null ? -1 : data.indexOf('\n');
+                            if (separator < 0 || !isTrustedPlaybackMessage(mainFrame,
+                                    origin.toString(), source.getUrl(), data.substring(separator + 1))) {
+                                return;
+                            }
+                            onWebAudioState(data.substring(0, separator));
+                        });
+                backgroundBridgeAvailable = true;
+            } catch (IllegalArgumentException | UnsupportedOperationException error) {
+                logActivity("Background audio messages unavailable; using page polling", error);
+            }
+        }
+        updateBackgroundAudioScript();
+    }
+
+    private void onWebAudioState(String state) {
+        if ("unavailable".equals(state)) {
+            if (webBackgroundAudioAvailable) {
+                logActivity("Web background audio unavailable");
+                Toast.makeText(this, R.string.web_background_audio_unavailable,
+                        Toast.LENGTH_LONG).show();
+            }
+            webBackgroundAudioAvailable = false;
+            webAudioActive = false;
+        } else if ("playing".equals(state) || "paused".equals(state)) {
+            webBackgroundAudioAvailable = backgroundAudioScriptSource != null;
+            webAudioActive = "playing".equals(state);
+        } else {
+            return;
+        }
+        syncBackgroundPlayback();
+    }
+
+    private void updateBackgroundAudioScript() {
+        if (backgroundScriptHandler != null) {
+            backgroundScriptHandler.remove();
+            backgroundScriptHandler = null;
+        }
+        if (backgroundAudioScriptSource == null) {
+            return;
+        }
+        backgroundAudioScript = BackgroundAudioScript.create(
+                backgroundAudioScriptSource, backgroundAudioEnabled);
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            try {
+                backgroundScriptHandler = WebViewCompat.addDocumentStartJavaScript(
+                        webView, backgroundAudioScript, NativePlaybackScript.ORIGIN_RULES);
+            } catch (IllegalArgumentException | UnsupportedOperationException error) {
+                logActivity("Background audio document start script unavailable", error);
+            }
+        }
+        applyBackgroundAudioScript();
+    }
+
+    private void applyBackgroundAudioScript() {
+        if (backgroundAudioScript != null && playbackOrigin(webView.getUrl()) != null) {
+            webView.evaluateJavascript(backgroundAudioScript, null);
+            applyBackgroundForeground();
+        }
+    }
+
+    private void applyBackgroundForeground() {
+        if (playbackOrigin(webView.getUrl()) != null) {
+            webView.evaluateJavascript(BackgroundAudioScript.foreground(
+                    activityResumed, canKeepBackgroundPlayback()), null);
+        }
+    }
+
+    private void sampleWebPlayback() {
+        String url = webView.getUrl();
+        if (playbackOrigin(url) == null) {
+            webAudioActive = false;
+            return;
+        }
+        webView.evaluateJavascript(BackgroundAudioScript.STATE, result -> {
+            if (!destroying && webView != null && url.equals(webView.getUrl())) {
+                if ("\"playing\"".equals(result)) {
+                    onWebAudioState("playing");
+                } else if ("\"paused\"".equals(result)) {
+                    onWebAudioState("paused");
+                } else if ("null".equals(result)) {
+                    webAudioActive = false;
+                    syncBackgroundPlayback();
+                } else {
+                    onWebAudioState("unavailable");
+                }
+            }
+        });
+    }
+
+    private boolean canKeepBackgroundPlayback() {
+        return !destroying && !isFinishing() && backgroundAudioEnabled
+                && backgroundAudioAvailable && backgroundServiceRequested;
+    }
+
+    private void syncBackgroundPlayback() {
+        if (destroying || nativePlayer == null || webView == null) {
+            return;
+        }
+        boolean webActive = webBackgroundAudioAvailable && webAudioActive
+                && playbackOrigin(webView.getUrl()) != null
+                && (!mpvEnabled || PlaybackRequest.isShortsPage(webView.getUrl()));
+        boolean active = nativePlayer.wantsBackgroundAudio() || webActive;
+        boolean sessionNeeded = backgroundPlaybackState.needsProtection(
+                active, backgroundServiceRequested, SystemClock.elapsedRealtime());
+        boolean needed = !isFinishing() && backgroundAudioEnabled && backgroundAudioAvailable
+                && sessionNeeded;
+        if (needed) {
+            boolean starting = !backgroundServiceRequested;
+            boolean playing = nativePlayer.isPlayingForHistory() || webActive;
+            if (starting && !activityResumed) {
+                // A page cannot start an unprotected background session on its own.
+                applyPausedPlaybackState();
+                return;
+            }
+            if (starting || playing != backgroundNotificationPlaying) {
+                if (starting) {
+                    backgroundToken++;
+                }
+                Intent intent = new Intent(this, BackgroundPlaybackService.class)
+                        .setAction(starting ? BackgroundPlaybackService.START
+                                : BackgroundPlaybackService.UPDATE)
+                        .putExtra(BackgroundPlaybackService.TOKEN, backgroundToken)
+                        .putExtra(BackgroundPlaybackService.PLAYING, playing);
+                try {
+                    if (starting) {
+                        ContextCompat.startForegroundService(this, intent);
+                    } else {
+                        startService(intent);
+                    }
+                    backgroundServiceRequested = true;
+                    backgroundNotificationPlaying = playing;
+                } catch (IllegalStateException | SecurityException error) {
+                    backgroundAudioAvailable = false;
+                    stopBackgroundService();
+                    logActivity("Background audio could not start", error);
+                    Toast.makeText(this, R.string.background_audio_unavailable,
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+        } else {
+            stopBackgroundService();
+        }
+        webView.setBackgroundPlaybackAllowed(canKeepBackgroundPlayback());
+        if (!activityResumed && playbackKeptInBackground != canKeepBackgroundPlayback()) {
+            applyPausedPlaybackState();
+        }
+    }
+
+    private void applyPausedPlaybackState() {
+        boolean keepPlaying = canKeepBackgroundPlayback();
+        playbackKeptInBackground = keepPlaying;
+        updateWatchHistory(!keepPlaying);
+        nativePlayer.onPause(keepPlaying);
+        webView.setBackgroundPlaybackAllowed(keepPlaying);
+        applyBackgroundForeground();
+        if (keepPlaying) {
+            webView.onResume();
+        } else {
+            webView.onPause();
+        }
+        watchHistoryHandler.removeCallbacks(watchHistoryTick);
+        if (keepPlaying) {
+            watchHistoryHandler.postDelayed(watchHistoryTick, NativeWatchHistoryState.SAMPLE_MS);
+        }
+    }
+
+    private void stopBackgroundService() {
+        if (backgroundServiceRequested) {
+            backgroundServiceRequested = false;
+            try {
+                startService(new Intent(this, BackgroundPlaybackService.class)
+                        .setAction(BackgroundPlaybackService.STOP)
+                        .putExtra(BackgroundPlaybackService.TOKEN, backgroundToken));
+            } catch (IllegalStateException | SecurityException error) {
+                logActivity("Background playback stop could not be delivered", error);
+            }
+        }
+    }
+
+    private void pauseBackgroundPlayback() {
+        nativePlayer.pausePlayback();
+        webAudioActive = false;
+        if (playbackOrigin(webView.getUrl()) != null) {
+            webView.evaluateJavascript(BackgroundAudioScript.PAUSE, null);
+        }
+        stopBackgroundService();
+        syncBackgroundPlayback();
     }
 
     private void updateAdBlocking(WebView view) {
@@ -944,6 +1235,34 @@ public class MainActivity extends AppCompatActivity {
         prefs.edit().putBoolean(KEY_ADBLOCKING_ENABLED, enabled).apply();
         updateAdBlocking(webView);
         webView.reload();
+    }
+
+    private void updatePageElementBlocking(WebView view) {
+        if (pageElementScriptSource == null) {
+            return;
+        }
+        if (pageElementScriptHandler != null) {
+            pageElementScriptHandler.remove();
+            pageElementScriptHandler = null;
+        }
+        pageElementScript = PageElementBlockingScript.create(
+                pageElementScriptSource, blockedPageElements);
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            try {
+                pageElementScriptHandler = WebViewCompat.addDocumentStartJavaScript(
+                        view, pageElementScript, NativePlaybackScript.ORIGIN_RULES);
+            } catch (IllegalArgumentException | UnsupportedOperationException error) {
+                logActivity("Page element document start script unavailable", error);
+            }
+        }
+        applyPageElementBlocking(view);
+    }
+
+    private void applyPageElementBlocking(WebView view) {
+        if (view == webView && pageElementScript != null
+                && AdBlockEngine.isSupportedPage(view.getUrl())) {
+            view.evaluateJavascript(pageElementScript, null);
+        }
     }
 
     static boolean isTrustedPlaybackMessage(boolean mainFrame, String sourceOrigin,
@@ -1030,7 +1349,7 @@ public class MainActivity extends AppCompatActivity {
             nativePlayer.play(request.videoId, request.startPositionMs);
             lastPlaybackKey = key;
             if (!activityResumed) {
-                nativePlayer.onPause();
+                nativePlayer.onPause(canKeepBackgroundPlayback());
             }
         }
         if (changedRoute) {
@@ -1221,6 +1540,75 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    @SuppressLint("ClickableViewAccessibility")
+    private void installSettingsHold() {
+        int slop = ViewConfiguration.get(this).getScaledTouchSlop();
+        settingsButton.setOnTouchListener((view, event) -> {
+            long now = SystemClock.elapsedRealtime();
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    settingsHold.down(now);
+                    view.setPressed(true);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (event.getX() < -slop || event.getY() < -slop
+                            || event.getX() > view.getWidth() + slop
+                            || event.getY() > view.getHeight() + slop) {
+                        settingsHold.cancelPress();
+                        view.setPressed(false);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    view.setPressed(false);
+                    applySettingsHold(settingsHold.up(now));
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    settingsHold.cancelPress();
+                    view.setPressed(false);
+                    break;
+                default:
+                    break;
+            }
+            scheduleSettingsHold();
+            return true;
+        });
+    }
+
+    private void applySettingsHold(SettingsButtonHold.Action action) {
+        if (destroying || settingsButton == null) {
+            return;
+        }
+        if (action == SettingsButtonHold.Action.CLICK) {
+            settingsButton.performClick();
+        } else if (action == SettingsButtonHold.Action.HIDE) {
+            settingsButton.setPressed(false);
+            settingsButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+            settingsButton.setVisibility(View.INVISIBLE);
+        } else if (action == SettingsButtonHold.Action.SHOW) {
+            settingsButton.setVisibility(View.VISIBLE);
+        }
+        scheduleSettingsHold();
+    }
+
+    private void scheduleSettingsHold() {
+        settingsHoldHandler.removeCallbacks(settingsHoldTick);
+        long delay = settingsHold.delay(SystemClock.elapsedRealtime());
+        if (!destroying && delay >= 0) {
+            settingsHoldHandler.postDelayed(settingsHoldTick, delay);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus && settingsButton != null) {
+            settingsHold.cancelPress();
+            settingsButton.setPressed(false);
+            scheduleSettingsHold();
+        }
+    }
+
     private void closePreferencePanel() {
         logActivity("closePreferencePanel");
         settingsButton.animate().translationY(0f).setDuration(
@@ -1336,6 +1724,40 @@ public class MainActivity extends AppCompatActivity {
                     : R.string.advanced_collapsed);
             advancedToggle.setContentDescription(getString(expanded ? R.string.collapse_advanced
                     : R.string.expand_advanced));
+        });
+        TextView adBlockerSectionToggle = content.findViewById(R.id.adblocker_section_toggle);
+        View adBlockerSection = content.findViewById(R.id.adblocker_section);
+        adBlockerSectionToggle.setOnClickListener(v -> {
+            boolean expanded = adBlockerSection.getVisibility() != View.VISIBLE;
+            adBlockerSection.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            adBlockerSectionToggle.setText(expanded ? R.string.adblocker_settings_expanded
+                    : R.string.adblocker_settings_collapsed);
+            adBlockerSectionToggle.setContentDescription(getString(expanded
+                    ? R.string.collapse_adblocker_settings : R.string.expand_adblocker_settings));
+        });
+        for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
+            Switch toggle = content.findViewWithTag(option.preferenceKey);
+            toggle.setChecked(blockedPageElements.contains(option));
+            toggle.setEnabled(pageElementScriptSource != null);
+            toggle.setOnCheckedChangeListener((button, checked) -> {
+                if (checked) {
+                    blockedPageElements.add(option);
+                } else {
+                    blockedPageElements.remove(option);
+                }
+                prefs.edit().putBoolean(option.preferenceKey, checked).apply();
+                updatePageElementBlocking(webView);
+            });
+        }
+        Switch backgroundAudioToggle = content.findViewById(R.id.background_audio_toggle);
+        backgroundAudioToggle.setChecked(backgroundAudioEnabled);
+        backgroundAudioToggle.setOnCheckedChangeListener((button, checked) -> {
+            backgroundAudioEnabled = checked;
+            backgroundAudioAvailable = true;
+            webBackgroundAudioAvailable = backgroundAudioScriptSource != null;
+            prefs.edit().putBoolean(KEY_BACKGROUND_AUDIO_ENABLED, checked).apply();
+            updateBackgroundAudioScript();
+            syncBackgroundPlayback();
         });
         ToggleButton relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
         ToggleButton headerToggle = content.findViewById(R.id.header_toggle);
@@ -1880,6 +2302,8 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             super.onPageStarted(view, url, favicon);
+            webAudioActive = false;
+            webBackgroundAudioAvailable = backgroundAudioScriptSource != null;
             adBlocker.onPage(view, url);
             logActivityUrl("onPageStarted ", url);
             logoInjectionHandler.removeCallbacksAndMessages(null);
@@ -1917,7 +2341,8 @@ public class MainActivity extends AppCompatActivity {
                     NativePlaybackScript.forPreference(mpvEnabled), null);
             applyRelatedVisibility(view);
             applyHeaderVisibility(view);
-            view.evaluateJavascript(PLAYABLES_CLEANUP_SCRIPT, null);
+            applyPageElementBlocking(view);
+            applyBackgroundAudioScript();
             view.evaluateJavascript(POSTS_CLEANUP_SCRIPT, null);
             view.evaluateJavascript(SUBSCRIBER_COUNT_SCRIPT, null);
             view.evaluateJavascript(APP_LOGO_SCRIPT, null);

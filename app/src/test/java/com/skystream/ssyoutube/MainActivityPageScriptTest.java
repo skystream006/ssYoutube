@@ -11,16 +11,6 @@ import org.junit.Test;
 public class MainActivityPageScriptTest {
 
     @Test
-    public void removesPlayablesSections() {
-        String script = MainActivity.PLAYABLES_CLEANUP_SCRIPT;
-        assertTrue(script.contains("PlayablesCleanupInstalled"));
-        assertTrue(script.contains("if(inComments(el)){return false;}"));
-        assertTrue(script.contains("playables?"));
-        assertTrue(script.contains("MutationObserver"));
-        assertTrue(script.contains("addedNodes"));
-    }
-
-    @Test
     public void removesPostsSections() {
         String script = MainActivity.POSTS_CLEANUP_SCRIPT;
         assertTrue(script.contains("PostsCleanupInstalled"));
@@ -51,7 +41,6 @@ public class MainActivityPageScriptTest {
         assertTrue(MainActivity.COMMENTS_SELECTOR.contains("ytm-engagement-panel"));
         assertTrue(MainActivity.COMMENTS_SELECTOR.contains("ytd-comments"));
         for (String script : new String[] {
-                MainActivity.PLAYABLES_CLEANUP_SCRIPT,
                 MainActivity.POSTS_CLEANUP_SCRIPT,
                 MainActivity.SUBSCRIBER_COUNT_SCRIPT }) {
             assertTrue(script.contains("function inComments(el)"));

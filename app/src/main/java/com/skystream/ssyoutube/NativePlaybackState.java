@@ -13,6 +13,10 @@ final class NativePlaybackState {
     boolean prepared;
     boolean failed;
 
+    void setLifecycle(boolean foreground, boolean backgroundAudioAllowed) {
+        lifecyclePaused = !foreground && !backgroundAudioAllowed;
+    }
+
     Selection select(String id, long startPositionMs) {
         if (!isVideoId(id)) {
             return Selection.IGNORE;

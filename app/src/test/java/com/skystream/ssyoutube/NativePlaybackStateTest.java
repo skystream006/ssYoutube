@@ -27,7 +27,7 @@ public class NativePlaybackStateTest {
     }
 
     @Test
-    public void pendingExtractionResumesButNeverPlaysInBackground() {
+    public void pendingExtractionResumesButDoesNotPlayWhenLifecyclePaused() {
         NativePlaybackState state = new NativePlaybackState();
         state.select(FIRST, 0);
         assertFalse(state.shouldExtract());
@@ -44,6 +44,43 @@ public class NativePlaybackStateTest {
         state.lifecyclePaused = true;
         state.lifecyclePaused = false;
         assertFalse(state.shouldPlay());
+    }
+
+    @Test
+    public void backgroundAudioPreservesPlaybackAndPendingExtractionWhenAllowed() {
+        NativePlaybackState state = new NativePlaybackState();
+        state.select(FIRST, 0);
+        state.setLifecycle(true, true);
+        state.setLifecycle(false, true);
+        assertTrue(state.shouldExtract());
+        assertTrue(state.shouldPlay());
+        state.prepared = true;
+        assertFalse(state.shouldExtract());
+        assertTrue(state.shouldPlay());
+        state.setLifecycle(false, false);
+        assertFalse(state.shouldPlay());
+        assertTrue(state.wantsPlay);
+        state.setLifecycle(true, false);
+        assertTrue(state.shouldPlay());
+    }
+
+    @Test
+    public void backgroundAudioNeverUndoesPauseCloseOrFailure() {
+        NativePlaybackState state = new NativePlaybackState();
+        state.select(FIRST, 0);
+        state.wantsPlay = false;
+        state.setLifecycle(false, true);
+        assertFalse(state.shouldPlay());
+        state.setLifecycle(true, true);
+        assertFalse(state.shouldPlay());
+        state.wantsPlay = true;
+        state.failed = true;
+        assertFalse(state.shouldPlay());
+        assertFalse(state.shouldExtract());
+        state.stop();
+        state.setLifecycle(false, true);
+        assertFalse(state.shouldPlay());
+        assertFalse(state.shouldExtract());
     }
 
     @Test
