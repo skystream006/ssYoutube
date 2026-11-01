@@ -14,6 +14,7 @@ public final class Preferences {
     public static final int THEME_DARK = 2;
 
     public static final String DEFAULT_LANGUAGE = "en";
+    public static final boolean DEFAULT_BACKGROUND_AUDIO = true;
     private static final String[] LANGUAGE_CODES = {
             "en", "ar", "bn", "zh", "nl", "fr", "de", "gu", "hi", "id", "it", "ja", "kn",
             "ko", "ml", "mr", "pl", "pt", "pa", "ru", "es", "ta", "te", "th", "tr", "uk",

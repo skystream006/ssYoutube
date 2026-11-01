@@ -276,6 +276,27 @@
                     android:layout_height="wrap_content"
                     android:minHeight="48dp"
                     android:text="@string/block_youtube_members_only" />
+
+                <Switch
+                    android:id="@+id/block_youtube_end_video"
+                    android:tag="block_youtube_end_video"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/block_youtube_end_video" />
+
+                <Switch
+                    android:id="@+id/background_audio_toggle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/enable_background_audio" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/background_audio_summary"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <Button

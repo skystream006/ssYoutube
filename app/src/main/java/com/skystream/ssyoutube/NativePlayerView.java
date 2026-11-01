@@ -83,6 +83,7 @@ final class NativePlayerView extends FrameLayout {
     private boolean changingPlayer;
     private boolean isFullscreen;
     private boolean isMinimized;
+    private boolean foreground;
     private String preferredLanguage = Preferences.DEFAULT_LANGUAGE;
 
     NativePlayerView(Context context, Listener listener) {
@@ -173,7 +174,7 @@ final class NativePlayerView extends FrameLayout {
             @Override
             public void onIsPlayingChanged(boolean isPlaying) {
                 historyContinuityToken++;
-                setKeepScreenOn(isPlaying && !state.lifecyclePaused && !released);
+                setKeepScreenOn(isPlaying && foreground && !released);
             }
 
             @Override
@@ -260,15 +261,29 @@ final class NativePlayerView extends FrameLayout {
         return historyContinuityToken;
     }
 
-    void onPause() {
-        if (released || state.lifecyclePaused) {
+    boolean wantsBackgroundAudio() {
+        return !released && state.shouldPlay();
+    }
+
+    void pausePlayback() {
+        if (!released) {
+            state.wantsPlay = false;
+            setPlayerPlayWhenReady(false);
+        }
+    }
+
+    void onPause(boolean backgroundAudioAllowed) {
+        if (released) {
             return;
         }
+        foreground = false;
         clearGestureUi();
         capturePosition();
-        state.lifecyclePaused = true;
-        cancelExtraction();
-        setPlayerPlayWhenReady(false);
+        state.setLifecycle(false, backgroundAudioAllowed);
+        if (state.lifecyclePaused) {
+            cancelExtraction();
+            setPlayerPlayWhenReady(false);
+        }
         setKeepScreenOn(false);
     }
 
@@ -276,12 +291,14 @@ final class NativePlayerView extends FrameLayout {
         if (released) {
             return;
         }
-        state.lifecyclePaused = false;
+        foreground = true;
+        state.setLifecycle(true, false);
         if (state.prepared) {
             setPlayerPlayWhenReady(state.shouldPlay());
         } else {
             startExtraction();
         }
+        setKeepScreenOn(player.isPlaying());
     }
 
     void saveState(Bundle outState) {

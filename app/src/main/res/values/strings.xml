@@ -116,6 +116,14 @@
     <string name="block_youtube_thumbnails">Block YouTube thumbnails</string>
     <string name="block_youtube_autodubbed">Block YouTube auto-dubbed videos</string>
     <string name="block_youtube_members_only">Block YouTube members-only videos</string>
+    <string name="block_youtube_end_video">YouTube end video elements blocker</string>
+    <string name="enable_background_audio">Enable Background Audio</string>
+    <string name="background_audio_summary">Keep audio playing with mpv or YouTube’s web player when switching apps or turning the screen off. A media notification lets you pause it. Closing the app stops playback. Hold the floating Settings button for 3 seconds to hide it for 5 seconds.</string>
+    <string name="background_audio_channel">Background audio</string>
+    <string name="background_audio_notification">Audio playback is enabled in the background</string>
+    <string name="background_audio_unavailable">Background audio is unavailable. Playback will pause outside the app. Reopen the app or toggle this setting to retry.</string>
+    <string name="web_background_audio_unavailable">This WebView could not enable background audio. Update Android System WebView, or use mpv.</string>
+    <string name="pause_audio">Pause audio</string>
     <string name="page_elements_unavailable">Page element blocking could not start. Restart the app to retry.</string>
     <string name="adblocker_settings_collapsed">Ad-Blocker Settings ▸</string>
     <string name="adblocker_settings_expanded">Ad-Blocker Settings ▾</string>

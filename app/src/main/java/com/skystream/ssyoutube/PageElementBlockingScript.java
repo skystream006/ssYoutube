@@ -13,7 +13,8 @@ final class PageElementBlockingScript {
         DISTRACTING("distracting", true),
         THUMBNAILS("thumbnails", false),
         AUTODUBBED("autodubbed", true),
-        MEMBERS_ONLY("members_only", true);
+        MEMBERS_ONLY("members_only", true),
+        END_VIDEO("end_video", true);
 
         final String key;
         final String preferenceKey;

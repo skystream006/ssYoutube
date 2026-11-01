@@ -42,7 +42,8 @@ function (options) {
             + 'ytd-rich-shelf-renderer[is-playables],ytm-rich-shelf-renderer[is-playables]',
         recommended: 'ytm-item-section-renderer[section-identifier="related-items"],'
             + 'ytd-watch-flexy #related,.ytm-player-endscreen,.ytp-endscreen-content,'
-            + '.ytp-ce-element,.ytp-autonav-endscreen-upnext-container',
+            + '.ytp-autonav-endscreen-upnext-container',
+        end_video: '.ytp-ce-element,.ytp-ce-element-show',
         distracting: '.mobile-topbar-header-sign-in-button,'
             + '.mobile-topbar-header-content > ytm-menu,ytm-topbar-menu-button-renderer,'
             + '.pivot-bar-slide-in,ytm-comments-entry-point-header-renderer,'

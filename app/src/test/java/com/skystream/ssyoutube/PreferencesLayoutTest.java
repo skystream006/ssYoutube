@@ -225,10 +225,14 @@ public class PreferencesLayoutTest {
     public void allBravePageElementSwitchesAreIndependentlyAccessible() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         Element section = byId(layout, "page_element_settings");
-        assertEquals(7, section.getElementsByTagName("Switch").getLength());
+        assertEquals(9, section.getElementsByTagName("Switch").getLength());
         assertFalse(isInside(section, byId(layout, "adblocker_section")));
         assertFalse(isInside(section, byId(layout, "adblocking_settings")));
         assertFalse(isInside(section, byId(layout, "advanced_settings")));
+        Element background = byId(layout, "background_audio_toggle");
+        assertEquals(section, background.getParentNode());
+        assertEquals("@string/enable_background_audio", background.getAttributeNS(ANDROID, "text"));
+        assertTrue(Preferences.DEFAULT_BACKGROUND_AUDIO);
         for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
             Element toggle = byId(layout, option.preferenceKey);
             assertEquals(section, toggle.getParentNode());

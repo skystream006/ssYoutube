@@ -9,17 +9,19 @@ const source = fs.readFileSync(
     path.join(__dirname, '../../main/res/raw/youtube_page_elements.js'), 'utf8');
 const adSource = fs.readFileSync(
     path.join(__dirname, '../../main/res/raw/youtube_video_adblock.js'), 'utf8');
+const backgroundSource = fs.readFileSync(
+    path.join(__dirname, '../../main/res/raw/youtube_background_audio.js'), 'utf8');
 
 // Run the shipped function against Chromium's real DOM, selectors and MutationObserver.
-async function browserFixtures(source, adSource) {
+async function browserFixtures(source, adSource, backgroundSource) {
     const results = [];
     const location = new URL('https://m.youtube.com/');
     const inject = new Function('location', 'options', `return (${source})(options);`);
     const keys = ['shorts', 'playables', 'recommended', 'distracting', 'thumbnails',
-        'autodubbed', 'members_only'];
+        'autodubbed', 'members_only', 'end_video'];
     const off = Object.fromEntries(keys.map(key => [key, false]));
     const defaults = {...off, shorts: true, playables: true, distracting: true,
-        autodubbed: true, members_only: true};
+        autodubbed: true, members_only: true, end_video: true};
     const original = {
         fetch: window.fetch, parse: JSON.parse, json: Response.prototype.json,
         play: HTMLMediaElement.prototype.play, pushState: history.pushState
@@ -64,15 +66,16 @@ async function browserFixtures(source, adSource) {
         <ytd-video-renderer id="member"><ytd-badge-supported-renderer>Members only</ytd-badge-supported-renderer></ytd-video-renderer>
         <ytm-item-section-renderer id="related" section-identifier="related-items">Up next</ytm-item-section-renderer>
         <div id="end" class="ytm-player-endscreen">End cards</div>
+        <div id="endOverlay" class="ytp-ce-element-show">Clickable overlay</div>
         <ytd-thumbnail id="thumbnail" style="display:inline-block">Image</ytd-thumbnail>
         <ytm-rich-grid-renderer id="home">Home feed</ytm-rich-grid-renderer>
         <img id="avatar" alt="Channel avatar">
         <video id="player"></video>
         <a id="search" href="/results?search_query=music">Search</a>`;
 
-    await run('requested defaults hide five categories but keep recommendations and thumbnails', () => {
+    await run('requested defaults hide six categories but keep recommendations and thumbnails', () => {
         fixture(content, defaults);
-        for (const id of ['short', 'playable', 'comments', 'info', 'dub', 'member']) {
+        for (const id of ['short', 'playable', 'comments', 'info', 'dub', 'member', 'endOverlay']) {
             check(!visible(id), `${id} must be hidden by default`);
         }
         for (const id of ['related', 'end', 'thumbnail', 'home', 'avatar', 'player', 'search']) {
@@ -81,7 +84,8 @@ async function browserFixtures(source, adSource) {
     });
     await run('each option works alone and disabling restores the same DOM nodes and styles', () => {
         const targets = {shorts: 'short', playables: 'playable', recommended: 'related',
-            distracting: 'comments', thumbnails: 'thumbnail', autodubbed: 'dub', members_only: 'member'};
+            distracting: 'comments', thumbnails: 'thumbnail', autodubbed: 'dub', members_only: 'member',
+            end_video: 'endOverlay'};
         fixture(content);
         const nodes = Object.fromEntries(Object.values(targets)
             .map(id => [id, document.getElementById(id)]));
@@ -149,8 +153,19 @@ async function browserFixtures(source, adSource) {
             <div class="feed-nudge-wrapper" id="nudge">Try searching to get started</div>
             <ytm-rich-grid-renderer id="home">Home</ytm-rich-grid-renderer>
         `, {recommended: true});
-        for (const id of ['related', 'end', 'endGrid', 'nudge']) check(!visible(id), `Hide ${id}`);
+        for (const id of ['related', 'endGrid', 'nudge']) check(!visible(id), `Hide ${id}`);
+        check(visible('end'), 'Clickable overlays have their own setting');
         check(visible('home') && visible('playlist'), 'Preserve home and playlist controls');
+    });
+    await run('end-video elements are independently reversible with recommendations off or on', () => {
+        fixture(content, {end_video: true});
+        check(!visible('endOverlay') && visible('related') && visible('end'), 'Only hide overlays');
+        update({end_video: true, recommended: true});
+        check(!visible('endOverlay') && !visible('related') && !visible('end'), 'Both filters apply');
+        update({recommended: true});
+        check(visible('endOverlay') && !visible('related'), 'Restore overlays independently');
+        update(off);
+        check(visible('endOverlay') && visible('related') && visible('end'), 'Restore all elements');
     });
     await run('distracting controls cover mobile and desktop without hiding search or the player', () => {
         fixture(`
@@ -271,6 +286,182 @@ async function browserFixtures(source, adSource) {
         nativeStyle.remove();
         delete window.ytInitialPlayerResponse;
     });
+    const messages = [];
+    window.ssYouTubeBackgroundAudio = {postMessage: value => messages.push(value)};
+    let backgroundNow = 1000000;
+    const injectBackground = value =>
+        new Function('location', 'enabled', 'Date', `return (${backgroundSource})(enabled);`)
+            (location, value, {now: () => backgroundNow});
+    let mediaState;
+    function audioFixture() {
+        fixture('<video id="audio"></video>');
+        const video = document.getElementById('audio');
+        mediaState = {paused: false, ended: false, muted: false, volume: 1, pauseCalls: 0};
+        for (const key of ['paused', 'ended', 'muted', 'volume']) {
+            Object.defineProperty(video, key, {get: () => mediaState[key], configurable: true});
+        }
+        video.pause = () => {
+            mediaState.pauseCalls++;
+            mediaState.paused = true;
+            video.dispatchEvent(new Event('pause', {bubbles: true}));
+        };
+        video.play = () => { throw new Error('Background audio must not restart paused media'); };
+        return video;
+    }
+    await run('background audio overrides and restores visibility without stacking hooks', () => {
+        audioFixture();
+        const originalHidden = () => true;
+        const originalState = () => 'hidden';
+        Object.defineProperty(document, 'hidden', {get: originalHidden, configurable: true});
+        Object.defineProperty(document, 'visibilityState', {get: originalState, configurable: true});
+        injectBackground(true);
+        check(!document.hidden && document.visibilityState === 'visible', 'Expose foreground visibility');
+        const hidden = Object.getOwnPropertyDescriptor(document, 'hidden').get;
+        injectBackground(true);
+        check(Object.getOwnPropertyDescriptor(document, 'hidden').get === hidden, 'Do not stack getters');
+        let delivered = 0;
+        const visibility = () => delivered++;
+        document.addEventListener('visibilitychange', visibility);
+        document.dispatchEvent(new Event('visibilitychange', {bubbles: true}));
+        check(delivered === 0, 'Suppress hidden-page visibility events while enabled');
+        injectBackground(false);
+        check(Object.getOwnPropertyDescriptor(document, 'hidden').get === originalHidden, 'Restore getter');
+        check(document.visibilityState === 'hidden', 'Restore visibility state');
+        document.dispatchEvent(new Event('visibilitychange', {bubbles: true}));
+        check(delivered === 1, 'Restore event delivery');
+        document.removeEventListener('visibilitychange', visibility);
+        delete document.hidden;
+        delete document.visibilityState;
+    });
+    await run('protected background playback continues, but disabling it pauses without restarting', () => {
+        audioFixture();
+        injectBackground(true);
+        const background = window.__ssyoutubeBackgroundAudio;
+        background.setForeground(false, true);
+        check(!mediaState.paused && mediaState.pauseCalls === 0, 'Keep protected audio playing');
+        injectBackground(false);
+        check(mediaState.paused && mediaState.pauseCalls === 1, 'Pause when disabled in background');
+        injectBackground(true);
+        background.setForeground(true, false);
+        document.dispatchEvent(new Event('yt-navigate-finish'));
+        check(mediaState.paused, 'Do not undo a pause when foregrounding or re-enabling');
+    });
+    await run('a missing foreground service cannot leave audio playing in the background', () => {
+        audioFixture();
+        injectBackground(true);
+        window.__ssyoutubeBackgroundAudio.setForeground(false, false);
+        check(mediaState.paused, 'Pause unprotected playback');
+        window.__ssyoutubeBackgroundAudio.setForeground(true, false);
+        check(mediaState.paused, 'Never automatically replay');
+    });
+    await run('late playback stays paused without protection or a message bridge', async () => {
+        const video = audioFixture();
+        injectBackground(true);
+        const bridge = window.ssYouTubeBackgroundAudio;
+        delete window.ssYouTubeBackgroundAudio;
+        try {
+            window.__ssyoutubeBackgroundAudio.setForeground(false, false);
+            mediaState.paused = false;
+            video.dispatchEvent(new Event('play', {bubbles: true}));
+            check(mediaState.paused, 'Reject an unprotected autoplay event');
+            mediaState.paused = false;
+            await new Promise(resolve => setTimeout(resolve, 1100));
+            check(mediaState.paused, 'Heartbeat also rejects a late start without a media event');
+            check(window.__ssyoutubeBackgroundAudio.state() === 'paused', 'Expose state for polling');
+        } finally {
+            window.ssYouTubeBackgroundAudio = bridge;
+            window.__ssyoutubeBackgroundAudio.setForeground(true, false);
+        }
+    });
+    await run('background reports track media events, muted previews, removal and page identity', async () => {
+        const video = audioFixture();
+        injectBackground(true);
+        video.dispatchEvent(new Event('play', {bubbles: true}));
+        check(messages.at(-1) === `playing\n${location.href}`, 'Report active page URL');
+        mediaState.muted = true;
+        video.dispatchEvent(new Event('volumechange', {bubbles: true}));
+        check(messages.at(-1).startsWith('paused\n'), 'Muted previews do not need a service');
+        mediaState.muted = false;
+        video.dispatchEvent(new Event('volumechange', {bubbles: true}));
+        location.href = 'https://www.youtube.com/watch?v=next';
+        document.dispatchEvent(new Event('yt-navigate-finish'));
+        check(messages.at(-1) === `playing\n${location.href}`, 'Bind reports to current page');
+        video.remove();
+        await new Promise(resolve => setTimeout(resolve, 1100));
+        check(messages.at(-1).startsWith('paused\n'), 'Detached media does not hold a service');
+    });
+    await run('notification pause and manual pause remain paused through background heartbeats', async () => {
+        audioFixture();
+        injectBackground(true);
+        window.__ssyoutubeBackgroundAudio.setForeground(false, true);
+        window.__ssyoutubeBackgroundAudio.pause();
+        await new Promise(resolve => setTimeout(resolve, 1100));
+        check(mediaState.paused && mediaState.pauseCalls === 1, 'No pause reversal or automatic play');
+        window.__ssyoutubeBackgroundAudio.setForeground(true, false);
+        injectBackground(false);
+    });
+    await run('YouTube activity is refreshed only for enabled, actively playing audio', async () => {
+        audioFixture();
+        injectBackground(true);
+        window._lact = 10;
+        backgroundNow += 300001;
+        await new Promise(resolve => setTimeout(resolve, 1100));
+        check(window._lact === backgroundNow, 'Refresh activity during enabled playback');
+        const last = window._lact;
+        mediaState.paused = true;
+        backgroundNow += 300001;
+        await new Promise(resolve => setTimeout(resolve, 1100));
+        check(window._lact === last, 'Do not refresh activity for paused playback');
+        mediaState.paused = false;
+        injectBackground(false);
+        backgroundNow += 300001;
+        await new Promise(resolve => setTimeout(resolve, 1100));
+        check(window._lact === last, 'Do not refresh activity when disabled');
+        delete window._lact;
+    });
+    await run('background script rejects other origins, insecure ports and embedded documents', () => {
+        audioFixture();
+        Object.defineProperty(document, 'hidden', {get: () => true, configurable: true});
+        for (const url of ['http://m.youtube.com/', 'https://accounts.google.com/',
+            'https://youtube.com.evil.example/', 'https://www.youtube.com:444/',
+            'https://user@m.youtube.com/']) {
+            location.href = url;
+            injectBackground(true);
+            check(document.hidden, `Do not override ${url}`);
+        }
+        for (const host of ['youtube.com', 'm.youtube.com', 'www.youtube.com', 'music.youtube.com']) {
+            location.href = `https://${host}/`;
+            injectBackground(true);
+            check(!document.hidden, `Enable ${host}`);
+            injectBackground(false);
+        }
+        const frame = document.createElement('iframe');
+        document.body.appendChild(frame);
+        frame.contentWindow.Function('location', 'enabled', `return (${backgroundSource})(enabled);`)
+            (location, true);
+        check(!frame.contentWindow.__ssyoutubeBackgroundAudio, 'No subframe hooks');
+        frame.remove();
+        delete document.hidden;
+    });
+    await run('background audio and page blocking do not change network or media play APIs', () => {
+        fixture(content, defaults);
+        injectBackground(true);
+        check(!visible('endOverlay'), 'End-video filter still applies');
+        update(off);
+        check(visible('endOverlay') && !document.hidden, 'Page filters do not disable background audio');
+        check(window.fetch === original.fetch && JSON.parse === original.parse
+            && HTMLMediaElement.prototype.play === original.play, 'Do not patch playback or network APIs');
+        injectBackground(false);
+    });
+    await run('unsupported visibility overrides explicitly report failure instead of breaking the page', () => {
+        Object.defineProperty(document, 'hidden', {value: true, configurable: false});
+        const before = messages.length;
+        injectBackground(true);
+        check(messages.slice(before).some(value => value.startsWith('unavailable\n')), 'Report failure');
+        check(window.__ssyoutubeBackgroundAudio.state() === 'unavailable', 'Polling sees failure too');
+        check(document.hidden, 'Do not overwrite a nonconfigurable page property');
+        injectBackground(false);
+    });
     update(off);
     return results;
 }
@@ -288,7 +479,8 @@ test('page-element filtering passes real browser behavior fixtures', t => {
         fs.writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"></head><body>
             <script>
             (${browserFixtures})(${JSON.stringify(source).replace(/</g, '\\u003c')},
-                ${JSON.stringify(adSource).replace(/</g, '\\u003c')})
+                ${JSON.stringify(adSource).replace(/</g, '\\u003c')},
+                ${JSON.stringify(backgroundSource).replace(/</g, '\\u003c')})
                 .then(results => {
                     document.body.innerHTML = '<pre id="results"></pre>';
                     document.getElementById('results').textContent = JSON.stringify(results);
@@ -308,7 +500,7 @@ test('page-element filtering passes real browser behavior fixtures', t => {
         assert.ok(report, `Browser fixtures did not finish: ${result.stdout}\n${result.stderr}`);
         const results = JSON.parse(report[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>')
             .replace(/&amp;/g, '&'));
-        assert.equal(results.length, 14);
+        assert.equal(results.length, 25);
         for (const result of results) {
             assert.equal(result.passed, true, `${result.name}: ${result.error}`);
             t.diagnostic(result.name);
