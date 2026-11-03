@@ -107,7 +107,10 @@
     <string name="close_miniplayer">Close miniplayer</string>
     <string name="hide_related">Hide related videos</string>
     <string name="hide_header">Hide header</string>
-    <string name="block_page_elements">Block Page elements</string>
+    <string name="block_page_elements_collapsed">Block Page elements ▸</string>
+    <string name="block_page_elements_expanded">Block Page elements ▾</string>
+    <string name="expand_block_page_elements">Expand Block Page elements</string>
+    <string name="collapse_block_page_elements">Collapse Block Page elements</string>
     <string name="block_page_elements_summary">Works with either player, independently of adblocking. Changes are saved and apply immediately. To show comments, video info and sign-in/menu controls, turn off distracting elements.</string>
     <string name="block_youtube_shorts">Block YouTube Shorts</string>
     <string name="block_youtube_playables">Block YouTube Playables</string>

@@ -298,6 +298,10 @@ The WebView's light/dark header logos are separate and unchanged.
 
 ## Block Page elements
 
+Tap **Block Page elements** in Preferences to expand or collapse its description and
+controls. The section starts collapsed each time Preferences opens; collapsing it
+does not change saved choices or stop filtering or background audio.
+
 Preferences includes all seven **Block YouTube …** options from Brave's Android media
 settings, plus a separate end-video filter and background audio, with these defaults:
 
@@ -396,13 +400,14 @@ navigation, origin/frame boundaries, background visibility/pausing and preservat
 network and media-play APIs. The JVM
 suite invokes these fixtures too; they explicitly skip if Node or Chrome is missing.
 Layout and preference tests verify the nine controls, their defaults, persistence wiring,
-the service manifest and the collapsed **Ad-Blocker Settings** group. Pure-Java tests cover
+the service manifest and the collapsed **Block Page elements** and **Ad-Blocker Settings**
+groups. Pure-Java tests cover
 native background lifecycle decisions, autoplay grace deadlines and the exact
 three-/five-second button deadlines.
 
 On a device, verify both new sections in light/dark themes and small/landscape layouts,
-expand/collapse Ad-Blocker Settings, reopen Preferences, and check every choice after an
-app restart and a site-mode change. Confirm page-element blocking remains active with
+expand/collapse Block Page elements and Ad-Blocker Settings, reopen Preferences, and check
+every choice after an app restart and a site-mode change. Confirm page-element blocking remains active with
 mpv on and adblocking off; disable distracting elements when checking comments and login.
 Check native and web audio with the screen locked and another app foregrounded, notification
 pause/reopen, headphone removal and audio-focus loss, pending extraction, autoplay, ended/

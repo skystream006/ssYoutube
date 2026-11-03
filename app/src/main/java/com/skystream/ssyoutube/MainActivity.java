@@ -1735,6 +1735,16 @@ public class MainActivity extends AppCompatActivity {
             adBlockerSectionToggle.setContentDescription(getString(expanded
                     ? R.string.collapse_adblocker_settings : R.string.expand_adblocker_settings));
         });
+        TextView pageElementSectionToggle = content.findViewById(R.id.page_element_section_toggle);
+        View pageElementSettings = content.findViewById(R.id.page_element_settings);
+        pageElementSectionToggle.setOnClickListener(v -> {
+            boolean expanded = pageElementSettings.getVisibility() != View.VISIBLE;
+            pageElementSettings.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            pageElementSectionToggle.setText(expanded ? R.string.block_page_elements_expanded
+                    : R.string.block_page_elements_collapsed);
+            pageElementSectionToggle.setContentDescription(getString(expanded
+                    ? R.string.collapse_block_page_elements : R.string.expand_block_page_elements));
+        });
         for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
             Switch toggle = content.findViewWithTag(option.preferenceKey);
             toggle.setChecked(blockedPageElements.contains(option));

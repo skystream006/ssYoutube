@@ -222,6 +222,39 @@ public class PreferencesLayoutTest {
     }
 
     @Test
+    public void pageElementSectionStartsCollapsedWithAccessibleExpander() throws Exception {
+        Document layout = resource("layout/dialog_preferences.xml");
+        Element section = byId(layout, "page_element_settings");
+        Element expander = byId(layout, "page_element_section_toggle");
+        assertEquals("gone", section.getAttributeNS(ANDROID, "visibility"));
+        assertEquals("Button", expander.getTagName());
+        assertEquals(section.getParentNode(), expander.getParentNode());
+        assertTrue((expander.compareDocumentPosition(section)
+                & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
+        assertEquals("@string/block_page_elements_collapsed",
+                expander.getAttributeNS(ANDROID, "text"));
+        assertEquals("@string/expand_block_page_elements",
+                expander.getAttributeNS(ANDROID, "contentDescription"));
+        assertEquals("48dp", expander.getAttributeNS(ANDROID, "minHeight"));
+        assertEquals("false", expander.getAttributeNS(ANDROID, "textAllCaps"));
+        for (Node node = expander; node instanceof Element; node = node.getParentNode()) {
+            String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
+            assertTrue(visibility.isEmpty() || "visible".equals(visibility));
+        }
+        NodeList labels = layout.getElementsByTagName("TextView");
+        int summaries = 0;
+        for (int i = 0; i < labels.getLength(); i++) {
+            Element label = (Element) labels.item(i);
+            if ("@string/block_page_elements_summary".equals(
+                    label.getAttributeNS(ANDROID, "text"))) {
+                assertEquals(section, label.getParentNode());
+                summaries++;
+            }
+        }
+        assertEquals(1, summaries);
+    }
+
+    @Test
     public void allBravePageElementSwitchesAreIndependentlyAccessible() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         Element section = byId(layout, "page_element_settings");
@@ -243,7 +276,11 @@ public class PreferencesLayoutTest {
             assertEquals("48dp", toggle.getAttributeNS(ANDROID, "minHeight"));
             for (Node node = toggle; node instanceof Element; node = node.getParentNode()) {
                 String visibility = ((Element) node).getAttributeNS(ANDROID, "visibility");
-                assertTrue(visibility.isEmpty() || "visible".equals(visibility));
+                if (node == section) {
+                    assertEquals("gone", visibility);
+                } else {
+                    assertTrue(visibility.isEmpty() || "visible".equals(visibility));
+                }
             }
         }
     }
