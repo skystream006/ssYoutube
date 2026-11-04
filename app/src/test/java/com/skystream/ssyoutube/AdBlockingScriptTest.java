@@ -19,6 +19,21 @@ public class AdBlockingScriptTest {
     }
 
     @Test
+    public void pageScriptsSupportEitherBothOrNeitherAdblockingChoice() throws Exception {
+        String source = "function (patched) { return patched; }";
+        AdBlockEngine engine = AdBlockEngineTest.bundled();
+        assertEquals("", AdBlockingScript.createPage(source, null, false, false));
+        assertEquals(AdBlockingScript.createVideo(source, false) + ";\n"
+                + AdBlockingScript.create(engine),
+                AdBlockingScript.createPage(source, engine, true, false));
+        assertEquals(AdBlockingScript.createVideo(source, true),
+                AdBlockingScript.createPage(source, null, false, true));
+        assertEquals(AdBlockingScript.createVideo(source, true) + ";\n"
+                + AdBlockingScript.create(engine),
+                AdBlockingScript.createPage(source, engine, true, true));
+    }
+
+    @Test
     public void patchChoiceIsSavedAndChangesReloadThePage() throws Exception {
         String activity = new String(Files.readAllBytes(Paths.get(
                 "src/main/java/com/skystream/ssyoutube/MainActivity.java")), StandardCharsets.UTF_8);
@@ -26,10 +41,16 @@ public class AdBlockingScriptTest {
         assertTrue(activity.contains("prefs.edit().putBoolean(KEY_PATCHED_ADBLOCKING_ENABLED, enabled).apply()"));
         int start = activity.indexOf("private void setPatchedAdBlockingEnabled(");
         String setter = activity.substring(start, activity.indexOf("\n    }", start));
-        assertTrue(setter.contains("mpvEnabled || !adBlockingEnabled"));
+        assertTrue(setter.contains("mpvEnabled || patchedAdBlockingEnabled == enabled"));
+        assertFalse(setter.contains("!adBlockingEnabled"));
+        assertFalse(setter.contains("KEY_ADBLOCKING_ENABLED"));
         assertTrue(setter.contains("updateAdBlocking(webView);"));
         assertTrue(setter.contains("webView.reload();"));
         assertTrue(activity.contains("patchedAdBlockingToggle.setChecked(patchedAdBlockingEnabled)"));
+        assertFalse(activity.contains("patchedAdBlockingToggle.setEnabled("));
+        start = activity.indexOf("private void setAdBlockingEnabled(");
+        String basicSetter = activity.substring(start, activity.indexOf("\n    }", start));
+        assertFalse(basicSetter.contains("KEY_PATCHED_ADBLOCKING_ENABLED"));
     }
 
     @Test

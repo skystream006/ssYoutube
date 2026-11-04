@@ -33,7 +33,7 @@ final class WebAdBlocker {
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
     private WeakReference<WebView> view = new WeakReference<>(null);
     private volatile AdBlockEngine engine;
-    private volatile boolean enabled;
+    private volatile boolean basicEnabled;
     private volatile String documentUrl;
     private boolean loading;
     private boolean destroyed;
@@ -51,17 +51,18 @@ final class WebAdBlocker {
         if (destroyed) {
             return;
         }
-        enabled = value;
-        patched = value && usePatches;
+        basicEnabled = value;
+        patched = usePatches;
         view = new WeakReference<>(target);
         documentUrl = target.getUrl();
         removeScript();
         stopVideoScript(target);
+        script = null;
         updateServiceWorker();
-        if (!value) {
+        if (!basicEnabled && !patched) {
             return;
         }
-        if (engine != null) {
+        if (videoSource != null && (!basicEnabled || engine != null)) {
             installScript(target);
         } else if (!loading) {
             loading = true;
@@ -72,10 +73,13 @@ final class WebAdBlocker {
                         context.getResources().openRawResource(R.raw.adblocking_rules),
                         StandardCharsets.UTF_8)) {
                     loaded = AdBlockEngine.read(input);
+                } catch (IOException | Resources.NotFoundException error) {
+                    Logger.get(context).log("E", "Adblocking rules unavailable", error);
+                }
+                try {
                     loadedScript = videoScript();
                 } catch (IOException | Resources.NotFoundException error) {
-                    Logger.get(context).log("E", "Adblocking resources unavailable", error);
-                    loaded = null;
+                    Logger.get(context).log("E", "Video adblocking script unavailable", error);
                 }
                 AdBlockEngine result = loaded;
                 String resultScript = loadedScript;
@@ -85,15 +89,14 @@ final class WebAdBlocker {
                     }
                     loading = false;
                     engine = result;
-                    if (result != null) {
-                        videoSource = resultScript;
-                    }
+                    videoSource = resultScript;
                     WebView current = view.get();
-                    if (enabled && current != null) {
-                        if (result == null) {
+                    if ((basicEnabled || patched) && current != null) {
+                        if (videoSource == null || (basicEnabled && engine == null)) {
                             Toast.makeText(context, R.string.adblocking_unavailable,
                                     Toast.LENGTH_LONG).show();
-                        } else {
+                        }
+                        if (videoSource != null) {
                             installScript(current);
                             // The first load may have started before the rules were ready.
                             current.reload();
@@ -120,14 +123,14 @@ final class WebAdBlocker {
 
     void onPage(WebView target, String url) {
         documentUrl = url;
-        if (enabled && script != null && AdBlockEngine.isSupportedPage(url)) {
+        if ((basicEnabled || patched) && script != null && AdBlockEngine.isSupportedPage(url)) {
             target.evaluateJavascript(script, null);
         }
     }
 
     WebResourceResponse intercept(WebResourceRequest request) {
         AdBlockEngine current = engine;
-        if (!enabled || current == null || request.isForMainFrame()) {
+        if (!basicEnabled || current == null || request.isForMainFrame()) {
             return null;
         }
         String page = documentUrl;
@@ -140,7 +143,7 @@ final class WebAdBlocker {
                 break;
             }
         }
-        if (!current.shouldBlock(page, request.getUrl().toString(), false) || !enabled) {
+        if (!current.shouldBlock(page, request.getUrl().toString(), false) || !basicEnabled) {
             return null;
         }
         return new WebResourceResponse("text/plain", "UTF-8", 200, "OK",
@@ -150,7 +153,8 @@ final class WebAdBlocker {
 
     void destroy() {
         destroyed = true;
-        enabled = false;
+        basicEnabled = false;
+        patched = false;
         documentUrl = null;
         updateServiceWorker();
         removeScript();
@@ -168,8 +172,8 @@ final class WebAdBlocker {
 
     private void installScript(WebView target) {
         removeScript();
-        script = AdBlockingScript.createVideo(videoSource, patched)
-                + ";\n" + AdBlockingScript.create(engine);
+        script = AdBlockingScript.createPage(videoSource, engine,
+                basicEnabled && engine != null, patched);
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
                 scriptHandler = WebViewCompat.addDocumentStartJavaScript(
@@ -205,7 +209,7 @@ final class WebAdBlocker {
             return;
         }
         ServiceWorkerControllerCompat controller = ServiceWorkerControllerCompat.getInstance();
-        if (enabled) {
+        if (basicEnabled) {
             serviceWorkerOwner = this;
             controller.setServiceWorkerClient(new ServiceWorkerClientCompat() {
                 @Override

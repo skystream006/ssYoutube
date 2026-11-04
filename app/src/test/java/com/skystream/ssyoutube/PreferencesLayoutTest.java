@@ -302,14 +302,14 @@ public class PreferencesLayoutTest {
     }
 
     @Test
-    public void patchedAdblockingIsAnOptInInsideTheAdblockingPanel() throws Exception {
+    public void patchedAdblockingIsIndependentlyAvailableInsideTheAdblockingPanel() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         Element toggle = byId(layout, "patched_adblocking_toggle");
         assertEquals(byId(layout, "adblocking_settings"), toggle.getParentNode());
         assertEquals("Switch", toggle.getTagName());
         assertEquals("@string/patched_adblocking", toggle.getAttributeNS(ANDROID, "text"));
         assertEquals("48dp", toggle.getAttributeNS(ANDROID, "minHeight"));
-        assertEquals("false", toggle.getAttributeNS(ANDROID, "enabled"));
+        assertFalse("false".equals(toggle.getAttributeNS(ANDROID, "enabled")));
         assertTrue((byId(layout, "adblocking_toggle").compareDocumentPosition(toggle)
                 & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
         NodeList strings = resource("values/strings.xml").getElementsByTagName("string");
@@ -317,7 +317,7 @@ public class PreferencesLayoutTest {
         for (int i = 0; i < strings.getLength(); i++) {
             Element string = (Element) strings.item(i);
             if ("patched_adblocking".equals(string.getAttribute("name"))) {
-                assertEquals("Patched AdBlockin", string.getTextContent());
+                assertEquals("Patched AdBlocking", string.getTextContent());
                 found = true;
             }
         }

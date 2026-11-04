@@ -11,13 +11,15 @@ import java.util.Locale;
 public class PreferencesTest {
 
     @Test
-    public void patchedAdblockingRequiresBothOptInsAndWebPlayback() {
+    public void adblockingChoicesAreIndependentAndBothRequireWebPlayback() {
         assertFalse(Preferences.DEFAULT_PATCHED_ADBLOCKING);
         for (boolean mpv : new boolean[] {false, true}) {
             for (boolean blocking : new boolean[] {false, true}) {
                 for (boolean patched : new boolean[] {false, true}) {
-                    assertEquals(!mpv && blocking && patched,
-                            Preferences.isPatchedAdBlockingEnabled(mpv, blocking, patched));
+                    assertEquals(!mpv && blocking,
+                            Preferences.isAdBlockingEnabled(mpv, blocking));
+                    assertEquals(!mpv && patched,
+                            Preferences.isPatchedAdBlockingEnabled(mpv, patched));
                 }
             }
         }
@@ -35,6 +37,9 @@ public class PreferencesTest {
     public void switchingPlaybackDoesNotDiscardTheAdblockingChoice() {
         for (boolean savedChoice : new boolean[] {false, true}) {
             assertEquals(savedChoice, Preferences.isAdBlockingEnabled(false, savedChoice));
+            assertEquals(savedChoice, Preferences.isPatchedAdBlockingEnabled(false, savedChoice));
+            assertFalse(Preferences.isPatchedAdBlockingEnabled(true, savedChoice));
+            assertEquals(savedChoice, Preferences.isPatchedAdBlockingEnabled(false, savedChoice));
             assertFalse(Preferences.isAdBlockingEnabled(true, savedChoice));
             assertEquals(savedChoice, Preferences.isAdBlockingEnabled(false, savedChoice));
         }

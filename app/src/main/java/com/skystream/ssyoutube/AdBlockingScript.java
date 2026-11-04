@@ -8,6 +8,13 @@ final class AdBlockingScript {
         return "(" + source + ")(" + patched + ");";
     }
 
+    static String createPage(String source, AdBlockEngine engine, boolean basic, boolean patched) {
+        if (!basic && !patched) {
+            return "";
+        }
+        return createVideo(source, patched) + (basic ? ";\n" + create(engine) : "");
+    }
+
     static String create(AdBlockEngine engine) {
         StringBuilder cases = new StringBuilder();
         for (String origin : NativePlaybackScript.ORIGIN_RULES) {

@@ -41,8 +41,8 @@ public final class Preferences {
     }
 
     public static boolean isPatchedAdBlockingEnabled(boolean mpvEnabled,
-            boolean adBlockingEnabled, boolean patchedAdBlockingEnabled) {
-        return isAdBlockingEnabled(mpvEnabled, adBlockingEnabled) && patchedAdBlockingEnabled;
+            boolean patchedAdBlockingEnabled) {
+        return !mpvEnabled && patchedAdBlockingEnabled;
     }
 
     public static String languageAt(int index) {

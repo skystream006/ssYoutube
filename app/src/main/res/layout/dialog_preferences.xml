@@ -361,7 +361,6 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:minHeight="48dp"
-                        android:enabled="false"
                         android:text="@string/patched_adblocking" />
 
                     <TextView

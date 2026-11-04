@@ -321,6 +321,19 @@ test('patched mode filters fetch text before a previously captured parser consum
     }
 });
 
+test('basic and patched filtering work alone, together, or with both off', async () => {
+    for (const basic of [false, true]) {
+        for (const patched of [false, true]) {
+            const p = page(undefined, basic || patched, patched);
+            p.run('ytInitialPlayerResponse = fixture();');
+            assert.equal(p.run('ytInitialPlayerResponse.adPlacements === undefined'), basic || patched);
+            assert.equal(p.intervals.size, basic || patched ? 1 : 0);
+            assert.equal(await p.run(`new Response(JSON.stringify(fixture())).text()
+                .then(text => originals.parse(text).adPlacements === undefined)`), patched);
+        }
+    }
+});
+
 test('patched XHR text and response agree, preserve partial reads and handle reuse', () => {
     const p = page(undefined, true, true);
     p.run(`xhr = new XMLHttpRequest(JSON.stringify(fixture())); xhr.responseType = '';
@@ -591,4 +604,214 @@ test('nonconfigurable XHR text hooks are left intact and reported without page d
     assert.equal(p.run(`Object.getOwnPropertyDescriptor(
         XMLHttpRequest.prototype, 'responseText').get === originals.xhrText`), true);
     assert.deepEqual(p.warnings, ['ssYouTube adblocking: XHR text hook unavailable']);
+});
+
+function installArchiveFixture(p) {
+    p.run(`
+        function archiveFixture() {
+            return {
+                responseContext: {},
+                videoDetails: {videoId: 'organic'},
+                playabilityStatus: {status: 'OK'},
+                contents: [
+                    {merchandiseShelfRenderer: {items: [{title: 'Merchandise'}]}},
+                    {richSectionRenderer: {content: {productListRenderer: {contents: []}}}},
+                    {statementBannerRenderer: {title: {simpleText: 'Ordinary Doodle'}}},
+                    {statementBannerRenderer: {thumbnail: {thumbnails: [
+                        {url: 'https://www.gstatic.com/youtube/img/promos/growth/premium.png'}
+                    ]}}},
+                    {backgroundPromoRenderer: {ctaButton: {buttonRenderer: {
+                        navigationEndpoint: {browseEndpoint: {browseId: 'SPunlimited'}}
+                    }}}},
+                    {videoRenderer: {videoId: 'keep', title: {simpleText: 'Premium products'}}},
+                    {continuationItemRenderer: {continuationEndpoint: {token: 'next'}}}
+                ],
+                paidContentOverlay: {paidContentOverlayRenderer: {text: 'Includes paid promotion'}},
+                engagementPanels: [
+                    {engagementPanelSectionListRenderer: {targetId: 'engagement-panel-PAproduct',
+                        content: {productListRenderer: {contents: []}}}},
+                    {engagementPanelSectionListRenderer: {identifier: {tag: 'jumpahead'}}},
+                    {engagementPanelSectionListRenderer: {targetId: 'engagement-panel-comments-section',
+                        content: {sectionListRenderer: {contents: [{commentThreadRenderer: {
+                            comment: {text: 'SPunlimited'}
+                        }}]}}}},
+                    {engagementPanelSectionListRenderer: {targetId: 'engagement-panel-macro-markers-description-chapters'}}
+                ],
+                endscreen: {endscreenRenderer: {elements: [
+                    {endscreenElementRenderer: {style: 'WEBSITE', image: {thumbnails: [
+                        {url: 'https://encrypted-tbn0.gstatic.com/shopping?q=product'}
+                    ]}}},
+                    {endscreenElementRenderer: {style: 'VIDEO', endpoint: {watchEndpoint: {videoId: 'next'}}}},
+                    {endscreenElementRenderer: {style: 'WEBSITE', image: {thumbnails: [
+                        {url: 'https://example.test/channel-site.png'}
+                    ]}}}
+                ]}},
+                onResponseReceivedActions: [
+                    {openPopupAction: {popup: {adInterstitialRenderer: {title: 'Ad'}}, popupType: 'DIALOG'}},
+                    {openPopupAction: {popup: {confirmDialogRenderer: {
+                        title: 'Sign in', endpoint: {browseEndpoint: {browseId: 'SPunlimited'}}
+                    }}, popupType: 'DIALOG'}},
+                    {openPopupAction: {popup: {playerInterstitialRenderer: {
+                        content: {interstitialViewModel: {text: 'Playback unavailable'}}
+                    }}, popupType: 'DIALOG'}}
+                ]
+            };
+        }
+        function archiveResult(value) {
+            return {
+                contents: value.contents.length,
+                paidLabel: !!value.paidContentOverlay,
+                panels: value.engagementPanels.length,
+                endCards: value.endscreen.endscreenRenderer.elements.length,
+                popups: value.onResponseReceivedActions.length
+            };
+        }
+    `);
+}
+
+test('archive-inspired filters apply to inline and legacy player data without scheduling fields', () => {
+    const p = page(undefined, true, true);
+    installArchiveFixture(p);
+    for (const assignment of [
+        'ytInitialData = archiveFixture(); result = ytInitialData;',
+        'ytInitialPlayerResponse = archiveFixture(); result = ytInitialPlayerResponse;',
+        `ytplayer = {config: {args: {player_response: JSON.stringify(archiveFixture())}}};
+            result = originals.parse(ytplayer.config.args.player_response);`
+    ]) {
+        p.run(assignment);
+        assert.deepEqual(JSON.parse(p.run('JSON.stringify(archiveResult(result))')),
+            {contents: 3, paidLabel: false, panels: 2, endCards: 2, popups: 2});
+        assert.equal(p.run('result.contents[0].statementBannerRenderer.title.simpleText'), 'Ordinary Doodle');
+        assert.equal(p.run('result.contents[1].videoRenderer.videoId'), 'keep');
+        assert.equal(p.run('result.contents[2].continuationItemRenderer.continuationEndpoint.token'), 'next');
+        assert.equal(p.run('result.engagementPanels[0].engagementPanelSectionListRenderer.targetId'),
+            'engagement-panel-comments-section');
+        assert.equal(p.run('result.endscreen.endscreenRenderer.elements[0].endscreenElementRenderer.style'), 'VIDEO');
+        assert.equal(p.run('result.onResponseReceivedActions[0].openPopupAction.popup.confirmDialogRenderer.title'),
+            'Sign in');
+    }
+});
+
+test('archive features work through all scoped response transports and continuations', async () => {
+    const p = page(undefined, true, true);
+    installArchiveFixture(p);
+    for (const expression of [
+        'JSON.parse(JSON.stringify(archiveFixture()))',
+        'new Response(archiveFixture()).json()',
+        'new Response(JSON.stringify(archiveFixture())).text().then(text => originals.parse(text))',
+        `(() => { var xhr = new XMLHttpRequest(JSON.stringify(archiveFixture()));
+            xhr.responseType = 'text'; return originals.parse(xhr.responseText); })()`,
+        'new XMLHttpRequest(archiveFixture()).response'
+    ]) {
+        const result = await p.run(`Promise.resolve(${expression}).then(value => JSON.stringify(archiveResult(value)))`);
+        assert.deepEqual(JSON.parse(result),
+            {contents: 3, paidLabel: false, panels: 2, endCards: 2, popups: 2});
+    }
+    p.run(`ytInitialData = {onResponseReceivedActions: [{appendContinuationItemsAction: {
+        continuationItems: archiveFixture().contents
+    }}]};`);
+    assert.equal(p.run('ytInitialData.onResponseReceivedActions[0].appendContinuationItemsAction.continuationItems.length'), 3);
+});
+
+test('Premium promotion evidence requires typed endpoints or trusted image URL boundaries', () => {
+    const p = page(undefined, true, true);
+    const rejected = [
+        'https://gstatic.com.evil.test/youtube/img/promos/growth/a.png',
+        'https://evilgstatic.com/youtube/img/promos/growth/a.png',
+        'http://www.gstatic.com/youtube/img/promos/growth/a.png',
+        'https://www.gstatic.com:444/youtube/img/promos/growth/a.png',
+        'https://www.gstatic.com/youtube/img/promos/growth-other/a.png',
+        'https://www.gstatic.com/youtube/img/doodle.png?next=/img/promos/growth/',
+        'https://www.gstatic.com/youtube/img/promos/growth/../doodle.png',
+        'https://['
+    ];
+    rejected.push('https://' + ['user', 'www.gstatic.com'].join('@') + '/youtube/img/promos/growth/a.png');
+    p.context.rejected = rejected;
+    p.run(`safe = rejected.map(url => ({statementBannerRenderer: {thumbnail: {thumbnails: [{url}]}}}));
+        safe.push({statementBannerRenderer: {title: {simpleText: 'SPunlimited img/promos/growth/'}}});
+        safe.push({statementBannerRenderer: {title: {browseId: 'SPunlimited'}}});
+        safe.push({statementBannerRenderer: {image: {thumbnails: [{url:
+            'https://www.gstatic.com/youtube/img/doodle.png'}]}}});
+        safe.push({videoRenderer: {thumbnail: {thumbnails: [{url:
+            'https://www.gstatic.com/youtube/img/promos/growth/premium.png'}]}}});
+        expected = JSON.stringify(safe);
+        ytInitialData = {contents: safe};`);
+    assert.equal(p.run('JSON.stringify(ytInitialData.contents) === expected'), true);
+    for (const url of ['https://gstatic.com/youtube/img/promos/growth/a.png',
+        'https://www.gstatic.com:443/youtube/img/promos/growth/a.png',
+        '//www.gstatic.com/youtube/img/promos/growth/a.png']) {
+        p.context.image = url;
+        p.run('ytInitialData = {contents: [{statementBannerRenderer: {image: {thumbnails: [{url: image}]}}}]};');
+        assert.equal(p.run('ytInitialData.contents.length'), 0);
+    }
+});
+
+test('shopping panels, end cards and popups require explicit ad identity', () => {
+    const p = page(undefined, true, true);
+    p.run(`safe = {
+        engagementPanels: [
+            {engagementPanelSectionListRenderer: {targetId: 'engagement-panel-PAproductivity'}},
+            {engagementPanelSectionListRenderer: {targetId: 'comments-jumpahead'}},
+            {engagementPanelSectionListRenderer: {targetId: 'engagement-panel-comments',
+                content: {productListRenderer: {contents: []}}}}
+        ],
+        endscreen: {endscreenRenderer: {elements: [
+            {endscreenElementRenderer: {style: 'VIDEO', image: {thumbnails: [
+                {url: 'https://encrypted-tbn0.gstatic.com/shopping?q=image'}
+            ]}}},
+            {endscreenElementRenderer: {style: 'WEBSITE', image: {thumbnails: [
+                {url: 'https://encrypted-tbn0.gstatic.com.evil.test/shopping?q=image'}
+            ]}}},
+            {endscreenElementRenderer: {style: 'WEBSITE', image: {thumbnails: [
+                {url: 'https://encrypted-tbn0.gstatic.com/shopping-other?q=image'}
+            ]}}}
+        ]}},
+        contents: [{adSlotRenderer: {}, statementBannerRenderer: {title: 'Doodle'}}],
+        onResponseReceivedActions: [{openPopupAction: {
+            popup: {adInterstitialRenderer: {}, confirmDialogRenderer: {title: 'Account'}}
+        }}]
+    };
+    expected = JSON.stringify(safe); ytInitialData = safe;`);
+    assert.equal(p.run('JSON.stringify(ytInitialData) === expected'), true);
+    p.run(`ytInitialData = {engagementPanels: [
+        {engagementPanelSectionListRenderer: {content: {productListRenderer: {contents: []}}}},
+        {engagementPanelSectionListRenderer: {panelIdentifier: 'PAproduct-products'}},
+        {engagementPanelSectionListRenderer: {targetId: 'engagement-panel-jumpahead:promo'}}
+    ]};`);
+    assert.equal(p.run('ytInitialData.engagementPanels.length'), 0);
+});
+
+test('basic mode does not remove archive-specific UI data', () => {
+    const p = page();
+    installArchiveFixture(p);
+    p.run(`expected = JSON.stringify(archiveFixture());
+        ytInitialData = archiveFixture(); ytInitialPlayerResponse = archiveFixture();
+        ytplayer = {config: {args: {player_response: expected}}};`);
+    assert.equal(p.run('JSON.stringify(ytInitialData) === expected'), true);
+    assert.equal(p.run('JSON.stringify(ytInitialPlayerResponse) === expected'), true);
+    assert.equal(p.run('ytplayer.config.args.player_response === expected'), true);
+});
+
+test('promotion detection is bounded, ignores getters and leaves immutable ad records alone', () => {
+    const p = page(undefined, true, true);
+    p.run(`calls = 0;
+        banner = {};
+        Object.defineProperty(banner, 'image', {get() { calls++; throw new Error('Do not evaluate'); }});
+        banner.button = banner;
+        frozen = Object.freeze([{merchandiseShelfRenderer: {}}]);
+        ytInitialData = {contents: [{statementBannerRenderer: banner}], items: frozen};
+        Object.defineProperty(ytInitialData, 'paidContentOverlay', {
+            value: {paidContentOverlayRenderer: {}}, configurable: false
+        });
+        __ssyoutubeVideoAdBlocking.update();`);
+    assert.equal(p.run('calls'), 0);
+    assert.equal(p.run('ytInitialData.contents.length'), 1);
+    assert.equal(p.run('ytInitialData.items.length'), 1);
+    assert.equal(p.run('!!ytInitialData.paidContentOverlay'), true);
+    p.run(`large = {button: {}};
+        var current = large.button;
+        for (var i = 0; i < 1000; i++) { current.button = {}; current = current.button; }
+        current.browseId = 'SPunlimited';
+        ytInitialData = {contents: [{statementBannerRenderer: large}]};`);
+    assert.equal(p.run('ytInitialData.contents.length'), 1);
 });
