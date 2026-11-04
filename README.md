@@ -128,6 +128,18 @@ playback extraction is separate and anonymous.
   Each selected video gets its own mpv handle; fullscreen/miniplayer transitions retain
   that handle and only change its surface size. Closing or replacing a video destroys its
   handle, and callbacks from that handle cannot update the replacement.
+  Startup reads only playback fields after NewPipe's page fetch, not the full `StreamInfo`
+  metadata/related-item aggregation. Live playback tries HLS, then DASH, before building
+  direct-stream lists; on-demand playback only reads manifests if direct streams are unavailable.
+  If a matching separate audio track is needed, an equally compatible, equal-resolution
+  video-only stream avoids downloading unused muxed audio without reducing frame rate.
+  Resolution and language preferences are unchanged. mpv starts without forced initial
+  cache filling and resumes cache stalls
+  after 0.5 seconds of buffered media (rather than the upstream 1-second refill threshold),
+  while retaining automatic buffering and the 64 MiB forward/16 MiB backward cache limits.
+  This shorter refill can cause more frequent stalls on marginal connections; it does not
+  increase network throughput or skip format probing, TLS verification, or required extraction
+  requests. End-to-end startup time still depends on YouTube, the connection and the device.
 - **Shorts in the WebView** – direct `/shorts` pages stay on YouTube's web player, including
   incoming Shorts links and single-page navigation. Entering Shorts closes any native
   playback so the two players do not play together.
@@ -526,6 +538,12 @@ loading. Verify the mpv toggle persists after restart/recreation, stops a playin
 miniplayer when disabled, restores web playback on mobile/desktop and after navigation,
 and resumes native routing when re-enabled. Native rendering/decoding and ABI compatibility
 cannot be verified by JVM tests alone.
+
+For loading-time comparisons, use the same video, device and network before/after the change.
+Measure tap-to-first-frame separately for cold/warm starts, timestamp seeks and live HLS/DASH;
+also check stall frequency on a throttled connection, not just how quickly the spinner disappears.
+Playback extraction fixtures assert the exact field-read order and live short circuit without
+network requests; they do not establish an end-to-end speedup on a device.
 
 With mpv off, verify the adblocking toggle persists after restart and works on mobile,
 desktop, Shorts, reloads, and single-page navigation. Toggle mpv on while adblocking is

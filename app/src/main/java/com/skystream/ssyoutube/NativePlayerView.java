@@ -389,7 +389,9 @@ final class NativePlayerView extends FrameLayout {
             pending = extractor.submit(() -> {
                 try {
                     NativeStreamExtractor.Result result =
-                            NativeStreamExtractor.extract(id, language, requestCancellation);
+                            NativeStreamExtractor.extract(id, language, requestCancellation,
+                                    warning -> Logger.get(getContext()).log(
+                                            "W", "Native stream candidate unavailable", warning));
                     String certificates = MpvPlayer.prepareCertificates(getContext());
                     requestCancellation.check();
                     main.post(() -> {

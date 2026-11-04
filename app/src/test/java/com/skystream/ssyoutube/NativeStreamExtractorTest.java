@@ -8,6 +8,7 @@ import static org.junit.Assert.assertFalse;
 
 import org.junit.Test;
 import org.schabi.newpipe.extractor.MediaFormat;
+import org.schabi.newpipe.extractor.services.youtube.ItagItem;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.AudioTrackType;
 import org.schabi.newpipe.extractor.stream.DeliveryMethod;
@@ -100,6 +101,58 @@ public class NativeStreamExtractorTest {
                 Collections.singletonList(english), false, "fr");
         assertEquals(muxed.getContent(), noMatch.videoUrl);
         assertNull(noMatch.audioUrl);
+    }
+
+    @Test
+    public void matchingSeparateAudioUsesEquivalentVideoOnlyInsteadOfRedundantMuxedAudio() {
+        VideoStream muxed = video(CDN + "?muxed", "720p", MediaFormat.MPEG_4);
+        VideoStream adaptive = video(CDN + "?video", "720p", MediaFormat.MPEG_4);
+        AudioStream english = audio(CDN + "?english", MediaFormat.M4A, 128, "en",
+                AudioTrackType.DUBBED);
+        NativeStreamExtractor.Result result = NativeStreamExtractor.selectStreams(
+                Collections.singletonList(muxed), Collections.singletonList(adaptive),
+                Collections.singletonList(english), false, "en");
+        assertEquals(adaptive.getContent(), result.videoUrl);
+        assertEquals(english.getContent(), result.audioUrl);
+    }
+
+    @Test
+    public void avoidingRedundantAudioNeverReducesVideoResolutionOrCompatibility() {
+        VideoStream muxed = video(CDN + "?muxed", "720p", MediaFormat.MPEG_4);
+        AudioStream english = audio(CDN + "?english", MediaFormat.M4A, 128, "en",
+                AudioTrackType.DUBBED);
+        for (VideoStream adaptive : Arrays.asList(
+                video(CDN + "?low", "360p", MediaFormat.MPEG_4),
+                video(CDN + "?webm", "720p", MediaFormat.WEBM))) {
+            NativeStreamExtractor.Result result = NativeStreamExtractor.selectStreams(
+                    Collections.singletonList(muxed), Collections.singletonList(adaptive),
+                    Collections.singletonList(english), false, "en");
+            assertEquals(muxed.getContent(), result.videoUrl);
+            assertEquals(english.getContent(), result.audioUrl);
+        }
+    }
+
+    @Test
+    public void avoidingRedundantAudioPreservesHighFrameRateVideo() {
+        AudioStream english = audio(CDN + "?english", MediaFormat.M4A, 128, "en",
+                AudioTrackType.DUBBED);
+        for (String resolution : new String[]{"720p", "720p60"}) {
+            VideoStream muxed = new VideoStream.Builder().setId("muxed")
+                    .setContent(CDN + "?muxed", true).setResolution(resolution)
+                    .setMediaFormat(MediaFormat.MPEG_4).setIsVideoOnly(false)
+                    .setItagItem(new ItagItem(22, ItagItem.ItagType.VIDEO,
+                            MediaFormat.MPEG_4, resolution, 60)).build();
+            VideoStream adaptive = new VideoStream.Builder().setId("adaptive")
+                    .setContent(CDN + "?video", true).setResolution("720p")
+                    .setMediaFormat(MediaFormat.MPEG_4).setIsVideoOnly(true)
+                    .setItagItem(new ItagItem(136, ItagItem.ItagType.VIDEO_ONLY,
+                            MediaFormat.MPEG_4, "720p", 30)).build();
+            NativeStreamExtractor.Result result = NativeStreamExtractor.selectStreams(
+                    Collections.singletonList(muxed), Collections.singletonList(adaptive),
+                    Collections.singletonList(english), false, "en");
+            assertEquals(muxed.getContent(), result.videoUrl);
+            assertEquals(english.getContent(), result.audioUrl);
+        }
     }
 
     @Test

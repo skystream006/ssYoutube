@@ -14,6 +14,22 @@ public class MpvPlaybackRequestTest {
     private static final String AUDIO = "https://rr2.googlevideo.com/videoplayback?id=audio";
 
     @Test
+    public void shortRefillWaitKeepsBoundedCachingAndAutomaticStallRecovery() throws Exception {
+        for (String url : new String[]{VIDEO,
+                "https://manifest.googlevideo.com/api/manifest/hls_playlist/index.m3u8",
+                "https://manifest.googlevideo.com/api/manifest/dash/index.mpd"}) {
+            MpvPlaybackRequest request = new MpvPlaybackRequest(url, null, -1, "/private/ca.pem");
+            assertEquals("yes", request.options.get("cache"));
+            assertEquals("yes", request.options.get("cache-pause"));
+            assertEquals("no", request.options.get("cache-pause-initial"));
+            assertEquals(0.5, Double.parseDouble(request.options.get("cache-pause-wait")), 0);
+            assertEquals("64MiB", request.options.get("demuxer-max-bytes"));
+            assertEquals("16MiB", request.options.get("demuxer-max-back-bytes"));
+            assertFalse(request.options.containsKey("demuxer-lavf-probe-info"));
+        }
+    }
+
+    @Test
     public void audioLanguageDefaultsToEnglishAndRejectsUnsupportedValues() throws Exception {
         assertEquals("en", new MpvPlaybackRequest(VIDEO, null, 0, "/private/ca.pem")
                 .options.get("alang"));
