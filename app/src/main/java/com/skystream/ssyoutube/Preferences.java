@@ -15,6 +15,7 @@ public final class Preferences {
 
     public static final String DEFAULT_LANGUAGE = "en";
     public static final boolean DEFAULT_BACKGROUND_AUDIO = true;
+    public static final boolean DEFAULT_PATCHED_ADBLOCKING = false;
     private static final String[] LANGUAGE_CODES = {
             "en", "ar", "bn", "zh", "nl", "fr", "de", "gu", "hi", "id", "it", "ja", "kn",
             "ko", "ml", "mr", "pl", "pt", "pa", "ru", "es", "ta", "te", "th", "tr", "uk",
@@ -37,6 +38,11 @@ public final class Preferences {
 
     public static boolean isAdBlockingEnabled(boolean mpvEnabled, boolean adBlockingEnabled) {
         return !mpvEnabled && adBlockingEnabled;
+    }
+
+    public static boolean isPatchedAdBlockingEnabled(boolean mpvEnabled,
+            boolean adBlockingEnabled, boolean patchedAdBlockingEnabled) {
+        return isAdBlockingEnabled(mpvEnabled, adBlockingEnabled) && patchedAdBlockingEnabled;
     }
 
     public static String languageAt(int index) {

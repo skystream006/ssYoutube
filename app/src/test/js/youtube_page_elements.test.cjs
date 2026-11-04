@@ -272,7 +272,7 @@ async function browserFixtures(source, adSource, backgroundSource) {
         nativeStyle.id = 'ssyoutube-native-player';
         nativeStyle.textContent = 'video{display:none!important;}';
         document.head.appendChild(nativeStyle);
-        new Function('location', adSource)(location);
+        new Function('location', `return (${adSource})(false);`)(location);
         window.ytInitialPlayerResponse = {
             videoDetails: {videoId: 'content'}, playabilityStatus: {status: 'OK'},
             adPlacements: [{ad: 'preroll'}]
@@ -285,6 +285,60 @@ async function browserFixtures(source, adSource, backgroundSource) {
         check(nativeStyle.isConnected && !visible('player'), 'Keep native player suppression');
         nativeStyle.remove();
         delete window.ytInitialPlayerResponse;
+    });
+    await run('patched adblocking preserves native Response bodies, clones and browser metadata', async () => {
+        const originalText = Response.prototype.text;
+        const originalXhrText = Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseText');
+        const injectAds = patched =>
+            new Function('location', `return (${adSource})(${patched});`)(location);
+        injectAds(true);
+        try {
+            const body = JSON.stringify({videoDetails: {videoId: 'content'},
+                streamingData: {formats: [{url: 'https://media.googlevideo.com/video'}]},
+                playabilityStatus: {status: 'OK'}, adPlacements: [{ad: 'preroll'}]});
+            const response = new Response(body, {
+                status: 201, statusText: 'Created', headers: {'Content-Type': 'application/json'}
+            });
+            // A local fixture supplies the URL without making a YouTube request.
+            Object.defineProperty(response, 'url', {value: 'https://m.youtube.com/youtubei/v1/player'});
+            const clone = response.clone();
+            Object.defineProperty(clone, 'url', {value: response.url});
+            const headers = response.headers;
+            const parsed = original.parse(await response.text());
+            check(!parsed.adPlacements && parsed.streamingData.formats.length === 1, 'Patch text before parsing');
+            check(response.bodyUsed && !clone.bodyUsed, 'Preserve stream consumption');
+            check(response.status === 201 && response.statusText === 'Created'
+                && response.headers === headers, 'Preserve browser metadata');
+            let rejected = false;
+            try { await response.json(); } catch (error) { rejected = error instanceof TypeError; }
+            check(rejected, 'A second body read still rejects');
+            check(!(await clone.json()).adPlacements, 'Cloned JSON responses are patched');
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', 'data:application/json,' + encodeURIComponent(body));
+            Object.defineProperty(xhr, 'responseURL', {value: response.url});
+            await new Promise((resolve, reject) => {
+                xhr.onload = resolve;
+                xhr.onerror = reject;
+                xhr.send();
+            });
+            check(!original.parse(xhr.responseText).adPlacements
+                && xhr.response === xhr.responseText, 'Native XHR text and response are patched together');
+            const bad = new Response('{invalid');
+            Object.defineProperty(bad, 'url', {value: response.url});
+            rejected = false;
+            try { await bad.json(); } catch (error) { rejected = error instanceof SyntaxError; }
+            check(rejected, 'JSON errors are not converted to successes');
+            injectAds(false);
+            check(Response.prototype.text === originalText, 'Basic mode restores text consumption');
+            check(Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseText').get
+                === originalXhrText.get, 'Basic mode restores XHR text access');
+            check(window.fetch === original.fetch && HTMLMediaElement.prototype.play === original.play,
+                'Do not replay requests or restart media');
+        } finally {
+            window.__ssyoutubeVideoAdBlocking.stop();
+        }
+        check(JSON.parse === original.parse && Response.prototype.json === original.json,
+            'Restore browser methods on stop');
     });
     const messages = [];
     window.ssYouTubeBackgroundAudio = {postMessage: value => messages.push(value)};
@@ -500,7 +554,7 @@ test('page-element filtering passes real browser behavior fixtures', t => {
         assert.ok(report, `Browser fixtures did not finish: ${result.stdout}\n${result.stderr}`);
         const results = JSON.parse(report[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>')
             .replace(/&amp;/g, '&'));
-        assert.equal(results.length, 25);
+        assert.equal(results.length, 26);
         for (const result of results) {
             assert.equal(result.passed, true, `${result.name}: ${result.error}`);
             t.diagnostic(result.name);
