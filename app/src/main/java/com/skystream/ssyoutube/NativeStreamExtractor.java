@@ -30,15 +30,22 @@ final class NativeStreamExtractor {
         final String audioUrl;
         final String audioMime;
         final boolean live;
+        final String dashManifest;
 
         Result(Kind kind, String videoUrl, String videoMime, String audioUrl, String audioMime,
                boolean live) {
+            this(kind, videoUrl, videoMime, audioUrl, audioMime, live, null);
+        }
+
+        Result(Kind kind, String videoUrl, String videoMime, String audioUrl, String audioMime,
+               boolean live, String dashManifest) {
             this.kind = kind;
             this.videoUrl = videoUrl;
             this.videoMime = videoMime;
             this.audioUrl = audioUrl;
             this.audioMime = audioMime;
             this.live = live;
+            this.dashManifest = dashManifest;
         }
     }
 
@@ -64,7 +71,20 @@ final class NativeStreamExtractor {
         return extract(localizedExtractor(videoId, language), language, cancellation, onWarning);
     }
 
+    static Result extract(String videoId, String language, boolean adaptive,
+                          ExtractorDownloader.Cancellation cancellation,
+                          Consumer<Exception> onWarning) throws Exception {
+        return extract(localizedExtractor(videoId, language), language, adaptive,
+                cancellation, onWarning);
+    }
+
     static Result extract(StreamExtractor extractor, String language,
+                          ExtractorDownloader.Cancellation cancellation,
+                          Consumer<Exception> onWarning) throws IOException, ExtractionException {
+        return extract(extractor, language, false, cancellation, onWarning);
+    }
+
+    static Result extract(StreamExtractor extractor, String language, boolean adaptive,
                           ExtractorDownloader.Cancellation cancellation,
                           Consumer<Exception> onWarning) throws IOException, ExtractionException {
         DOWNLOADER.begin(cancellation);
@@ -77,8 +97,8 @@ final class NativeStreamExtractor {
                 throw new IOException("No supported native stream type");
             }
             boolean live = type == StreamType.LIVE_STREAM || type == StreamType.AUDIO_LIVE_STREAM;
-            if (live) {
-                Result manifest = manifest(extractor, true, cancellation, onWarning);
+            if (live || adaptive) {
+                Result manifest = manifest(extractor, live, cancellation, onWarning);
                 if (manifest != null) {
                     return manifest;
                 }
@@ -89,11 +109,24 @@ final class NativeStreamExtractor {
                     cancellation, onWarning);
             List<VideoStream> video = read(extractor::getVideoOnlyStreams, Collections.emptyList(),
                     cancellation, onWarning);
+            if (adaptive && !live) {
+                long duration = read(extractor::getLength, 0L, cancellation, onWarning);
+                String dash = AdaptiveDashManifest.create(video, audio, duration, language);
+                cancellation.check();
+                if (dash != null) {
+                    return new Result(Kind.DASH, null, "application/dash+xml", null, null,
+                            false, dash);
+                }
+            }
             Result streams = selectStreams(muxed, video, audio, live, language);
             if (streams != null) {
+                if (adaptive) {
+                    onWarning.accept(new IOException(
+                            "Adaptive formats unavailable; using fixed quality"));
+                }
                 return streams;
             }
-            if (!live) {
+            if (!live && !adaptive) {
                 Result manifest = manifest(extractor, false, cancellation, onWarning);
                 if (manifest != null) {
                     return manifest;

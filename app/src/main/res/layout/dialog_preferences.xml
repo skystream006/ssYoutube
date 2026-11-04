@@ -320,18 +320,26 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
-                <Switch
-                    android:id="@+id/mpv_toggle"
+                <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
+                    android:labelFor="@+id/playback_engine_spinner"
+                    android:text="@string/playback_engine"
+                    android:textStyle="bold" />
+
+                <Spinner
+                    android:id="@id/playback_engine_spinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:minHeight="48dp"
-                    android:text="@string/enable_mpv" />
+                    android:entries="@array/playback_engine_options"
+                    android:spinnerMode="dropdown" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/mpv_summary"
+                    android:text="@string/playback_engine_summary"
                     android:textSize="12sp" />
 
                 <LinearLayout

@@ -46,6 +46,47 @@ public class NativeStreamExtractionTest {
     }
 
     @Test
+    public void adaptiveOnDemandPrefersSegmentedManifestBeforeReadingStreamLists() throws Exception {
+        Fixture extractor = new Fixture();
+        extractor.hls = HLS;
+        extractor.muxed = Collections.singletonList(video());
+        NativeStreamExtractor.Result result = NativeStreamExtractor.extract(extractor, "en", true,
+                new ExtractorDownloader.Cancellation(), warning -> fail());
+        assertEquals(NativeStreamExtractor.Kind.HLS, result.kind);
+        assertFalse(result.live);
+        assertEquals(Arrays.asList("fetch", "type", "hls"), extractor.calls);
+    }
+
+    @Test
+    public void adaptiveOnDemandBuildsDashFromIndexedStreamsWithoutMetadataAggregation()
+            throws Exception {
+        Fixture extractor = new Fixture();
+        extractor.video = Arrays.asList(AdaptiveDashManifestTest.video(360, 400_000),
+                AdaptiveDashManifestTest.video(720, 1_500_000));
+        extractor.audio = Collections.singletonList(AdaptiveDashManifestTest.audio("en"));
+        NativeStreamExtractor.Result result = NativeStreamExtractor.extract(extractor, "en", true,
+                new ExtractorDownloader.Cancellation(), warning -> fail());
+        assertEquals(NativeStreamExtractor.Kind.DASH, result.kind);
+        assertNotNull(result.dashManifest);
+        assertNull(result.videoUrl);
+        assertEquals(Arrays.asList("fetch", "type", "hls", "dash", "audio", "muxed", "video",
+                "length"), extractor.calls);
+    }
+
+    @Test
+    public void adaptiveFallbackIsExplicitAndDoesNotRefetchManifests() throws Exception {
+        Fixture extractor = new Fixture();
+        extractor.muxed = Collections.singletonList(video());
+        List<Exception> warnings = new ArrayList<>();
+        NativeStreamExtractor.Result result = NativeStreamExtractor.extract(extractor, "en", true,
+                new ExtractorDownloader.Cancellation(), warnings::add);
+        assertEquals(NativeStreamExtractor.Kind.PROGRESSIVE, result.kind);
+        assertEquals(1, warnings.size());
+        assertEquals(1, Collections.frequency(extractor.calls, "hls"));
+        assertEquals(1, Collections.frequency(extractor.calls, "dash"));
+    }
+
+    @Test
     public void liveHlsSkipsAllDirectStreamListsAndDash() throws Exception {
         for (StreamType type : new StreamType[]{StreamType.LIVE_STREAM,
                 StreamType.AUDIO_LIVE_STREAM}) {
@@ -213,6 +254,8 @@ public class NativeStreamExtractionTest {
         final List<String> calls = new ArrayList<>();
         StreamType type = StreamType.VIDEO_STREAM;
         List<VideoStream> muxed = Collections.emptyList();
+        List<VideoStream> video = Collections.emptyList();
+        List<AudioStream> audio = Collections.emptyList();
         String hls = "";
         String dash = "";
         IOException fetchFailure;
@@ -250,7 +293,7 @@ public class NativeStreamExtractionTest {
             if (audioFailure != null) {
                 throw audioFailure;
             }
-            return Collections.emptyList();
+            return audio;
         }
 
         @Override public List<VideoStream> getVideoStreams() {
@@ -260,7 +303,12 @@ public class NativeStreamExtractionTest {
 
         @Override public List<VideoStream> getVideoOnlyStreams() {
             calls.add("video");
-            return Collections.emptyList();
+            return video;
+        }
+
+        @Override public long getLength() {
+            calls.add("length");
+            return 60;
         }
 
         @Override public String getHlsUrl() throws ParsingException {

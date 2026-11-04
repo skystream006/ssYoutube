@@ -41,7 +41,7 @@ public class AdBlockingScriptTest {
         assertTrue(activity.contains("prefs.edit().putBoolean(KEY_PATCHED_ADBLOCKING_ENABLED, enabled).apply()"));
         int start = activity.indexOf("private void setPatchedAdBlockingEnabled(");
         String setter = activity.substring(start, activity.indexOf("\n    }", start));
-        assertTrue(setter.contains("mpvEnabled || patchedAdBlockingEnabled == enabled"));
+        assertTrue(setter.contains("playbackEngine.isNative() || patchedAdBlockingEnabled == enabled"));
         assertFalse(setter.contains("!adBlockingEnabled"));
         assertFalse(setter.contains("KEY_ADBLOCKING_ENABLED"));
         assertTrue(setter.contains("updateAdBlocking(webView);"));

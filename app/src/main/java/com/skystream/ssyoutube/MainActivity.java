@@ -89,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_DEFAULT_LANGUAGE = "default_language";
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_MPV_ENABLED = "mpv_enabled";
+    private static final String KEY_PLAYBACK_ENGINE = "playback_engine";
     private static final String KEY_ADBLOCKING_ENABLED = "adblocking_enabled";
     private static final String KEY_PATCHED_ADBLOCKING_ENABLED = "patched_adblocking_enabled";
     private static final String KEY_BACKGROUND_AUDIO_ENABLED = "background_audio_enabled";
@@ -597,7 +598,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean destroying;
     private final EnumSet<PageElementBlockingScript.Option> blockedPageElements =
             EnumSet.noneOf(PageElementBlockingScript.Option.class);
-    private boolean mpvEnabled;
+    private PlaybackEngine playbackEngine;
     private boolean adBlockingEnabled;
     private boolean patchedAdBlockingEnabled;
     private WebAdBlocker adBlocker;
@@ -629,7 +630,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
-        mpvEnabled = prefs.getBoolean(KEY_MPV_ENABLED, true);
+        playbackEngine = PlaybackEngine.fromPreference(prefs.getString(KEY_PLAYBACK_ENGINE, null),
+                prefs.getBoolean(KEY_MPV_ENABLED, true));
         adBlockingEnabled = prefs.getBoolean(KEY_ADBLOCKING_ENABLED, false);
         patchedAdBlockingEnabled = prefs.getBoolean(KEY_PATCHED_ADBLOCKING_ENABLED,
                 Preferences.DEFAULT_PATCHED_ADBLOCKING);
@@ -676,7 +678,7 @@ public class MainActivity extends AppCompatActivity {
         rootContainer = findViewById(R.id.root_container);
         settingsButton = findViewById(R.id.settings_button);
         statsOverlay = findViewById(R.id.stats_overlay);
-        nativePlayer = new NativePlayerView(this, new NativePlayerView.Listener() {
+        nativePlayer = new NativePlayerView(this, playbackEngine, new NativePlayerView.Listener() {
             @Override
             public void onClose() {
                 closeNativePlayback(true);
@@ -743,7 +745,7 @@ public class MainActivity extends AppCompatActivity {
         setStatsForNerdsEnabled(statsForNerdsEnabled);
 
         if (savedInstanceState != null) {
-            if (mpvEnabled) {
+            if (playbackEngine.isNative()) {
                 closedVideoId = savedInstanceState.getString(STATE_CLOSED_VIDEO);
                 lastPlaybackKey = savedInstanceState.getString(STATE_PLAYBACK_KEY);
                 lastRouteKey = savedInstanceState.getString(STATE_ROUTE_KEY);
@@ -998,10 +1000,11 @@ public class MainActivity extends AppCompatActivity {
             nativePlaybackScript.remove();
             nativePlaybackScript = null;
         }
-        if (mpvEnabled && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+        if (playbackEngine.isNative()
+                && WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
                 nativePlaybackScript = WebViewCompat.addDocumentStartJavaScript(view,
-                        NativePlaybackScript.forPreference(mpvEnabled),
+                        NativePlaybackScript.forPreference(playbackEngine.isNative()),
                         NativePlaybackScript.ORIGIN_RULES);
             } catch (IllegalArgumentException | UnsupportedOperationException error) {
                 logActivity("Document start script unavailable", error);
@@ -1009,13 +1012,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setMpvEnabled(boolean enabled) {
-        if (mpvEnabled == enabled) {
+    private void setPlaybackEngine(PlaybackEngine engine) {
+        if (playbackEngine == engine) {
             return;
         }
-        mpvEnabled = enabled;
-        prefs.edit().putBoolean(KEY_MPV_ENABLED, enabled).apply();
         closeNativePlayback(false);
+        playbackEngine = engine;
+        prefs.edit().putString(KEY_PLAYBACK_ENGINE, engine.preference).apply();
+        nativePlayer.setPlaybackEngine(engine);
         closedVideoId = null;
         lastRouteKey = null;
         webAudioActive = false;
@@ -1137,7 +1141,7 @@ public class MainActivity extends AppCompatActivity {
         }
         boolean webActive = webBackgroundAudioAvailable && webAudioActive
                 && playbackOrigin(webView.getUrl()) != null
-                && (!mpvEnabled || PlaybackRequest.isShortsPage(webView.getUrl()));
+                && (!playbackEngine.isNative() || PlaybackRequest.isShortsPage(webView.getUrl()));
         boolean active = nativePlayer.wantsBackgroundAudio() || webActive;
         boolean sessionNeeded = backgroundPlaybackState.needsProtection(
                 active, backgroundServiceRequested, SystemClock.elapsedRealtime());
@@ -1228,12 +1232,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateAdBlocking(WebView view) {
         adBlocker.setEnabled(view,
-                Preferences.isAdBlockingEnabled(mpvEnabled, adBlockingEnabled),
-                Preferences.isPatchedAdBlockingEnabled(mpvEnabled, patchedAdBlockingEnabled));
+                Preferences.isAdBlockingEnabled(playbackEngine.isNative(), adBlockingEnabled),
+                Preferences.isPatchedAdBlockingEnabled(
+                        playbackEngine.isNative(), patchedAdBlockingEnabled));
     }
 
     private void setAdBlockingEnabled(boolean enabled) {
-        if (mpvEnabled || adBlockingEnabled == enabled) {
+        if (playbackEngine.isNative() || adBlockingEnabled == enabled) {
             return;
         }
         adBlockingEnabled = enabled;
@@ -1243,7 +1248,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setPatchedAdBlockingEnabled(boolean enabled) {
-        if (mpvEnabled || patchedAdBlockingEnabled == enabled) {
+        if (playbackEngine.isNative() || patchedAdBlockingEnabled == enabled) {
             return;
         }
         patchedAdBlockingEnabled = enabled;
@@ -1334,7 +1339,8 @@ public class MainActivity extends AppCompatActivity {
         if (url == null || nativePlayer == null || isDestroyed()) {
             return;
         }
-        if (!mpvEnabled || !PlaybackRequest.isYouTubePage(url) || PlaybackRequest.isShortsPage(url)) {
+        if (!playbackEngine.isNative() || !PlaybackRequest.isYouTubePage(url)
+                || PlaybackRequest.isShortsPage(url)) {
             closedVideoId = null;
             closeNativePlayback(false);
             lastRouteKey = null;
@@ -1786,7 +1792,7 @@ public class MainActivity extends AppCompatActivity {
         });
         ToggleButton relatedVideosToggle = content.findViewById(R.id.related_videos_toggle);
         ToggleButton headerToggle = content.findViewById(R.id.header_toggle);
-        Switch mpvToggle = content.findViewById(R.id.mpv_toggle);
+        Spinner playbackSpinner = content.findViewById(R.id.playback_engine_spinner);
         View adBlockingSettings = content.findViewById(R.id.adblocking_settings);
         Switch adBlockingToggle = content.findViewById(R.id.adblocking_toggle);
         Switch patchedAdBlockingToggle = content.findViewById(R.id.patched_adblocking_toggle);
@@ -1806,8 +1812,8 @@ public class MainActivity extends AppCompatActivity {
         siteModeSpinner.setSelection(desktopMode ? 1 : 0);
         relatedVideosToggle.setChecked(relatedHidden);
         headerToggle.setChecked(headerHidden);
-        mpvToggle.setChecked(mpvEnabled);
-        adBlockingSettings.setVisibility(mpvEnabled ? View.GONE : View.VISIBLE);
+        playbackSpinner.setSelection(playbackEngine.ordinal());
+        adBlockingSettings.setVisibility(playbackEngine.isNative() ? View.GONE : View.VISIBLE);
         adBlockingToggle.setChecked(adBlockingEnabled);
         patchedAdBlockingToggle.setChecked(patchedAdBlockingEnabled);
         loggingToggle.setChecked(loggingEnabled);
@@ -1872,9 +1878,17 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        mpvToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            setMpvEnabled(isChecked);
-            adBlockingSettings.setVisibility(isChecked ? View.GONE : View.VISIBLE);
+        playbackSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                setPlaybackEngine(PlaybackEngine.values()[position]);
+                adBlockingSettings.setVisibility(
+                        playbackEngine.isNative() ? View.GONE : View.VISIBLE);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
         });
         adBlockingToggle.setOnCheckedChangeListener((buttonView, isChecked) ->
                 setAdBlockingEnabled(isChecked));
@@ -2367,7 +2381,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             view.evaluateJavascript(
-                    NativePlaybackScript.forPreference(mpvEnabled), null);
+                    NativePlaybackScript.forPreference(playbackEngine.isNative()), null);
             applyRelatedVisibility(view);
             applyHeaderVisibility(view);
             applyPageElementBlocking(view);

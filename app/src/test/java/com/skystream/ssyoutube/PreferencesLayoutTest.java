@@ -194,14 +194,14 @@ public class PreferencesLayoutTest {
             assertTrue(id + " must be inside Advanced", isInside(byId(layout, id), advanced));
         }
         for (String id : new String[] {"language_spinner", "theme_spinner", "site_mode_spinner",
-                "related_videos_toggle", "header_toggle", "mpv_toggle", "check_updates_button",
+                "related_videos_toggle", "header_toggle", "playback_engine_spinner", "check_updates_button",
                 "navigation_bar"}) {
             assertFalse(id + " must stay outside Advanced", isInside(byId(layout, id), advanced));
         }
     }
 
     @Test
-    public void adBlockerSectionStartsCollapsedAndContainsMpvAndAdblocking() throws Exception {
+    public void adBlockerSectionStartsCollapsedAndContainsPlaybackAndAdblocking() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         Element section = byId(layout, "adblocker_section");
         assertEquals("gone", section.getAttributeNS(ANDROID, "visibility"));
@@ -212,9 +212,9 @@ public class PreferencesLayoutTest {
         assertEquals("@string/expand_adblocker_settings",
                 expander.getAttributeNS(ANDROID, "contentDescription"));
         assertEquals("48dp", expander.getAttributeNS(ANDROID, "minHeight"));
-        Element toggle = byId(layout, "mpv_toggle");
-        assertEquals("Switch", toggle.getTagName());
-        assertEquals("@string/enable_mpv", toggle.getAttributeNS(ANDROID, "text"));
+        Element toggle = byId(layout, "playback_engine_spinner");
+        assertEquals("Spinner", toggle.getTagName());
+        assertEquals("@array/playback_engine_options", toggle.getAttributeNS(ANDROID, "entries"));
         assertEquals("48dp", toggle.getAttributeNS(ANDROID, "minHeight"));
         assertTrue(isInside(toggle, section));
         assertTrue(isInside(byId(layout, "adblocking_toggle"), section));
@@ -286,7 +286,7 @@ public class PreferencesLayoutTest {
     }
 
     @Test
-    public void adblockingHasAHiddenPanelBelowMpvOutsideAdvancedSettings() throws Exception {
+    public void adblockingHasAHiddenPanelBelowPlaybackOutsideAdvancedSettings() throws Exception {
         Document layout = resource("layout/dialog_preferences.xml");
         Element panel = byId(layout, "adblocking_settings");
         Element toggle = byId(layout, "adblocking_toggle");
@@ -296,8 +296,8 @@ public class PreferencesLayoutTest {
         assertEquals("@string/enable_adblocking", toggle.getAttributeNS(ANDROID, "text"));
         assertEquals("48dp", toggle.getAttributeNS(ANDROID, "minHeight"));
         assertFalse(isInside(panel, byId(layout, "advanced_settings")));
-        assertEquals(byId(layout, "mpv_toggle").getParentNode(), panel.getParentNode());
-        assertTrue((byId(layout, "mpv_toggle").compareDocumentPosition(panel)
+        assertEquals(byId(layout, "playback_engine_spinner").getParentNode(), panel.getParentNode());
+        assertTrue((byId(layout, "playback_engine_spinner").compareDocumentPosition(panel)
                 & Node.DOCUMENT_POSITION_FOLLOWING) != 0);
     }
 

@@ -36,13 +36,13 @@ public final class Preferences {
     private Preferences() {
     }
 
-    public static boolean isAdBlockingEnabled(boolean mpvEnabled, boolean adBlockingEnabled) {
-        return !mpvEnabled && adBlockingEnabled;
+    public static boolean isAdBlockingEnabled(boolean nativePlayback, boolean adBlockingEnabled) {
+        return !nativePlayback && adBlockingEnabled;
     }
 
-    public static boolean isPatchedAdBlockingEnabled(boolean mpvEnabled,
+    public static boolean isPatchedAdBlockingEnabled(boolean nativePlayback,
             boolean patchedAdBlockingEnabled) {
-        return !mpvEnabled && patchedAdBlockingEnabled;
+        return !nativePlayback && patchedAdBlockingEnabled;
     }
 
     public static String languageAt(int index) {
