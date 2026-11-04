@@ -51,6 +51,10 @@ final class MpvPlaybackRequest {
         options.put("demuxer-max-bytes", "64MiB");
         options.put("demuxer-max-back-bytes", "16MiB");
         options.put("cache", "yes");
+        // Resume after a short refill; keep reading ahead within the existing memory budget.
+        options.put("cache-pause", "yes");
+        options.put("cache-pause-initial", "no");
+        options.put("cache-pause-wait", "0.5");
         options.put("keep-open", "yes");
         options.put("idle", "yes");
         options.put("vo", "null");

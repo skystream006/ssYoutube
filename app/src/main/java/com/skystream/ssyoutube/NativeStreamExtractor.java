@@ -2,19 +2,22 @@ package com.skystream.ssyoutube;
 
 import org.schabi.newpipe.extractor.NewPipe;
 import org.schabi.newpipe.extractor.ServiceList;
+import org.schabi.newpipe.extractor.exceptions.ContentNotSupportedException;
+import org.schabi.newpipe.extractor.exceptions.ExtractionException;
 import org.schabi.newpipe.extractor.localization.Localization;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.AudioTrackType;
 import org.schabi.newpipe.extractor.stream.DeliveryMethod;
 import org.schabi.newpipe.extractor.stream.Stream;
 import org.schabi.newpipe.extractor.stream.StreamExtractor;
-import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 /** NewPipe owns YouTube protocol changes, signatures and stream extraction. */
 final class NativeStreamExtractor {
@@ -56,28 +59,45 @@ final class NativeStreamExtractor {
     }
 
     static Result extract(String videoId, String language,
-                          ExtractorDownloader.Cancellation cancellation) throws Exception {
-        StreamExtractor extractor = localizedExtractor(videoId, language);
+                          ExtractorDownloader.Cancellation cancellation,
+                          Consumer<Exception> onWarning) throws Exception {
+        return extract(localizedExtractor(videoId, language), language, cancellation, onWarning);
+    }
+
+    static Result extract(StreamExtractor extractor, String language,
+                          ExtractorDownloader.Cancellation cancellation,
+                          Consumer<Exception> onWarning) throws IOException, ExtractionException {
         DOWNLOADER.begin(cancellation);
         try {
-            StreamInfo info = StreamInfo.getInfo(extractor);
+            // StreamInfo also collects related items, subtitles and other unused metadata.
+            extractor.fetchPage();
             cancellation.check();
-            boolean live = info.getStreamType() == StreamType.LIVE_STREAM
-                    || info.getStreamType() == StreamType.AUDIO_LIVE_STREAM;
+            StreamType type = extractor.getStreamType();
+            if (type == StreamType.NONE) {
+                throw new IOException("No supported native stream type");
+            }
+            boolean live = type == StreamType.LIVE_STREAM || type == StreamType.AUDIO_LIVE_STREAM;
             if (live) {
-                Result manifest = manifest(info, true);
+                Result manifest = manifest(extractor, true, cancellation, onWarning);
                 if (manifest != null) {
                     return manifest;
                 }
             }
-            Result streams = selectStreams(info.getVideoStreams(),
-                    info.getVideoOnlyStreams(), info.getAudioStreams(), live, language);
+            List<AudioStream> audio = read(extractor::getAudioStreams, Collections.emptyList(),
+                    cancellation, onWarning);
+            List<VideoStream> muxed = read(extractor::getVideoStreams, Collections.emptyList(),
+                    cancellation, onWarning);
+            List<VideoStream> video = read(extractor::getVideoOnlyStreams, Collections.emptyList(),
+                    cancellation, onWarning);
+            Result streams = selectStreams(muxed, video, audio, live, language);
             if (streams != null) {
                 return streams;
             }
-            Result manifest = manifest(info, live);
-            if (manifest != null) {
-                return manifest;
+            if (!live) {
+                Result manifest = manifest(extractor, false, cancellation, onWarning);
+                if (manifest != null) {
+                    return manifest;
+                }
             }
             throw new IOException("No supported native streams");
         } finally {
@@ -92,14 +112,42 @@ final class NativeStreamExtractor {
         }
     }
 
-    private static Result manifest(StreamInfo info, boolean live) {
-        if (NativeNetworkPolicy.isMediaUrl(info.getHlsUrl())) {
-            return new Result(Kind.HLS, info.getHlsUrl(), "application/x-mpegURL", null, null, live);
+    private static Result manifest(StreamExtractor extractor, boolean live,
+                                   ExtractorDownloader.Cancellation cancellation,
+                                   Consumer<Exception> onWarning)
+            throws IOException, ExtractionException {
+        String hls = read(extractor::getHlsUrl, "", cancellation, onWarning);
+        if (NativeNetworkPolicy.isMediaUrl(hls)) {
+            return new Result(Kind.HLS, hls, "application/x-mpegURL", null, null, live);
         }
-        if (NativeNetworkPolicy.isMediaUrl(info.getDashMpdUrl())) {
-            return new Result(Kind.DASH, info.getDashMpdUrl(), "application/dash+xml", null, null, live);
+        String dash = read(extractor::getDashMpdUrl, "", cancellation, onWarning);
+        if (NativeNetworkPolicy.isMediaUrl(dash)) {
+            return new Result(Kind.DASH, dash, "application/dash+xml", null, null, live);
         }
         return null;
+    }
+
+    private interface StreamField<T> {
+        T get() throws IOException, ExtractionException;
+    }
+
+    private static <T> T read(StreamField<T> field, T fallback,
+                              ExtractorDownloader.Cancellation cancellation,
+                              Consumer<Exception> onWarning)
+            throws IOException, ExtractionException {
+        cancellation.check();
+        try {
+            T value = field.get();
+            cancellation.check();
+            return value;
+        } catch (ContentNotSupportedException error) {
+            throw error;
+        } catch (IOException | ExtractionException error) {
+            cancellation.check();
+            // One unavailable format must not hide another playable format.
+            onWarning.accept(error);
+            return fallback;
+        }
     }
 
     static Result selectStreams(List<VideoStream> muxedStreams, List<VideoStream> videoStreams,
@@ -113,16 +161,28 @@ final class NativeStreamExtractor {
         VideoStream muxed = bestVideo(muxedStreams);
         VideoStream video = bestVideo(videoStreams);
         AudioStream audio = bestAudio(audioStreams, language);
-        if (video != null && audio != null && (muxed == null
-                || (resolution(video.getResolution()) > resolution(muxed.getResolution())
-                && videoCompatibility(mime(video), video.getCodec())
-                >= videoCompatibility(mime(muxed), muxed.getCodec())))) {
-            return new Result(Kind.PROGRESSIVE, video.getContent(), mime(video),
-                    audio.getContent(), mime(audio), live);
+        boolean matchingAudio = audio != null
+                && matchesLanguage(audio, Preferences.normalizeLanguage(language));
+        if (video != null && audio != null) {
+            boolean preferVideoOnly = muxed == null;
+            if (muxed != null) {
+                boolean higherResolution =
+                        resolution(video.getResolution()) > resolution(muxed.getResolution());
+                boolean avoidsRedundantAudio = matchingAudio
+                        && video.getResolution().equals(muxed.getResolution())
+                        && video.getFps() >= muxed.getFps();
+                preferVideoOnly = (higherResolution || avoidsRedundantAudio)
+                        && videoCompatibility(mime(video), video.getCodec())
+                        >= videoCompatibility(mime(muxed), muxed.getCodec());
+            }
+            if (preferVideoOnly) {
+                return new Result(Kind.PROGRESSIVE, video.getContent(), mime(video),
+                        audio.getContent(), mime(audio), live);
+            }
         }
         if (muxed != null) {
             // Muxed streams have no audio-language metadata; use a matching separate track.
-            if (audio != null && matchesLanguage(audio, Preferences.normalizeLanguage(language))) {
+            if (matchingAudio) {
                 return new Result(Kind.PROGRESSIVE, muxed.getContent(), mime(muxed),
                         audio.getContent(), mime(audio), live);
             }
