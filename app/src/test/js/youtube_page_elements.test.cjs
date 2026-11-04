@@ -340,6 +340,204 @@ async function browserFixtures(source, adSource, backgroundSource) {
         check(JSON.parse === original.parse && Response.prototype.json === original.json,
             'Restore browser methods on stop');
     });
+    const injectAds = patched =>
+        new Function('location', `return (${adSource})(${patched});`)(location);
+    async function adFixture(html, verify, setup = () => {}) {
+        fixture(html);
+        setup();
+        injectAds(true);
+        try {
+            await verify();
+        } finally {
+            window.__ssyoutubeVideoAdBlocking?.stop();
+        }
+    }
+    await run('patched-only UI hides explicit ads and shopping without the basic rule engine', async () => {
+        await adFixture(`
+            <ytd-rich-item-renderer id="adCard"><ytd-ad-slot-renderer>Ad</ytd-ad-slot-renderer></ytd-rich-item-renderer>
+            <ytm-merchandise-shelf-renderer id="merch">Merchandise</ytm-merchandise-shelf-renderer>
+            <ytd-product-list-renderer id="products">Products</ytd-product-list-renderer>
+            <div class="ytp-paid-content-overlay" id="disclosure">Includes paid promotion</div>
+            <ytm-paid-content-overlay-renderer id="mobileDisclosure">Paid promotion</ytm-paid-content-overlay-renderer>
+            <ytd-engagement-panel-section-list-renderer target-id="engagement-panel-PAproduct" id="shoppingPanel">Shop</ytd-engagement-panel-section-list-renderer>
+            <ytd-engagement-panel-section-list-renderer panel-identifier="jumpahead" id="premiumPanel">Premium</ytd-engagement-panel-section-list-renderer>
+            <ytd-video-renderer id="organic">Premium product review</ytd-video-renderer>
+            <ytm-rich-item-renderer id="short"><a href="/shorts/id">Short</a></ytm-rich-item-renderer>
+            <video id="video" style="opacity:0.9"></video>
+        `, () => {
+            const hidden = ['adCard', 'merch', 'products', 'disclosure', 'mobileDisclosure',
+                'shoppingPanel', 'premiumPanel'];
+            const nodes = hidden.map(id => document.getElementById(id));
+            hidden.forEach(id => check(!visible(id), `Hide ${id}`));
+            check(visible('organic') && visible('video') && visible('short'), 'Keep ordinary playback and cards');
+            update({shorts: true});
+            injectAds(false);
+            hidden.forEach((id, index) => {
+                check(visible(id) && document.getElementById(id) === nodes[index], `Restore ${id} in place`);
+            });
+            check(!visible('short'), 'Keep the independent page-element setting');
+            check(!document.querySelector('[data-ssyoutube-patched-ad]')
+                && !document.getElementById('ssyoutube-patched-adblocking'), 'Remove owned UI state');
+            check(document.getElementById('video').style.opacity === '0.9', 'Preserve site styling');
+            check(window.fetch === original.fetch && HTMLMediaElement.prototype.play === original.play,
+                'No request replay or media control');
+        });
+    });
+    await run('patched Premium and end-card UI preserves ordinary banners, videos and comments', async () => {
+        await adFixture(`
+            <ytd-statement-banner-renderer id="premium"><img src="https://www.gstatic.com/youtube/img/promos/growth/premium.png"></ytd-statement-banner-renderer>
+            <ytm-background-promo-renderer id="upsell"><a href="/premium">Try Premium</a></ytm-background-promo-renderer>
+            <ytd-statement-banner-renderer id="doodle">SPunlimited img/promos/growth/ tutorial</ytd-statement-banner-renderer>
+            <ytd-statement-banner-renderer id="lookalike"><img src="https://www.gstatic.com.evil.test/youtube/img/promos/growth/a.png"></ytd-statement-banner-renderer>
+            <ytd-statement-banner-renderer id="external"><a href="https://example.test/premium">Premium</a></ytd-statement-banner-renderer>
+            <ytd-video-renderer id="organic"><ytd-paid-content-overlay-renderer>Paid label in ordinary card</ytd-paid-content-overlay-renderer></ytd-video-renderer>
+            <ytd-rich-grid-media><ytd-ad-slot-renderer id="homeContent">Ordinary home card</ytd-ad-slot-renderer></ytd-rich-grid-media>
+            <yt-lockup-view-model><ytd-product-list-renderer id="lockupContent">Ordinary lockup</ytd-product-list-renderer></yt-lockup-view-model>
+            <ytd-rich-item-renderer id="mixedCard"><ytd-merchandise-shelf-renderer id="mixedShop">Shop</ytd-merchandise-shelf-renderer><span id="mixedText">Unclassified content</span></ytd-rich-item-renderer>
+            <ytd-comment-thread-renderer id="comment"><ytd-product-list-renderer id="commentProduct">Comment fixture</ytd-product-list-renderer></ytd-comment-thread-renderer>
+            <yt-live-chat-renderer><div class="ytp-paid-content-overlay" id="chatLabel">Chat fixture</div></yt-live-chat-renderer>
+            <ytd-playlist-panel-renderer><ytd-ad-slot-renderer id="playlistItem">Playlist fixture</ytd-ad-slot-renderer></ytd-playlist-panel-renderer>
+            <ytd-engagement-panel-section-list-renderer target-id="engagement-panel-comments-section" id="commentsPanel">Comments</ytd-engagement-panel-section-list-renderer>
+            <a class="ytp-ce-element ytp-ce-website" id="store"><span style="background-image:url('https://encrypted-tbn0.gstatic.com/shopping?q=product')">Shop</span></a>
+            <a class="ytp-ce-element ytp-ce-website" id="website"><img src="https://example.test/website.png">Website</a>
+            <a class="ytp-ce-element ytp-ce-video" id="endVideo"><img src="https://encrypted-tbn0.gstatic.com/shopping?q=product">Video</a>
+            <div role="dialog" id="accountDialog"><ytd-statement-banner-renderer id="accountBanner"><a href="/premium">Account information</a></ytd-statement-banner-renderer></div>
+        `, () => {
+            for (const id of ['premium', 'upsell', 'store', 'mixedShop']) check(!visible(id), `Hide ${id}`);
+            for (const id of ['doodle', 'lookalike', 'external', 'organic', 'commentProduct',
+                'chatLabel', 'playlistItem', 'commentsPanel', 'website', 'endVideo', 'accountBanner',
+                'homeContent', 'lockupContent', 'mixedText']) {
+                check(visible(id), `Preserve ${id}`);
+            }
+        });
+    });
+    await run('patched UI repairs its stylesheet and restores recycled nodes without extra observers', async () => {
+        await adFixture(`
+            <ytd-statement-banner-renderer id="recycled"><a href="/premium">Promotion</a></ytd-statement-banner-renderer>
+            <ytd-rich-item-renderer id="recycledCard"><ytd-merchandise-shelf-renderer>Shop</ytd-merchandise-shelf-renderer></ytd-rich-item-renderer>
+        `, async () => {
+            const before = observers;
+            const node = document.getElementById('recycled');
+            check(!visible('recycled') && !visible('recycledCard'), 'Hide initial promotions');
+            node.querySelector('a').setAttribute('href', '/watch?v=organic');
+            const card = document.getElementById('recycledCard');
+            card.innerHTML = '<ytd-video-renderer>Organic video</ytd-video-renderer>';
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(visible('recycled') && visible('recycledCard'), 'Restore recycled content');
+            node.data = {button: {buttonRenderer: {navigationEndpoint: {browseEndpoint: {browseId: 'SPunlimited'}}}}};
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(!visible('recycled'), 'Read typed site promotion data');
+            node.data = {title: {simpleText: 'Ordinary banner'}};
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(visible('recycled'), 'Clear stale data markers');
+            document.body.insertAdjacentHTML('beforeend', '<ytm-product-list-renderer id="lateShop">Shop</ytm-product-list-renderer>');
+            await new Promise(resolve => setTimeout(resolve, 600));
+            check(!visible('lateShop'), 'Existing heartbeat handles dynamic content');
+            document.getElementById('ssyoutube-patched-adblocking').textContent = '';
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(!visible('lateShop'), 'Repair changed stylesheet contents');
+            document.getElementById('ssyoutube-patched-adblocking').remove();
+            injectAds(true);
+            check(!visible('lateShop') && document.querySelectorAll('#ssyoutube-patched-adblocking').length === 1,
+                'Reinjection repairs without stacking styles');
+            check(observers === before, 'Do not install another mutation observer');
+            window.__ssyoutubeVideoAdBlocking.stop();
+            check(visible('lateShop') && visible('recycledCard'), 'Stop restores late and recycled content');
+        });
+    });
+    await run('ad dialogs dismiss through site close handlers so backdrops and focus traps are released', async () => {
+        let closed = 0;
+        await adFixture(`
+            <div id="backdrop">Backdrop</div>
+            <div role="dialog" id="adDialog" style="pointer-events:none"><ytd-ad-slot-renderer>Ad</ytd-ad-slot-renderer>
+                <button class="ytp-ad-overlay-close-button" style="display:none">Hidden close</button>
+                <button id="dismiss-button" style="pointer-events:auto">Close</button></div>
+            <div class="ytp-ad-overlay-container" id="overlay">Overlay ad
+                <button class="ytp-ad-overlay-close-button">Close</button></div>
+            <div role="dialog" id="unsupported"><ytd-ad-slot-renderer>Ad without dismiss control</ytd-ad-slot-renderer></div>
+        `, () => {
+            check(closed === 2, 'Use each supported close handler');
+            check(!document.getElementById('adDialog') && !document.getElementById('backdrop')
+                && !document.getElementById('overlay'), 'Let site handlers release their own modal state');
+            check(visible('unsupported') && !document.querySelector('#unsupported [data-ssyoutube-patched-ad]'),
+                'Never merely hide an unsupported modal');
+        }, () => {
+            document.getElementById('dismiss-button').onclick = () => {
+                closed++;
+                document.getElementById('adDialog').remove();
+                document.getElementById('backdrop').remove();
+            };
+            document.querySelector('#overlay .ytp-ad-overlay-close-button').onclick = () => {
+                closed++;
+                document.getElementById('overlay').remove();
+            };
+        });
+    });
+    await run('ad dismissal leaves disabled, invisible, account, consent and playback-error dialogs intact', async () => {
+        let clicked = 0;
+        await adFixture(`
+            <div role="dialog" id="disabled"><ytd-ad-slot-renderer>Ad</ytd-ad-slot-renderer><button class="ytp-ad-overlay-close-button" disabled>Close</button></div>
+            <div role="dialog" id="ariaDisabled"><ytd-ad-slot-renderer>Ad</ytd-ad-slot-renderer><button class="ytp-ad-overlay-close-button" aria-disabled="true">Close</button></div>
+            <div role="dialog" id="invisible" style="opacity:0"><ytd-ad-slot-renderer>Ad</ytd-ad-slot-renderer><button class="ytp-ad-overlay-close-button">Close</button></div>
+            <div role="dialog" id="inertDialog" inert><ytd-ad-slot-renderer>Ad</ytd-ad-slot-renderer><button class="ytp-ad-overlay-close-button">Close</button></div>
+            <div role="dialog" id="generic"><button class="ytp-ad-overlay-close-button">Close account</button></div>
+            <div role="dialog" id="confirm"><ytd-ad-slot-renderer>Ad</ytd-ad-slot-renderer><button>OK</button></div>
+            <div role="dialog" id="login"><ytd-ad-slot-renderer>Stale ad</ytd-ad-slot-renderer><form>Sign in</form><button class="ytp-ad-overlay-close-button">Close</button></div>
+            <div role="dialog" id="denied"><ytd-ad-slot-renderer>Stale ad</ytd-ad-slot-renderer><yt-enforcement-message-view-model><a href="/premium">Playback unavailable</a></yt-enforcement-message-view-model><button class="ytp-ad-overlay-close-button">Close</button></div>
+            <div role="dialog" id="error"><ytd-ad-slot-renderer>Stale ad</ytd-ad-slot-renderer><div class="ytp-error">Playback error</div><button class="ytp-ad-overlay-close-button">Close</button></div>
+            <div role="dialog" id="consent"><ytd-ad-slot-renderer>Stale ad</ytd-ad-slot-renderer><ytd-consent-bump-v2-lightbox>Consent</ytd-consent-bump-v2-lightbox><button class="ytp-ad-overlay-close-button">Close</button></div>
+            <div aria-modal="true" id="ariaModal"><ytd-ad-slot-renderer>Ad without dismiss control</ytd-ad-slot-renderer></div>
+            <ytd-ad-interstitial-renderer id="interstitial"><ytd-ad-slot-renderer>Ad
+                <button class="ytp-ad-overlay-close-button" disabled>Close later</button></ytd-ad-slot-renderer></ytd-ad-interstitial-renderer>
+        `, () => {
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(clicked === 0, 'No unsafe or unrelated clicks');
+            check(!document.querySelector('[data-ssyoutube-patched-ad]'), 'Do not hide modal contents either');
+            for (const id of ['disabled', 'ariaDisabled', 'generic', 'confirm', 'login', 'denied', 'error', 'consent']) {
+                check(visible(id), `Leave ${id} visible`);
+            }
+            document.querySelector('#interstitial button').disabled = false;
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(clicked === 1 && visible('interstitial'), 'A newly enabled close stays reachable');
+        }, () => {
+            document.querySelectorAll('button').forEach(button => { button.onclick = () => clicked++; });
+        });
+    });
+    await run('ad close retries are rate-limited per button and stop with patched mode', () => {
+        fixture('<div class="ytp-ad-overlay-container"><button class="ytp-ad-overlay-close-button">Close</button></div>');
+        let now = 10000;
+        let clicked = 0;
+        document.querySelector('button').onclick = () => clicked++;
+        new Function('location', 'Date', `return (${adSource})(true);`)(location, {now: () => now});
+        try {
+            check(clicked === 1, 'Initial close attempt');
+            now += 4999;
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(clicked === 1, 'No retry before five seconds');
+            now++;
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(clicked === 2, 'Retry at five seconds if the site has not dismissed the ad');
+            injectAds(false);
+            now += 5000;
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(clicked === 2, 'Basic mode does not dismiss patched ad dialogs');
+        } finally {
+            window.__ssyoutubeVideoAdBlocking.stop();
+        }
+    });
+    await run('patched UI work is bounded and owned markers are not rewritten every heartbeat', async () => {
+        await adFixture(Array.from({length: 2049}, (_, index) =>
+            `<ytd-merchandise-shelf-renderer id="shop${index}">Shop</ytd-merchandise-shelf-renderer>`).join(''),
+        () => {
+            check(!visible('shop2047') && visible('shop2048'), 'Process at most 2048 candidates per selector');
+            const node = document.getElementById('shop0');
+            const mutations = new OriginalObserver(() => {});
+            mutations.observe(node, {attributes: true});
+            window.__ssyoutubeVideoAdBlocking.update();
+            check(mutations.takeRecords().length === 0, 'Do not repeatedly set an unchanged marker');
+            mutations.disconnect();
+        });
+    });
     const messages = [];
     window.ssYouTubeBackgroundAudio = {postMessage: value => messages.push(value)};
     let backgroundNow = 1000000;
@@ -530,7 +728,8 @@ test('page-element filtering passes real browser behavior fixtures', t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ssyoutube-elements-'));
     try {
         const html = path.join(directory, 'fixtures.html');
-        fs.writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8"></head><body>
+        fs.writeFileSync(html, `<!doctype html><html><head><meta charset="utf-8">
+            <meta http-equiv="Content-Security-Policy" content="img-src 'none'"></head><body>
             <script>
             (${browserFixtures})(${JSON.stringify(source).replace(/</g, '\\u003c')},
                 ${JSON.stringify(adSource).replace(/</g, '\\u003c')},
@@ -547,14 +746,14 @@ test('page-element filtering passes real browser behavior fixtures', t => {
         const result = spawnSync(browser, [
             '--headless', '--no-sandbox', '--disable-gpu', '--disable-background-networking',
             '--no-first-run', '--no-default-browser-check', `--user-data-dir=${directory}/profile`,
-            '--virtual-time-budget=10000', '--dump-dom', pathToFileURL(html).href
+            '--virtual-time-budget=15000', '--dump-dom', pathToFileURL(html).href
         ], {encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024});
         assert.equal(result.status, 0, result.error?.message || result.stderr);
         const report = result.stdout.match(/<pre id="results">([^]*?)<\/pre>/);
         assert.ok(report, `Browser fixtures did not finish: ${result.stdout}\n${result.stderr}`);
         const results = JSON.parse(report[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>')
             .replace(/&amp;/g, '&'));
-        assert.equal(results.length, 26);
+        assert.equal(results.length, 33);
         for (const result of results) {
             assert.equal(result.passed, true, `${result.name}: ${result.error}`);
             t.diagnostic(result.name);

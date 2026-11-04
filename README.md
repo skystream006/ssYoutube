@@ -36,14 +36,15 @@ playback extraction is separate and anonymous.
   This does not translate videos or change the app UI; changing it does not interrupt a
   video that is already playing.
   **Ad-Blocker Settings** starts collapsed each time Preferences opens. Expand it for
-  **Enable mpv player**, **Enable adblocking**, and **Patched AdBlockin**.
+  **Enable mpv player**, **Enable adblocking**, and **Patched AdBlocking**.
   **Enable mpv player** is on by default and saved across restarts. Turn it off to use
   YouTube's web player instead. Switching stops native playback (including the miniplayer
   and pending extraction) and reloads the current page; turn it back on to use mpv again.
   **Enable adblocking** is available only with mpv off and starts off. The choice is saved
   across restarts. Enabling mpv disables adblocking and hides its controls, without
   forgetting that choice; turning mpv off restores it. Changing adblocking reloads the
-  current page so disabling it also removes filters already applied to the document.
+  current page so disabling it removes that option's filters from the document;
+  independently enabled patched filtering remains active.
   This is a lightweight, bundled rule-based engine, not uBlock Origin or a full
   EasyList/Adblock Plus implementation. It blocks selected advertising requests and hides
   page ad containers. A bundled YouTube script also removes known pre-roll, mid-roll and
@@ -51,12 +52,15 @@ playback extraction is separate and anonymous.
   explicitly marked Shorts ad entries, and clicks available skip buttons in an ad-playing
   player as a fallback. It does not bypass anti-adblock checks or remove creator sponsorships.
   YouTube changes and server-stitched ads can still defeat these filters.
-  **Patched AdBlockin** is an additional, default-off implementation option under
-  **Enable adblocking**, available with mpv off. It extends the existing player-data
-  filtering to text responses and explicit feed/search ad components before rendering.
-  The choice is saved, temporarily inactive when adblocking is off or mpv is on, and
-  changing it reloads the page. This is a ReVanced-inspired WebView adaptation, not a
-  YouTube APK patcher; it does not download or install another app.
+  **Patched AdBlocking** is a separate, default-off switch, available with mpv off.
+  It works independently of **Enable adblocking** and extends the shared player-data
+  filtering to text responses, feed/search ad components, merchandise and product panels,
+  identified Premium promotions, shopping end cards, and paid-promotion labels.
+  Its reversible UI fallback also dismisses supported ad popups through their close buttons.
+  Either switch can be used alone or both can be enabled together. Both choices are saved,
+  temporarily inactive when mpv is on, and changing either reloads the page.
+  This is a ReVanced-inspired WebView adaptation, not a YouTube APK patcher;
+  it does not download or install another app.
   **Hide related videos** and **Hide header** are independent button toggles on the same
   row, always available regardless of site mode or page. **Hide header** hides the desktop
   masthead or mobile header bar and collapses its reserved vertical space. Both choices
@@ -253,7 +257,7 @@ app/src/test/java/... JUnit coverage for URL routing, page scripts, preferences 
 ### Bundled adblocking rules
 
 `app/src/main/res/raw/adblocking_rules.txt` is an app-maintained, versioned rule resource,
-loaded off the UI thread only when adblocking is first enabled. No filter lists or
+loaded off the UI thread when either adblocking option is first enabled. No filter lists or
 executable scripts are downloaded. There are no proxy requests, certificate changes,
 or additional permissions/runtime dependencies. The bundled `youtube_video_adblock.js`
 is loaded with the rules and installed at document start. Allowed requests remain with
@@ -279,35 +283,52 @@ stream URLs, captions, live metadata, account details or watch-history reporting
 are not replayed and response status/headers remain unchanged. The skip fallback acts only
 on a visible, enabled skip button inside a player with an explicit ad-playing state; it
 never seeks, accelerates, mutes or starts the content video. Hooks and timers are removed
-when adblocking is disabled; the existing reload clears already-filtered page data.
+when both adblocking options are disabled; the existing reload clears already-filtered
+page data.
 
 Document-start injection and service-worker interception depend on WebView support; page
 callbacks provide late video-ad and cosmetic filtering when document-start injection is
 unavailable. Late injection may miss an ad already scheduled by the player. WebView does
 not expose every redirect, cached response or media request to interception.
 
-### Patched AdBlockin
+### Patched AdBlocking
 
-Turn off **Enable mpv player**, turn on **Enable adblocking**, then turn on
-**Patched AdBlockin** inside **Ad-Blocker Settings**. Turning the last switch off
-restores the original implementation, not unfiltered browsing. Turn off
-**Enable adblocking** to disable both implementations.
+Turn off **Enable mpv player**, then turn on **Patched AdBlocking** inside
+**Ad-Blocker Settings**. **Enable adblocking** is independent: either switch works
+on its own, and both can be enabled together. Turning one off leaves the other active
+without changing its saved choice. Turn both off to disable all adblocking.
 
 ReVanced's [patch anatomy](https://github.com/ReVanced/revanced-patcher/blob/main/docs/3_1_patch_anatomy.md)
 describes matching APK methods, merging DEX extensions and inserting calls into native
-code. Its archived
-[video-ad decision](https://github.com/ReVanced/revanced-integrations/blob/53d5a94bfa16a74276c69252212ee6bc1a163027/app/src/main/java/app/revanced/integrations/youtube/patches/VideoAdsPatch.java)
-and [component filter](https://github.com/ReVanced/revanced-integrations/blob/53d5a94bfa16a74276c69252212ee6bc1a163027/app/src/main/java/app/revanced/integrations/youtube/patches/components/AdsFilter.java)
-illustrate two separate interception points: suppress ad playback decisions and omit
-recognized advertising components. ssYouTube contains neither the YouTube APK's classes
+code. The supplied `revanced-patches-main.zip` was extracted and its actual YouTube
+patches and extensions reviewed (SHA-256:
+`55699733ac87894348c9f50b56e404e4e8bcbac31c4b292b900322197b5d499a`).
+Inside the archive, `patches/api/patches.api` contains exported JVM signatures, not the
+implementations. The relevant implementations are:
+
+- `patches/src/main/kotlin/app/revanced/patches/youtube/ad/video/VideoAdsPatch.kt`
+  and its fingerprints: intercept the native ad-loading decision.
+- `patches/src/main/kotlin/app/revanced/patches/youtube/ad/general/HideAdsPatch.kt`:
+  wire component, shopping, engagement-panel and fullscreen-ad hooks.
+- `extensions/youtube/src/main/java/app/revanced/extension/youtube/patches/litho/AdsFilter.java`:
+  classify advertising and shopping components, guard Premium banners, identify store
+  images and popup panels, and preserve ordinary video/comment components.
+- The adjacent `LayoutComponentsFilter.java` and `ShortsFilter.java`:
+  identify paid-promotion disclosures.
+
+ssYouTube contains neither the YouTube APK's classes
 nor its Litho/protobuf UI pipeline. An APK from APKMirror would not provide patch targets
 inside this WebView app. No APK, ReVanced code, patch bundle or DEX extension is imported;
-this independently authored implementation adapts those two ideas to web response data.
-It is not a port of, or a claim of parity with, the current GitLab patch set.
+this independently authored implementation adapts the compatible behavior to browser
+response data and DOM elements. It does not execute the archive or copy its native
+implementations, and does not claim parity with the native patch set.
 
-Both modes share the existing scheduling/Shorts filters, guarded skip fallback, network
-rules and cosmetic stylesheet. Patched mode additionally processes `Response.text()` and
-completed text-mode XHR reads before the site's parser consumes them, including callers
+Both options share the existing scheduling/Shorts filters and guarded skip fallback,
+using a single set of hooks when both are enabled. Only **Enable adblocking** activates
+the bundled rule-based network engine and its cosmetic stylesheet. Patched mode has its
+own removable UI stylesheet; patched-only filtering does not intercept network or
+service-worker requests. Patched mode additionally processes
+`Response.text()` and completed text-mode XHR reads before the site's parser consumes them, including callers
 that cached the original JSON parser. It handles the supported player/next/reel APIs and
 adds browse/search response filtering. Initial page data and recognized API response
 envelopes are filtered along known rendering paths, removing only explicit advertising
@@ -315,13 +336,39 @@ renderer types (including wrapped rich-grid cards), not videos whose titles ment
 Organic cards, continuation tokens, account data, comments, playback errors, streams,
 captions, playlists and watch-history data are retained.
 
+The archive-informed additions cover these web equivalents:
+
+| Native concept | Patched WebView behavior |
+| --- | --- |
+| Merchandise and shopping components | Remove explicit merchandise shelves/product lists and identified product engagement panels. |
+| Premium promotion guard | Filter supported promo renderers only with a typed `SPunlimited` browse endpoint or an HTTPS gstatic growth-promo image. The DOM fallback also recognizes a same-origin `/premium` link inside a supported promo renderer. Ordinary/Doodle banners and title-only matches remain. |
+| Player popup panels | Omit identified `PAproduct` shopping and `jumpahead` promotional panels, without removing comment, chapter or transcript panels. |
+| End-screen store banners | Remove website-style end cards with trusted gstatic shopping images; keep ordinary video, channel, playlist and website cards. |
+| Paid-promotion disclosures | Hide explicit paid-content overlay data/elements. This does **not** remove creator-sponsored segments or modify the video timeline. |
+| Fullscreen/overlay ads | Omit explicit ad-interstitial popup actions before rendering. For existing ad dialogs, click only a visible, enabled, specifically identifiable close control; retry no more than once per button every five seconds. |
+
+UI fallback markers are recomputed by the existing heartbeat, including for recycled
+nodes, and removed with their owned stylesheet on stop. Nodes and original inline
+styles are never deleted or rewritten. Modal contents are not merely hidden, since that
+can strand a backdrop or focus trap; the site's close handler must dismiss the ad.
+Unsupported dialogs remain intact with a content-free diagnostic. Account, consent,
+playback-error and anti-adblock dialogs are not bypassed.
+
+Native-only DEX fingerprints, Litho/protobuf interception, Android window manipulation
+and native client-context spoofing (including `Android Automotive`) are not transplanted
+into browser requests. Native identifiers without a confirmed web equivalent, such as
+self-sponsor CTA shelves, are not treated as arbitrary text/element matches. Movie
+purchase filtering is not enabled. The native Shorts OS-name helper is not assumed to be
+active; web Shorts filtering continues to require explicit ad markers.
+
 Requests are never replayed, proxied or modified. Response status, headers, native body
 consumption and parsing failures remain browser-owned. Text rewriting is limited to
 5,000,000 characters, preserves anti-XSSI prefixes and returns unchanged text when no ad
 field was removed. Component traversal is bounded, cycle-safe and skips oversized arrays;
 unrecognized formats are not guessed. Hooks apply only to supported HTTPS YouTube
-top-level documents; changing mode, disabling adblocking or enabling mpv stops the old
-hooks and reloads all frames. Pending response processing from an old mode is inactive.
+top-level documents; changing either switch or enabling mpv stops the old hooks and
+reloads all frames with the remaining enabled filters. Pending response processing
+from an old configuration is inactive.
 If document-start injection is unavailable, the app warns that late filtering may miss
 ads. Fixed, content-free console diagnostics identify skipped patches.
 
@@ -461,10 +508,11 @@ On a device, verify both new sections in light/dark themes and small/landscape l
 expand/collapse Block Page elements and Ad-Blocker Settings, reopen Preferences, and check
 every choice after an app restart and a site-mode change. Confirm page-element blocking remains active with
 mpv on and adblocking off; disable distracting elements when checking comments and login.
-With mpv off, compare basic and patched adblocking on watch pages, playlists, Shorts,
-home/search continuations and live streams. Verify signed-in controls, captions, seeking
+With mpv off, compare basic-only, patched-only, both-on and both-off combinations on watch
+pages, playlists, Shorts, home/search continuations and live streams. Verify signed-in controls, captions, seeking
 and watch history still work, switch implementations during playback, and confirm the
-saved patched choice returns after temporarily enabling mpv or disabling adblocking.
+saved choices return after temporarily enabling mpv. Disabling either adblocking switch
+must leave the other switch enabled and working.
 Check native and web audio with the screen locked and another app foregrounded, notification
 pause/reopen, headphone removal and audio-focus loss, pending extraction, autoplay, ended/
 failed playback, disabling background audio, and removing the app from Recents. Check the

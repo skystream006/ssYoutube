@@ -137,8 +137,8 @@
     <string name="enable_adblocking">Enable adblocking</string>
     <string name="adblocking_summary">Blocks page ads and YouTube video-ad scheduling, with automatic skipping when available. Disabled while mpv is enabled. Your choice is saved; changing it reloads the page. YouTube changes can affect blocking.</string>
     <string name="adblocking_unavailable">Adblocking could not start. Turn it off and on to retry.</string>
-    <string name="patched_adblocking">Patched AdBlockin</string>
-    <string name="patched_adblocking_summary">Optional web-response patches inspired by ReVanced: also filter text-based player responses and explicit feed/search ad components before use. Requires Enable adblocking with mpv off. Saved across restarts; changes reload the page. Does not patch or install a YouTube APK, and cannot guarantee ad-free playback.</string>
+    <string name="patched_adblocking">Patched AdBlocking</string>
+    <string name="patched_adblocking_summary">Independent ReVanced-inspired web patches: filter video and feed ads, merchandise, product panels, identified Premium promos, shopping end cards and paid-promotion labels. Safely dismiss supported ad popups. Works with Enable adblocking on or off; requires mpv off. Saved across restarts; changes reload the page. Does not remove creator-sponsored video segments or patch a YouTube APK. YouTube changes can affect blocking.</string>
     <string name="adblocking_late_injection">This WebView cannot install ad patches before the page starts. Update Android System WebView; late filtering may miss ads.</string>
     <string name="debugging">Debugging</string>
     <string name="enable_logging">Enable debug logging</string>

@@ -1229,8 +1229,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateAdBlocking(WebView view) {
         adBlocker.setEnabled(view,
                 Preferences.isAdBlockingEnabled(mpvEnabled, adBlockingEnabled),
-                Preferences.isPatchedAdBlockingEnabled(mpvEnabled, adBlockingEnabled,
-                        patchedAdBlockingEnabled));
+                Preferences.isPatchedAdBlockingEnabled(mpvEnabled, patchedAdBlockingEnabled));
     }
 
     private void setAdBlockingEnabled(boolean enabled) {
@@ -1244,7 +1243,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setPatchedAdBlockingEnabled(boolean enabled) {
-        if (mpvEnabled || !adBlockingEnabled || patchedAdBlockingEnabled == enabled) {
+        if (mpvEnabled || patchedAdBlockingEnabled == enabled) {
             return;
         }
         patchedAdBlockingEnabled = enabled;
@@ -1811,7 +1810,6 @@ public class MainActivity extends AppCompatActivity {
         adBlockingSettings.setVisibility(mpvEnabled ? View.GONE : View.VISIBLE);
         adBlockingToggle.setChecked(adBlockingEnabled);
         patchedAdBlockingToggle.setChecked(patchedAdBlockingEnabled);
-        patchedAdBlockingToggle.setEnabled(adBlockingEnabled);
         loggingToggle.setChecked(loggingEnabled);
         statsForNerdsToggle.setChecked(statsForNerdsEnabled);
 
@@ -1878,10 +1876,8 @@ public class MainActivity extends AppCompatActivity {
             setMpvEnabled(isChecked);
             adBlockingSettings.setVisibility(isChecked ? View.GONE : View.VISIBLE);
         });
-        adBlockingToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            setAdBlockingEnabled(isChecked);
-            patchedAdBlockingToggle.setEnabled(isChecked);
-        });
+        adBlockingToggle.setOnCheckedChangeListener((buttonView, isChecked) ->
+                setAdBlockingEnabled(isChecked));
         patchedAdBlockingToggle.setOnCheckedChangeListener((buttonView, isChecked) ->
                 setPatchedAdBlockingEnabled(isChecked));
 
