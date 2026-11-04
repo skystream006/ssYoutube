@@ -11,6 +11,19 @@ import java.util.Locale;
 public class PreferencesTest {
 
     @Test
+    public void patchedAdblockingRequiresBothOptInsAndWebPlayback() {
+        assertFalse(Preferences.DEFAULT_PATCHED_ADBLOCKING);
+        for (boolean mpv : new boolean[] {false, true}) {
+            for (boolean blocking : new boolean[] {false, true}) {
+                for (boolean patched : new boolean[] {false, true}) {
+                    assertEquals(!mpv && blocking && patched,
+                            Preferences.isPatchedAdBlockingEnabled(mpv, blocking, patched));
+                }
+            }
+        }
+    }
+
+    @Test
     public void adblockingRequiresWebPlaybackAndTheSavedOptIn() {
         assertFalse(Preferences.isAdBlockingEnabled(true, true));
         assertFalse(Preferences.isAdBlockingEnabled(true, false));

@@ -1,12 +1,37 @@
 package com.skystream.ssyoutube;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import org.junit.Test;
 
 public class AdBlockingScriptTest {
+    @Test
+    public void videoPatchModeIsPassedLocallyWithoutAGlobalSetting() {
+        String source = "function (patched) { return patched; }";
+        assertEquals("(" + source + ")(false);", AdBlockingScript.createVideo(source, false));
+        assertEquals("(" + source + ")(true);", AdBlockingScript.createVideo(source, true));
+    }
+
+    @Test
+    public void patchChoiceIsSavedAndChangesReloadThePage() throws Exception {
+        String activity = new String(Files.readAllBytes(Paths.get(
+                "src/main/java/com/skystream/ssyoutube/MainActivity.java")), StandardCharsets.UTF_8);
+        assertTrue(activity.contains("prefs.getBoolean(KEY_PATCHED_ADBLOCKING_ENABLED,"));
+        assertTrue(activity.contains("prefs.edit().putBoolean(KEY_PATCHED_ADBLOCKING_ENABLED, enabled).apply()"));
+        int start = activity.indexOf("private void setPatchedAdBlockingEnabled(");
+        String setter = activity.substring(start, activity.indexOf("\n    }", start));
+        assertTrue(setter.contains("mpvEnabled || !adBlockingEnabled"));
+        assertTrue(setter.contains("updateAdBlocking(webView);"));
+        assertTrue(setter.contains("webView.reload();"));
+        assertTrue(activity.contains("patchedAdBlockingToggle.setChecked(patchedAdBlockingEnabled)"));
+    }
+
     @Test
     public void onlyTrustedOriginsGetCosmeticRules() throws Exception {
         String script = AdBlockingScript.create(AdBlockEngineTest.bundled());

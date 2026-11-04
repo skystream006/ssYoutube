@@ -1,8 +1,12 @@
 package com.skystream.ssyoutube;
 
-/** Only inserts a scoped stylesheet; it never patches the player, fetch, or account APIs. */
+/** Builds scoped cosmetic rules and configures the bundled web-player patches. */
 final class AdBlockingScript {
     private AdBlockingScript() { }
+
+    static String createVideo(String source, boolean patched) {
+        return "(" + source + ")(" + patched + ");";
+    }
 
     static String create(AdBlockEngine engine) {
         StringBuilder cases = new StringBuilder();

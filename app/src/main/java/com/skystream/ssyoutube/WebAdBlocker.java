@@ -1,6 +1,7 @@
 package com.skystream.ssyoutube;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.os.Handler;
 import android.os.Looper;
 import android.webkit.WebResourceRequest;
@@ -36,27 +37,28 @@ final class WebAdBlocker {
     private volatile String documentUrl;
     private boolean loading;
     private boolean destroyed;
+    private boolean patched;
+    private boolean warnedLateInjection;
     private ScriptHandler scriptHandler;
     private String script;
+    private String videoSource;
 
     WebAdBlocker(Context context) {
         this.context = context.getApplicationContext();
     }
 
-    void setEnabled(WebView target, boolean value) {
+    void setEnabled(WebView target, boolean value, boolean usePatches) {
         if (destroyed) {
             return;
         }
         enabled = value;
+        patched = value && usePatches;
         view = new WeakReference<>(target);
         documentUrl = target.getUrl();
         removeScript();
+        stopVideoScript(target);
         updateServiceWorker();
         if (!value) {
-            if (script != null) {
-                target.evaluateJavascript("if(window.__ssyoutubeVideoAdBlocking){"
-                        + "window.__ssyoutubeVideoAdBlocking.stop();}", null);
-            }
             return;
         }
         if (engine != null) {
@@ -70,9 +72,9 @@ final class WebAdBlocker {
                         context.getResources().openRawResource(R.raw.adblocking_rules),
                         StandardCharsets.UTF_8)) {
                     loaded = AdBlockEngine.read(input);
-                    loadedScript = videoScript() + ";\n" + AdBlockingScript.create(loaded);
-                } catch (IOException | RuntimeException ignored) {
-                    // Filtering is optional; a bad bundled resource must not break browsing.
+                    loadedScript = videoScript();
+                } catch (IOException | Resources.NotFoundException error) {
+                    Logger.get(context).log("E", "Adblocking resources unavailable", error);
                     loaded = null;
                 }
                 AdBlockEngine result = loaded;
@@ -84,7 +86,7 @@ final class WebAdBlocker {
                     loading = false;
                     engine = result;
                     if (result != null) {
-                        script = resultScript;
+                        videoSource = resultScript;
                     }
                     WebView current = view.get();
                     if (enabled && current != null) {
@@ -152,21 +154,40 @@ final class WebAdBlocker {
         documentUrl = null;
         updateServiceWorker();
         removeScript();
+        WebView current = view.get();
+        if (current != null) {
+            stopVideoScript(current);
+        }
         view.clear();
         loader.shutdownNow();
         main.removeCallbacksAndMessages(null);
         engine = null;
+        videoSource = null;
+        script = null;
     }
 
     private void installScript(WebView target) {
         removeScript();
+        script = AdBlockingScript.createVideo(videoSource, patched)
+                + ";\n" + AdBlockingScript.create(engine);
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
                 scriptHandler = WebViewCompat.addDocumentStartJavaScript(
                         target, script, NativePlaybackScript.ORIGIN_RULES);
-            } catch (IllegalArgumentException | UnsupportedOperationException ignored) {
-                // Page callbacks still apply cosmetic rules on older WebView providers.
+            } catch (IllegalArgumentException | UnsupportedOperationException error) {
+                Logger.get(context).log("W", "Adblocking document start unavailable", error);
             }
+        }
+        if (patched && scriptHandler == null && !warnedLateInjection) {
+            warnedLateInjection = true;
+            Toast.makeText(context, R.string.adblocking_late_injection, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void stopVideoScript(WebView target) {
+        if (script != null) {
+            target.evaluateJavascript("if(window.__ssyoutubeVideoAdBlocking){"
+                    + "window.__ssyoutubeVideoAdBlocking.stop();}", null);
         }
     }
 

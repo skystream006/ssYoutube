@@ -36,7 +36,7 @@ playback extraction is separate and anonymous.
   This does not translate videos or change the app UI; changing it does not interrupt a
   video that is already playing.
   **Ad-Blocker Settings** starts collapsed each time Preferences opens. Expand it for
-  **Enable mpv player** and **Enable adblocking**.
+  **Enable mpv player**, **Enable adblocking**, and **Patched AdBlockin**.
   **Enable mpv player** is on by default and saved across restarts. Turn it off to use
   YouTube's web player instead. Switching stops native playback (including the miniplayer
   and pending extraction) and reloads the current page; turn it back on to use mpv again.
@@ -51,6 +51,12 @@ playback extraction is separate and anonymous.
   explicitly marked Shorts ad entries, and clicks available skip buttons in an ad-playing
   player as a fallback. It does not bypass anti-adblock checks or remove creator sponsorships.
   YouTube changes and server-stitched ads can still defeat these filters.
+  **Patched AdBlockin** is an additional, default-off implementation option under
+  **Enable adblocking**, available with mpv off. It extends the existing player-data
+  filtering to text responses and explicit feed/search ad components before rendering.
+  The choice is saved, temporarily inactive when adblocking is off or mpv is on, and
+  changing it reloads the page. This is a ReVanced-inspired WebView adaptation, not a
+  YouTube APK patcher; it does not download or install another app.
   **Hide related videos** and **Hide header** are independent button toggles on the same
   row, always available regardless of site mode or page. **Hide header** hides the desktop
   masthead or mobile header bar and collapses its reserved vertical space. Both choices
@@ -280,6 +286,50 @@ callbacks provide late video-ad and cosmetic filtering when document-start injec
 unavailable. Late injection may miss an ad already scheduled by the player. WebView does
 not expose every redirect, cached response or media request to interception.
 
+### Patched AdBlockin
+
+Turn off **Enable mpv player**, turn on **Enable adblocking**, then turn on
+**Patched AdBlockin** inside **Ad-Blocker Settings**. Turning the last switch off
+restores the original implementation, not unfiltered browsing. Turn off
+**Enable adblocking** to disable both implementations.
+
+ReVanced's [patch anatomy](https://github.com/ReVanced/revanced-patcher/blob/main/docs/3_1_patch_anatomy.md)
+describes matching APK methods, merging DEX extensions and inserting calls into native
+code. Its archived
+[video-ad decision](https://github.com/ReVanced/revanced-integrations/blob/53d5a94bfa16a74276c69252212ee6bc1a163027/app/src/main/java/app/revanced/integrations/youtube/patches/VideoAdsPatch.java)
+and [component filter](https://github.com/ReVanced/revanced-integrations/blob/53d5a94bfa16a74276c69252212ee6bc1a163027/app/src/main/java/app/revanced/integrations/youtube/patches/components/AdsFilter.java)
+illustrate two separate interception points: suppress ad playback decisions and omit
+recognized advertising components. ssYouTube contains neither the YouTube APK's classes
+nor its Litho/protobuf UI pipeline. An APK from APKMirror would not provide patch targets
+inside this WebView app. No APK, ReVanced code, patch bundle or DEX extension is imported;
+this independently authored implementation adapts those two ideas to web response data.
+It is not a port of, or a claim of parity with, the current GitLab patch set.
+
+Both modes share the existing scheduling/Shorts filters, guarded skip fallback, network
+rules and cosmetic stylesheet. Patched mode additionally processes `Response.text()` and
+completed text-mode XHR reads before the site's parser consumes them, including callers
+that cached the original JSON parser. It handles the supported player/next/reel APIs and
+adds browse/search response filtering. Initial page data and recognized API response
+envelopes are filtered along known rendering paths, removing only explicit advertising
+renderer types (including wrapped rich-grid cards), not videos whose titles mention ads.
+Organic cards, continuation tokens, account data, comments, playback errors, streams,
+captions, playlists and watch-history data are retained.
+
+Requests are never replayed, proxied or modified. Response status, headers, native body
+consumption and parsing failures remain browser-owned. Text rewriting is limited to
+5,000,000 characters, preserves anti-XSSI prefixes and returns unchanged text when no ad
+field was removed. Component traversal is bounded, cycle-safe and skips oversized arrays;
+unrecognized formats are not guessed. Hooks apply only to supported HTTPS YouTube
+top-level documents; changing mode, disabling adblocking or enabling mpv stops the old
+hooks and reloads all frames. Pending response processing from an old mode is inactive.
+If document-start injection is unavailable, the app warns that late filtering may miss
+ads. Fixed, content-free console diagnostics identify skipped patches.
+
+These are client-side response patches, not anti-adblock, account, DRM or server-stitched-ad
+bypasses. Encoded/protobuf responses, new renderer schemas and changes to YouTube's player
+can defeat them. Executable fixtures verify the supported shapes and browser contracts;
+they do not establish ad-free playback against every live YouTube rollout.
+
 ## App icons
 
 `file_00000000c28481f6bff0eb7c51226dbd.png` is the source artwork for the launcher
@@ -388,8 +438,9 @@ When updating the library, update the versioned CA cache filename in `MpvPlayer`
 The video-ad JUnit test executes the actual bundled JavaScript using Node.js's built-in
 test runner (Node 18+; no npm packages). It skips that executable test if Node is absent.
 To run those fixtures directly: `node --test app/src/test/js/youtube_video_adblock.test.cjs`.
-Fixtures cover initial/SPA player responses, playlists, live metadata, Shorts, JSON/XHR/
-Response behavior, origin checks, hook removal, and guarded skipping. They do not substitute
+Fixtures cover both implementations, initial/SPA player responses, playlists, live metadata,
+Shorts, browse/search continuations, JSON/XHR/Response behavior, text-size limits, anti-XSSI,
+origin checks, mode changes, hook removal, and guarded skipping. They do not substitute
 for testing against YouTube's changing live site.
 
 Page-element fixtures use Node 18+ and Chrome/Chromium (no npm dependencies):
@@ -397,7 +448,8 @@ Page-element fixtures use Node 18+ and Chrome/Chromium (no npm dependencies):
 is not on PATH. They exercise the bundled script against a real DOM/CSS engine, covering
 all eight filters, restoration, mobile/desktop renderers, dynamic/recycled content,
 navigation, origin/frame boundaries, background visibility/pausing and preservation of
-network and media-play APIs. The JVM
+network and media-play APIs. They also check patched adblocking against Chromium's native
+Response body consumption, clones, parsing errors, XHR text getters and hook restoration. The JVM
 suite invokes these fixtures too; they explicitly skip if Node or Chrome is missing.
 Layout and preference tests verify the nine controls, their defaults, persistence wiring,
 the service manifest and the collapsed **Block Page elements** and **Ad-Blocker Settings**
@@ -409,6 +461,10 @@ On a device, verify both new sections in light/dark themes and small/landscape l
 expand/collapse Block Page elements and Ad-Blocker Settings, reopen Preferences, and check
 every choice after an app restart and a site-mode change. Confirm page-element blocking remains active with
 mpv on and adblocking off; disable distracting elements when checking comments and login.
+With mpv off, compare basic and patched adblocking on watch pages, playlists, Shorts,
+home/search continuations and live streams. Verify signed-in controls, captions, seeking
+and watch history still work, switch implementations during playback, and confirm the
+saved patched choice returns after temporarily enabling mpv or disabling adblocking.
 Check native and web audio with the screen locked and another app foregrounded, notification
 pause/reopen, headphone removal and audio-focus loss, pending extraction, autoplay, ended/
 failed playback, disabling background audio, and removing the app from Recents. Check the

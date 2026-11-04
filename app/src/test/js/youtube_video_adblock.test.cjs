@@ -3,16 +3,19 @@ const test = require('node:test');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
-const script = fs.readFileSync(
+const source = fs.readFileSync(
     path.join(__dirname, '../../main/res/raw/youtube_video_adblock.js'), 'utf8');
+const script = `(${source})(false);`;
 
-function page(url = 'https://m.youtube.com/watch?v=content', enabled = true) {
+function page(url = 'https://m.youtube.com/watch?v=content', enabled = true, patched = false) {
     const intervals = new Map();
     const listeners = new Map();
     const players = [];
+    const warnings = [];
     let nextId = 0;
     const context = vm.createContext({
         URL, location: new URL(url),
+        console: {warn(message) { warnings.push(message); }},
         setInterval(fn) { const id = ++nextId; intervals.set(id, fn); return id; },
         clearInterval(id) { intervals.delete(id); },
         addEventListener(name, fn) { listeners.set(name, fn); },
@@ -38,21 +41,31 @@ function page(url = 'https://m.youtube.com/watch?v=content', enabled = true) {
                 this.headers = { marker: 'untouched' };
             }
             json() { return this.failure ? Promise.reject(this.failure) : Promise.resolve(this.value); }
+            text() { return this.failure ? Promise.reject(this.failure) : Promise.resolve(this.value); }
         }
         class XMLHttpRequest {
             constructor(value, url = 'https://m.youtube.com/youtubei/v1/player') {
                 this.value = value;
                 this.responseURL = url;
                 this.responseType = 'json';
+                this.readyState = 4;
             }
             get response() { return this.value; }
+            get responseText() {
+                if (this.responseType !== '' && this.responseType !== 'text') {
+                    throw new Error('InvalidStateError');
+                }
+                return this.value;
+            }
         }
         window.Response = Response;
         window.XMLHttpRequest = XMLHttpRequest;
         window.fetch = function () { throw new Error('Must not replay requests'); };
         originals = {
             parse: JSON.parse, json: Response.prototype.json,
+            text: Response.prototype.text,
             xhr: Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'response').get,
+            xhrText: Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseText').get,
             fetch: window.fetch
         };
         function fixture() {
@@ -67,9 +80,11 @@ function page(url = 'https://m.youtube.com/watch?v=content', enabled = true) {
             };
         }
     `);
-    if (enabled) vm.runInContext(script, context, { timeout: 1000 });
-    return {run, context, intervals, listeners, players,
-        inject() { vm.runInContext(script, context, { timeout: 1000 }); }};
+    function inject(mode = patched) {
+        vm.runInContext(`(${source})(${mode});`, context, { timeout: 1000 });
+    }
+    if (enabled) inject();
+    return {run, context, intervals, listeners, players, warnings, inject};
 }
 
 function assertFiltered(p, expression) {
@@ -292,4 +307,288 @@ test('fallback never seeks, changes rate, mutes, or plays content when ad UI is 
     p.players.push({ad: true, querySelectorAll() { return []; }});
     p.intervals.values().next().value();
     assert.equal(p.run('typeof __ssyoutubeVideoAdBlocking.update'), 'function');
+});
+
+test('patched mode filters fetch text before a previously captured parser consumes it', async () => {
+    for (const patched of [false, true]) {
+        const p = page(undefined, true, patched);
+        p.run('body = JSON.stringify(fixture()); response = new Response(body);');
+        await p.run('response.text().then(text => { parsed = originals.parse(text); })');
+        assert.equal(p.run('parsed.adPlacements === undefined'), patched);
+        assert.equal(p.run('parsed.videoDetails.videoId'), 'content');
+        assert.equal(p.run('parsed.streamingData.adaptiveFormats.length'), 1);
+        assert.equal(p.run('window.fetch === originals.fetch'), true);
+    }
+});
+
+test('patched XHR text and response agree, preserve partial reads and handle reuse', () => {
+    const p = page(undefined, true, true);
+    p.run(`xhr = new XMLHttpRequest(JSON.stringify(fixture())); xhr.responseType = '';
+        xhr.readyState = 3;`);
+    assert.equal(p.run('xhr.responseText === xhr.value && xhr.response === xhr.value'), true);
+    p.run('xhr.readyState = 4; received = originals.parse(xhr.responseText);');
+    assertFiltered(p, 'received');
+    assert.equal(p.run('xhr.responseText === xhr.response'), true);
+    p.run(`xhr.responseURL = 'https://accounts.google.com/youtubei/v1/player';`);
+    assert.equal(p.run('xhr.responseText === xhr.value'), true);
+    p.run(`xhr.responseURL = 'https://m.youtube.com/youtubei/v1/player';
+        next = fixture(); next.videoDetails.videoId = 'next'; xhr.value = JSON.stringify(next);
+        xhr.responseType = 'text'; received = originals.parse(xhr.response);`);
+    assertFiltered(p, 'received');
+    assert.equal(p.run('received.videoDetails.videoId'), 'next');
+    p.run('xhr.responseType = "json";');
+    assert.throws(() => p.run('xhr.responseText'), /InvalidStateError/);
+    p.run('xhr.responseType = "arraybuffer";');
+    assert.equal(p.run('xhr.response === xhr.value'), true);
+});
+
+test('patched text preserves XSSI, malformed bodies, untouched formatting, and size bounds', async () => {
+    const p = page(undefined, true, true);
+    const prefix = ")]}'\n";
+    p.run(`body = ${JSON.stringify(prefix)} + JSON.stringify(fixture());`);
+    const filtered = await p.run('new Response(body).text()');
+    assert.ok(filtered.startsWith(prefix));
+    assert.equal(JSON.parse(filtered.slice(prefix.length)).adSlots, undefined);
+    for (const text of [' { "value" : 42 }\n', '{"adSlots": [1]}', '{"adSlots":invalid',
+        '{"videoDetails":{},"adSlots":[1],"padding":"' + 'x'.repeat(5000000) + '"}']) {
+        p.context.body = text;
+        assert.equal(await p.run('new Response(body).text()'), text);
+    }
+    assert.deepEqual(p.warnings, ['ssYouTube adblocking: Non-JSON response left unchanged']);
+});
+
+test('text limit accepts exactly five million characters and rejects larger bodies unchanged', async () => {
+    const p = page(undefined, true, true);
+    const response = {videoDetails: {}, adSlots: [{}], padding: ''};
+    response.padding = 'x'.repeat(5000000 - JSON.stringify(response).length);
+    p.context.body = JSON.stringify(response);
+    assert.equal(p.context.body.length, 5000000);
+    assert.equal(JSON.parse(await p.run('new Response(body).text()')).adSlots, undefined);
+    p.context.body += ' ';
+    assert.equal(await p.run('new Response(body).text()'), p.context.body);
+});
+
+test('patched text hooks keep rejections and never patch non-player/feed endpoints', async () => {
+    const p = page(undefined, true, true);
+    p.run('response = new Response(""); response.failure = new Error("network");');
+    assert.equal(await p.run('response.text().catch(error => error === response.failure)'), true);
+    for (const url of ['https://accounts.google.com/youtubei/v1/player',
+        'http://m.youtube.com/youtubei/v1/player', 'https://www.youtube.com:444/youtubei/v1/player',
+        'https://youtube.com.evil.test/youtubei/v1/player', 'https://www.youtube.com/api/stats/watchtime',
+        'https://www.youtube.com/youtubei/v1/account/account_menu',
+        'https://www.youtube.com/youtubei/v1/player/extra',
+        'https://user:password@www.youtube.com/youtubei/v1/player']) {
+        p.context.endpoint = url;
+        p.run(`body = JSON.stringify(fixture()); response = new Response(body, endpoint);
+            xhr = new XMLHttpRequest(body, endpoint); xhr.responseType = 'text';`);
+        assert.equal(await p.run('response.text()'), p.run('body'));
+        assert.equal(p.run('xhr.response === body && xhr.responseText === body'), true);
+    }
+});
+
+function installFeedFixture(p) {
+    p.run(`
+        function feed() {
+            return {responseContext: {}, contents: {twoColumnBrowseResultsRenderer: {tabs: [
+                {tabRenderer: {content: {richGridRenderer: {contents: [
+                    {richItemRenderer: {content: {videoRenderer: {videoId: 'organic',
+                        title: {simpleText: 'promotedVideoRenderer ad tutorial'}}}}},
+                    {richItemRenderer: {content: {adSlotRenderer: {slot: 'paid'}}}},
+                    {richSectionRenderer: {content: {inFeedAdLayoutRenderer: {slot: 'paid'}}}},
+                    {continuationItemRenderer: {continuationEndpoint: {token: 'next'}}},
+                    {richItemRenderer: {content: {reelItemRenderer: {videoId: 'short'}}}}
+                ]}}}}
+            ]}}};
+        }
+        function items(value) {
+            return value.contents.twoColumnBrowseResultsRenderer.tabs[0]
+                .tabRenderer.content.richGridRenderer.contents;
+        }
+    `);
+}
+
+test('patched inline feed removes explicit ad components, preserving organic cards and pagination', () => {
+    for (const host of ['m', 'www', 'music']) {
+        const p = page(`https://${host}.youtube.com/`, true, true);
+        installFeedFixture(p);
+        p.run('ytInitialData = feed(); result = items(ytInitialData);');
+        assert.equal(p.run('result.length'), 3);
+        assert.equal(p.run('result[0].richItemRenderer.content.videoRenderer.videoId'), 'organic');
+        assert.equal(p.run('result[1].continuationItemRenderer.continuationEndpoint.token'), 'next');
+        assert.equal(p.run('result[2].richItemRenderer.content.reelItemRenderer.videoId'), 'short');
+    }
+});
+
+test('patched browse/search responses and continuation actions filter before rendering', async () => {
+    const p = page(undefined, true, true);
+    installFeedFixture(p);
+    for (const endpoint of ['browse', 'search', 'next']) {
+        p.context.endpoint = `https://m.youtube.com/youtubei/v1/${endpoint}?key=fixture`;
+        await p.run('new Response(feed(), endpoint).json().then(value => { received = value; });');
+        assert.equal(p.run('items(received).length'), 3);
+        await p.run(`new Response(JSON.stringify(feed()), endpoint).text()
+            .then(text => { received = originals.parse(text); });`);
+        assert.equal(p.run('items(received).length'), 3);
+        p.run('xhr = new XMLHttpRequest(feed(), endpoint); received = xhr.response;');
+        assert.equal(p.run('items(received).length'), 3);
+    }
+    for (const action of ['onResponseReceivedActions', 'onResponseReceivedEndpoints',
+        'onResponseReceivedCommands']) {
+        p.context.action = action;
+        p.run(`ytInitialData = {[action]: [{appendContinuationItemsAction: {
+            continuationItems: [{promotedVideoRenderer: {}}, {videoRenderer: {videoId: 'next'}},
+                {continuationItemRenderer: {continuationEndpoint: {token: 'more'}}}]
+        }}]}; result = ytInitialData[action][0].appendContinuationItemsAction.continuationItems;`);
+        assert.equal(p.run('result.length'), 2);
+        assert.equal(p.run('result[0].videoRenderer.videoId'), 'next');
+        assert.equal(p.run('result[1].continuationItemRenderer.continuationEndpoint.token'), 'more');
+    }
+});
+
+test('basic mode does not opt into component or text patches', async () => {
+    const p = page();
+    installFeedFixture(p);
+    p.run('ytInitialData = feed();');
+    assert.equal(p.run('items(ytInitialData).length'), 5);
+    assert.equal(p.run('Response.prototype.text === originals.text'), true);
+    assert.equal(p.run(`Object.getOwnPropertyDescriptor(
+        XMLHttpRequest.prototype, 'responseText').get === originals.xhrText`), true);
+    assert.equal(await p.run(`new Response(feed(), 'https://m.youtube.com/youtubei/v1/browse')
+        .json().then(value => items(value).length)`), 5);
+});
+
+test('patched JSON parser only traverses recognized response and rendering envelopes', () => {
+    const p = page(undefined, true, true);
+    installFeedFixture(p);
+    p.run(`received = JSON.parse(JSON.stringify(feed()));
+        unrelated = JSON.parse('{"contents":[{"adSlotRenderer":{}}]}');
+        account = {contents: [{adSlotRenderer: {}}]};
+        ytInitialData = {responseContext: {}, account: account, comments: account,
+            streamingData: account, captions: account, playbackTracking: account};`);
+    assert.equal(p.run('items(received).length'), 3);
+    assert.equal(p.run('unrelated.contents.length'), 1);
+    assert.equal(p.run('account.contents.length'), 1);
+    assert.equal(p.run('ytInitialData.account === account && ytInitialData.comments === account'), true);
+    assert.throws(() => p.run('JSON.parse("{invalid")'), /SyntaxError/);
+    assert.equal(p.run('JSON.parse(\'{"x":1}\', (k,v) => k === "x" ? 2 : v).x'), 2);
+});
+
+test('ambiguous mixed renderer records are preserved instead of dropping organic content', () => {
+    const p = page(undefined, true, true);
+    p.run(`mixed = {adSlotRenderer: {}, videoRenderer: {videoId: 'organic'}};
+        ytInitialData = {contents: [mixed, {adSlotRenderer: {}, trackingParams: 'ad'},
+            {richItemRenderer: {content: mixed}}]};`);
+    assert.equal(p.run('ytInitialData.contents.length'), 2);
+    assert.equal(p.run('ytInitialData.contents[0].videoRenderer.videoId'), 'organic');
+    assert.equal(p.run('ytInitialData.contents[1].richItemRenderer.content.videoRenderer.videoId'), 'organic');
+});
+
+test('patched mode preserves denied playback, live media, subtitles, playlist and history data', async () => {
+    const p = page(undefined, true, true);
+    p.run(`value = fixture(); value.playabilityStatus = {status: 'LOGIN_REQUIRED', reason: 'denied'};
+        value.videoDetails.isLiveContent = true; value.streamingData.hlsManifestUrl = 'https://manifest.googlevideo.com/live';
+        value.playlist = {index: 4, videoIds: ['a', 'b']};
+        expected = JSON.stringify([value.streamingData, value.playabilityStatus,
+            value.captions, value.playbackTracking, value.playlist, value.videoDetails]);`);
+    await p.run('new Response(JSON.stringify(value)).text().then(text => { received = originals.parse(text); });');
+    assertFiltered(p, 'received');
+    assert.equal(p.run(`JSON.stringify([received.streamingData, received.playabilityStatus,
+        received.captions, received.playbackTracking, received.playlist, received.videoDetails]) === expected`), true);
+});
+
+test('patched mode still filters marked Shorts entries but keeps organic Shorts', async () => {
+    const p = page('https://m.youtube.com/shorts/content', true, true);
+    p.run(`value = {entries: [
+        {command: {reelWatchEndpoint: {videoId: 'short'}}},
+        {command: {reelWatchEndpoint: {adClientParams: {isAd: true}}}},
+        {command: {reelWatchEndpoint: {videoId: 'next', adClientParams: {isAd: false}}}}
+    ], continuation: 'more'};`);
+    await p.run(`new Response(JSON.stringify(value),
+        'https://m.youtube.com/youtubei/v1/reel/reel_watch_sequence').text()
+        .then(text => { received = originals.parse(text); });`);
+    assert.equal(p.run('received.entries.length'), 2);
+    assert.equal(p.run('received.entries[1].command.reelWatchEndpoint.videoId'), 'next');
+    assert.equal(p.run('received.continuation'), 'more');
+});
+
+test('switching implementation restores then reinstalls exactly one set of hooks', async () => {
+    const p = page();
+    p.inject(true);
+    p.run(`installed = Response.prototype.text; pending = new Response(JSON.stringify(fixture())).text();`);
+    p.inject(true);
+    assert.equal(p.run('Response.prototype.text === installed'), true);
+    assert.equal(p.intervals.size, 1);
+    p.inject(false);
+    assert.equal(await p.run('pending.then(text => originals.parse(text).adSlots.length)'), 1);
+    assert.equal(p.run('Response.prototype.text === originals.text'), true);
+    assert.equal(p.intervals.size, 1);
+    p.inject(true);
+    p.run(`xhr = new XMLHttpRequest(JSON.stringify(fixture())); xhr.responseType = 'text';
+        first = xhr.responseText; __ssyoutubeVideoAdBlocking.stop();`);
+    assert.equal(p.run('xhr.responseText === xhr.value'), true);
+    assert.equal(p.run('JSON.parse === originals.parse && Response.prototype.json === originals.json'), true);
+    assert.equal(p.run('Response.prototype.text === originals.text'), true);
+    assert.equal(p.run(`Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'response').get === originals.xhr
+        && Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseText').get === originals.xhrText`), true);
+    assert.equal(p.intervals.size, 0);
+    assert.equal(p.listeners.size, 0);
+});
+
+test('stop does not overwrite hooks installed later by the page', () => {
+    const p = page(undefined, true, true);
+    p.run(`siteText = function () { return 'site'; }; Response.prototype.text = siteText;
+        siteGetter = function () { return 'site'; };
+        Object.defineProperty(XMLHttpRequest.prototype, 'responseText', {get: siteGetter, configurable: true});
+        __ssyoutubeVideoAdBlocking.stop();`);
+    assert.equal(p.run('Response.prototype.text === siteText'), true);
+    assert.equal(p.run(`Object.getOwnPropertyDescriptor(XMLHttpRequest.prototype, 'responseText').get === siteGetter`), true);
+});
+
+test('a stale stop callback cannot remove a new implementation instance', () => {
+    const p = page(undefined, true, true);
+    p.run('oldStop = __ssyoutubeVideoAdBlocking.stop;');
+    p.inject(false);
+    p.run('oldStop();');
+    assert.equal(p.run('__ssyoutubeVideoAdBlocking.patched'), false);
+    assert.equal(p.intervals.size, 1);
+});
+
+test('patched injection excludes sign-in, insecure origins, lookalikes and subframes', () => {
+    for (const url of ['https://accounts.google.com/', 'https://accounts.youtube.com/',
+        'https://m.youtube.com:444/', 'http://www.youtube.com/', 'https://www.youtube.com.evil.test/']) {
+        const p = page(url, true, true);
+        assert.equal(p.run('Response.prototype.text === originals.text && JSON.parse === originals.parse'), true);
+        assert.equal(p.intervals.size, 0);
+    }
+    const p = page(undefined, false, true);
+    p.run('window.top = {};');
+    p.inject();
+    assert.equal(p.intervals.size, 0);
+    assert.equal(p.run('Response.prototype.text === originals.text'), true);
+});
+
+test('frozen responses, read-only hooks, cycles, and large renderer arrays are safe', () => {
+    const p = page(undefined, false, true);
+    p.run(`Object.defineProperty(Response.prototype, 'text', {writable: false});
+        ytInitialData = {contents: Object.freeze([{adSlotRenderer: {}}])};`);
+    p.inject();
+    assert.equal(p.run('Response.prototype.text === originals.text'), true);
+    assert.equal(p.run('ytInitialData.contents.length'), 1);
+    p.run(`cycle = {}; cycle.contents = [cycle, {adSlotRenderer: {}}, {videoRenderer: {}}];
+        ytInitialData = cycle;`);
+    assert.equal(p.run('ytInitialData.contents.length'), 2);
+    p.run(`large = Array.from({length: 4097}, () => ({adSlotRenderer: {}}));
+        ytInitialData = {contents: large};`);
+    assert.equal(p.run('large.length'), 4097);
+    assert.ok(p.warnings.includes('ssYouTube adblocking: Component limit reached'));
+    assert.ok(p.warnings.includes('ssYouTube adblocking: Read-only browser hook left unchanged'));
+});
+
+test('nonconfigurable XHR text hooks are left intact and reported without page data', () => {
+    const p = page(undefined, false, true);
+    p.run("Object.defineProperty(XMLHttpRequest.prototype, 'responseText', {configurable: false});");
+    p.inject();
+    assert.equal(p.run(`Object.getOwnPropertyDescriptor(
+        XMLHttpRequest.prototype, 'responseText').get === originals.xhrText`), true);
+    assert.deepEqual(p.warnings, ['ssYouTube adblocking: XHR text hook unavailable']);
 });

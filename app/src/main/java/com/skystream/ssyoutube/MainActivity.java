@@ -90,6 +90,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_DESKTOP_MODE = "desktop_mode";
     private static final String KEY_MPV_ENABLED = "mpv_enabled";
     private static final String KEY_ADBLOCKING_ENABLED = "adblocking_enabled";
+    private static final String KEY_PATCHED_ADBLOCKING_ENABLED = "patched_adblocking_enabled";
     private static final String KEY_BACKGROUND_AUDIO_ENABLED = "background_audio_enabled";
     private static final String KEY_RELATED_HIDDEN = "related_hidden";
     private static final String KEY_HEADER_HIDDEN = "header_hidden";
@@ -598,6 +599,7 @@ public class MainActivity extends AppCompatActivity {
             EnumSet.noneOf(PageElementBlockingScript.Option.class);
     private boolean mpvEnabled;
     private boolean adBlockingEnabled;
+    private boolean patchedAdBlockingEnabled;
     private WebAdBlocker adBlocker;
     private boolean playerFullscreen;
     private boolean playerMinimized;
@@ -629,6 +631,8 @@ public class MainActivity extends AppCompatActivity {
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         mpvEnabled = prefs.getBoolean(KEY_MPV_ENABLED, true);
         adBlockingEnabled = prefs.getBoolean(KEY_ADBLOCKING_ENABLED, false);
+        patchedAdBlockingEnabled = prefs.getBoolean(KEY_PATCHED_ADBLOCKING_ENABLED,
+                Preferences.DEFAULT_PATCHED_ADBLOCKING);
         backgroundAudioEnabled = prefs.getBoolean(KEY_BACKGROUND_AUDIO_ENABLED,
                 Preferences.DEFAULT_BACKGROUND_AUDIO);
         for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
@@ -1224,7 +1228,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateAdBlocking(WebView view) {
         adBlocker.setEnabled(view,
-                Preferences.isAdBlockingEnabled(mpvEnabled, adBlockingEnabled));
+                Preferences.isAdBlockingEnabled(mpvEnabled, adBlockingEnabled),
+                Preferences.isPatchedAdBlockingEnabled(mpvEnabled, adBlockingEnabled,
+                        patchedAdBlockingEnabled));
     }
 
     private void setAdBlockingEnabled(boolean enabled) {
@@ -1233,6 +1239,16 @@ public class MainActivity extends AppCompatActivity {
         }
         adBlockingEnabled = enabled;
         prefs.edit().putBoolean(KEY_ADBLOCKING_ENABLED, enabled).apply();
+        updateAdBlocking(webView);
+        webView.reload();
+    }
+
+    private void setPatchedAdBlockingEnabled(boolean enabled) {
+        if (mpvEnabled || !adBlockingEnabled || patchedAdBlockingEnabled == enabled) {
+            return;
+        }
+        patchedAdBlockingEnabled = enabled;
+        prefs.edit().putBoolean(KEY_PATCHED_ADBLOCKING_ENABLED, enabled).apply();
         updateAdBlocking(webView);
         webView.reload();
     }
@@ -1774,6 +1790,7 @@ public class MainActivity extends AppCompatActivity {
         Switch mpvToggle = content.findViewById(R.id.mpv_toggle);
         View adBlockingSettings = content.findViewById(R.id.adblocking_settings);
         Switch adBlockingToggle = content.findViewById(R.id.adblocking_toggle);
+        Switch patchedAdBlockingToggle = content.findViewById(R.id.patched_adblocking_toggle);
         Switch loggingToggle = content.findViewById(R.id.logging_toggle);
         Switch statsForNerdsToggle = content.findViewById(R.id.stats_for_nerds_toggle);
 
@@ -1793,6 +1810,8 @@ public class MainActivity extends AppCompatActivity {
         mpvToggle.setChecked(mpvEnabled);
         adBlockingSettings.setVisibility(mpvEnabled ? View.GONE : View.VISIBLE);
         adBlockingToggle.setChecked(adBlockingEnabled);
+        patchedAdBlockingToggle.setChecked(patchedAdBlockingEnabled);
+        patchedAdBlockingToggle.setEnabled(adBlockingEnabled);
         loggingToggle.setChecked(loggingEnabled);
         statsForNerdsToggle.setChecked(statsForNerdsEnabled);
 
@@ -1859,8 +1878,12 @@ public class MainActivity extends AppCompatActivity {
             setMpvEnabled(isChecked);
             adBlockingSettings.setVisibility(isChecked ? View.GONE : View.VISIBLE);
         });
-        adBlockingToggle.setOnCheckedChangeListener((buttonView, isChecked) ->
-                setAdBlockingEnabled(isChecked));
+        adBlockingToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            setAdBlockingEnabled(isChecked);
+            patchedAdBlockingToggle.setEnabled(isChecked);
+        });
+        patchedAdBlockingToggle.setOnCheckedChangeListener((buttonView, isChecked) ->
+                setPatchedAdBlockingEnabled(isChecked));
 
         relatedVideosToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override

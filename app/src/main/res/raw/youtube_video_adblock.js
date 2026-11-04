@@ -1,12 +1,16 @@
-(function () {
+function (patched) {
     'use strict';
     if (location.protocol !== 'https:' || (location.port && location.port !== '443')
-            || !/^(www\.|m\.|music\.)?youtube\.com$/.test(location.hostname)) {
+            || !/^(www\.|m\.|music\.)?youtube\.com$/.test(location.hostname)
+            || (window.top && window.top !== window)) {
         return;
     }
     if (window.__ssyoutubeVideoAdBlocking) {
-        window.__ssyoutubeVideoAdBlocking.update();
-        return;
+        if (window.__ssyoutubeVideoAdBlocking.patched === patched) {
+            window.__ssyoutubeVideoAdBlocking.update();
+            return;
+        }
+        window.__ssyoutubeVideoAdBlocking.stop();
     }
 
     var active = true;
@@ -15,6 +19,33 @@
     var parse = JSON.parse;
     var stringify = JSON.stringify;
     var adKeys = ['playerAds', 'adPlacements', 'adSlots', 'adBreakHeartbeatParams'];
+    var adRenderers = ['adSlotRenderer', 'displayAdRenderer', 'inFeedAdLayoutRenderer',
+        'promotedSparklesWebRenderer', 'promotedSparklesTextSearchRenderer',
+        'promotedVideoRenderer', 'compactPromotedVideoRenderer', 'searchPyvRenderer',
+        'companionAdRenderer', 'playerLegacyDesktopWatchAdsRenderer'];
+    var componentPaths = ['response', 'contents', 'content', 'items', 'tabs', 'masthead',
+        'richGridRenderer', 'richItemRenderer', 'richSectionRenderer', 'itemSectionRenderer',
+        'sectionListRenderer', 'tabRenderer', 'singleColumnBrowseResultsRenderer',
+        'twoColumnBrowseResultsRenderer', 'twoColumnSearchResultsRenderer',
+        'singleColumnSearchResultsRenderer', 'twoColumnWatchNextResults',
+        'singleColumnWatchNextResults', 'results', 'secondaryResults',
+        'continuationContents', 'richGridContinuation', 'sectionListContinuation',
+        'itemSectionContinuation', 'onResponseReceivedActions', 'onResponseReceivedEndpoints',
+        'onResponseReceivedCommands', 'appendContinuationItemsAction',
+        'reloadContinuationItemsCommand', 'continuationItems'];
+    var textMarkers = new RegExp('"(' + adKeys.concat(adRenderers, ['adClientParams']).join('|')
+        + ')"');
+    var changes = 0;
+    var reported = new Set();
+    var xhrText = new WeakMap();
+
+    function report(reason) {
+        if (!reported.has(reason)) {
+            reported.add(reason);
+            // Never log response bodies, request URLs, or exception messages.
+            console.warn('ssYouTube adblocking: ' + reason);
+        }
+    }
 
     function ownValue(object, key) {
         var descriptor = Object.getOwnPropertyDescriptor(object, key);
@@ -33,13 +64,97 @@
             var descriptor = Object.getOwnPropertyDescriptor(value, key);
             if (descriptor && descriptor.configurable) {
                 delete value[key];
+                changes++;
             }
         });
         return value;
     }
 
-    // Visit only player-response envelopes, never arbitrary account/page object trees.
-    function prune(value) {
+    function adComponent(value) {
+        for (var depth = 0; object(value) && !Array.isArray(value) && depth < 3; depth++) {
+            if (adRenderers.some(function (key) { return object(ownValue(value, key)); })) {
+                return Object.keys(value).every(function (key) {
+                    return adRenderers.indexOf(key) !== -1
+                        || key === 'trackingParams' || key === 'clickTrackingParams';
+                });
+            }
+            var wrapper = ownValue(value, 'richItemRenderer')
+                || ownValue(value, 'richSectionRenderer');
+            if (!object(wrapper) || !Object.keys(value).every(function (key) {
+                return key === 'richItemRenderer' || key === 'richSectionRenderer'
+                    || key === 'trackingParams' || key === 'clickTrackingParams';
+            })) {
+                return false;
+            }
+            value = ownValue(wrapper, 'content');
+        }
+        return false;
+    }
+
+    function mutableArray(value) {
+        if (!Object.isExtensible(value) || Object.isSealed(value)
+                || !Object.getOwnPropertyDescriptor(value, 'length').writable) {
+            return false;
+        }
+        for (var i = 0; i < value.length; i++) {
+            var descriptor = Object.getOwnPropertyDescriptor(value, String(i));
+            if (descriptor && (!descriptor.configurable || !descriptor.writable)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // The web equivalent of a component filter: explicit ad renderers, not text matching.
+    // Follow rendering envelopes only, leaving account, comments and media metadata alone.
+    function patchComponents(value) {
+        var pending = [value];
+        var seen = new WeakSet();
+        var budget = 16384;
+        for (var cursor = 0; cursor < pending.length && cursor < 4096 && budget > 0; cursor++) {
+            var current = pending[cursor];
+            if (!object(current) || seen.has(current)) {
+                continue;
+            }
+            seen.add(current);
+            if (Array.isArray(current)) {
+                if (current.length > 4096 || current.length * 2 > budget) {
+                    report('Component limit reached');
+                    continue;
+                }
+                budget -= current.length * 2 + 1;
+                var mutable = mutableArray(current);
+                for (var i = current.length - 1; i >= 0; i--) {
+                    var item = ownValue(current, String(i));
+                    if (adComponent(item) && mutable) {
+                        current.splice(i, 1);
+                        changes++;
+                    } else if (object(item) && pending.length < 4096) {
+                        pending.push(item);
+                    }
+                }
+            } else {
+                budget -= componentPaths.length;
+                componentPaths.forEach(function (key) {
+                    var child = ownValue(current, key);
+                    if (adComponent(child)) {
+                        var descriptor = Object.getOwnPropertyDescriptor(current, key);
+                        if (descriptor.configurable) {
+                            delete current[key];
+                            changes++;
+                        }
+                    } else if (object(child) && pending.length < 4096) {
+                        pending.push(child);
+                    }
+                });
+            }
+        }
+        if (pending.length >= 4096 || budget <= 0) {
+            report('Component limit reached');
+        }
+    }
+
+    function prune(value, components) {
         if (!active || !object(value)) {
             return value;
         }
@@ -51,6 +166,10 @@
                 continue;
             }
             seen.add(current);
+            if (patched && ((components && current === value)
+                    || object(ownValue(current, 'responseContext')))) {
+                patchComponents(current);
+            }
             var entries = ownValue(current, 'entries');
             if (Array.isArray(entries) && !Object.isSealed(entries)) {
                 for (var entry = Math.min(entries.length, 256) - 1; entry >= 0; entry--) {
@@ -59,6 +178,7 @@
                     var params = object(reel) && ownValue(reel, 'adClientParams');
                     if (object(params) && ownValue(params, 'isAd') === true) {
                         entries.splice(entry, 1);
+                        changes++;
                     }
                 }
             }
@@ -90,12 +210,46 @@
         return value;
     }
 
-    function safelyPrune(value) {
+    function safelyPrune(value, components) {
         try {
-            return prune(value);
-        } catch (ignored) {
+            return prune(value, components);
+        } catch (error) {
+            report('Response patch unavailable');
             return value;
         }
+    }
+
+    function responseText(value) {
+        if (!active || typeof value !== 'string' || value.length > 5000000
+                || !textMarkers.test(value)) {
+            return value;
+        }
+        // Some Innertube responses carry an anti-XSSI prefix. Preserve it for the caller.
+        var prefix = /^\)\]\}'(?:\r?\n)?/.exec(value);
+        var body = prefix ? value.slice(prefix[0].length) : value;
+        var parsed;
+        try {
+            parsed = parse(body);
+        } catch (error) {
+            report('Non-JSON response left unchanged');
+            return value;
+        }
+        var before = changes;
+        safelyPrune(parsed, true);
+        return changes === before ? value : (prefix ? prefix[0] : '') + stringify(parsed);
+    }
+
+    function cachedXhrText(xhr, value) {
+        if (!active || !patched || xhr.readyState !== 4
+                || !playerApi(xhr.responseURL)) {
+            return value;
+        }
+        var cached = xhrText.get(xhr);
+        if (!cached || cached.input !== value || cached.url !== xhr.responseURL) {
+            cached = {input: value, url: xhr.responseURL, output: responseText(value)};
+            xhrText.set(xhr, cached);
+        }
+        return cached.output;
     }
 
     function playerString(value) {
@@ -157,7 +311,7 @@
 
     function installGlobals() {
         watch(window, 'ytInitialPlayerResponse', player);
-        watch(window, 'ytInitialData', safelyPrune);
+        watch(window, 'ytInitialData', function (value) { return safelyPrune(value, true); });
         watch(window, 'ytplayer', function (ytplayer) {
             watch(ytplayer, 'config', function (config) {
                 watch(config, 'args', function (args) {
@@ -172,6 +326,11 @@
     }
 
     function replace(target, key, replacement) {
+        var descriptor = Object.getOwnPropertyDescriptor(target, key);
+        if (descriptor && (!descriptor.writable || !('value' in descriptor))) {
+            report('Read-only browser hook left unchanged');
+            return;
+        }
         var original = target[key];
         target[key] = replacement;
         restore.push(function () {
@@ -187,8 +346,9 @@
             return parsed.protocol === 'https:' && (!parsed.port || parsed.port === '443')
                     && !parsed.username && !parsed.password
                     && /^(www\.|m\.|music\.)?youtube\.com$/.test(parsed.hostname)
-                    && /^\/youtubei\/v1\/(?:player|next|reel\/reel_item_watch|reel\/reel_watch_sequence)$/
-                        .test(parsed.pathname);
+                    && (/^\/youtubei\/v1\/(?:player|next|reel\/reel_item_watch|reel\/reel_watch_sequence)$/
+                        .test(parsed.pathname)
+                        || (patched && /^\/youtubei\/v1\/(?:browse|search)$/.test(parsed.pathname)));
         } catch (ignored) {
             return false;
         }
@@ -204,7 +364,16 @@
         replace(Response.prototype, 'json', function () {
             var filtered = playerApi(this.url);
             return responseJson.apply(this, arguments).then(function (value) {
-                return active && filtered ? safelyPrune(value) : value;
+                return active && filtered ? safelyPrune(value, true) : value;
+            });
+        });
+    }
+    if (patched && window.Response && Response.prototype.text) {
+        var text = Response.prototype.text;
+        replace(Response.prototype, 'text', function () {
+            var filtered = playerApi(this.url);
+            return text.apply(this, arguments).then(function (value) {
+                return active && filtered ? responseText(value) : value;
             });
         });
     }
@@ -214,8 +383,11 @@
         if (response && response.get && response.configurable) {
             var getResponse = function () {
                 var value = response.get.call(this);
-                return active && this.responseType === 'json' && playerApi(this.responseURL)
-                        ? safelyPrune(value) : value;
+                if (active && this.responseType === 'json' && playerApi(this.responseURL)) {
+                    return safelyPrune(value, true);
+                }
+                return this.responseType === '' || this.responseType === 'text'
+                        ? cachedXhrText(this, value) : value;
             };
             Object.defineProperty(prototype, 'response', {
                 configurable: response.configurable,
@@ -229,6 +401,27 @@
                     Object.defineProperty(prototype, 'response', response);
                 }
             });
+        }
+        var responseTextDescriptor = Object.getOwnPropertyDescriptor(prototype, 'responseText');
+        if (patched && responseTextDescriptor && responseTextDescriptor.get
+                && responseTextDescriptor.configurable) {
+            var getText = function () {
+                return cachedXhrText(this, responseTextDescriptor.get.call(this));
+            };
+            Object.defineProperty(prototype, 'responseText', {
+                configurable: responseTextDescriptor.configurable,
+                enumerable: responseTextDescriptor.enumerable,
+                get: getText,
+                set: responseTextDescriptor.set
+            });
+            restore.push(function () {
+                var current = Object.getOwnPropertyDescriptor(prototype, 'responseText');
+                if (current && current.get === getText) {
+                    Object.defineProperty(prototype, 'responseText', responseTextDescriptor);
+                }
+            });
+        } else if (patched) {
+            report('XHR text hook unavailable');
         }
     }
 
@@ -258,8 +451,8 @@
                     }
                 }
             }
-        } catch (ignored) {
-            // Site changes must not break content playback.
+        } catch (error) {
+            report('Player update unavailable');
         }
     }
 
@@ -267,17 +460,22 @@
     document.addEventListener('DOMContentLoaded', update);
     window.addEventListener('yt-navigate-finish', update);
     window.__ssyoutubeVideoAdBlocking = {
+        patched: patched,
         update: update,
         stop: function () {
+            if (!active) {
+                return;
+            }
             active = false;
             clearInterval(interval);
             document.removeEventListener('DOMContentLoaded', update);
             window.removeEventListener('yt-navigate-finish', update);
             for (var i = restore.length - 1; i >= 0; i--) {
-                try { restore[i](); } catch (ignored) { }
+                try { restore[i](); } catch (error) { report('Hook restoration unavailable'); }
             }
+            xhrText = new WeakMap();
             delete window.__ssyoutubeVideoAdBlocking;
         }
     };
     update();
-})();
+}
