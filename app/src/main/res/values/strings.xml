@@ -111,7 +111,7 @@
     <string name="block_page_elements_expanded">Block Page elements ▾</string>
     <string name="expand_block_page_elements">Expand Block Page elements</string>
     <string name="collapse_block_page_elements">Collapse Block Page elements</string>
-    <string name="block_page_elements_summary">Works with either player, independently of adblocking. Changes are saved and apply immediately. To show comments, video info and sign-in/menu controls, turn off distracting elements.</string>
+    <string name="block_page_elements_summary">Works with every player, independently of adblocking. Changes are saved and apply immediately. To show comments, video info and sign-in/menu controls, turn off distracting elements.</string>
     <string name="block_youtube_shorts">Block YouTube Shorts</string>
     <string name="block_youtube_playables">Block YouTube Playables</string>
     <string name="block_youtube_recommended">Block YouTube recommended content</string>
@@ -121,24 +121,32 @@
     <string name="block_youtube_members_only">Block YouTube members-only videos</string>
     <string name="block_youtube_end_video">YouTube end video elements blocker</string>
     <string name="enable_background_audio">Enable Background Audio</string>
-    <string name="background_audio_summary">Keep audio playing with mpv or YouTube’s web player when switching apps or turning the screen off. A media notification lets you pause it. Closing the app stops playback. Hold the floating Settings button for 3 seconds to hide it for 5 seconds.</string>
+    <string name="background_audio_summary">Keep audio playing with mpv, ExoPlayer or YouTube’s web player when switching apps or turning the screen off. A media notification lets you pause it. Closing the app stops playback. Hold the floating Settings button for 3 seconds to hide it for 5 seconds.</string>
     <string name="background_audio_channel">Background audio</string>
     <string name="background_audio_notification">Audio playback is enabled in the background</string>
     <string name="background_audio_unavailable">Background audio is unavailable. Playback will pause outside the app. Reopen the app or toggle this setting to retry.</string>
-    <string name="web_background_audio_unavailable">This WebView could not enable background audio. Update Android System WebView, or use mpv.</string>
+    <string name="web_background_audio_unavailable">This WebView could not enable background audio. Update Android System WebView, or use a native player.</string>
     <string name="pause_audio">Pause audio</string>
     <string name="page_elements_unavailable">Page element blocking could not start. Restart the app to retry.</string>
     <string name="adblocker_settings_collapsed">Ad-Blocker Settings ▸</string>
     <string name="adblocker_settings_expanded">Ad-Blocker Settings ▾</string>
     <string name="expand_adblocker_settings">Expand Ad-Blocker Settings</string>
     <string name="collapse_adblocker_settings">Collapse Ad-Blocker Settings</string>
-    <string name="enable_mpv">Enable mpv player</string>
-    <string name="mpv_summary">On by default. Turn off to use YouTube’s web player. Changing this setting stops native playback and reloads the current page.</string>
+    <string name="playback_engine">Playback engine</string>
+    <string name="playback_web">YouTube web player</string>
+    <string name="playback_mpv">mpv (default)</string>
+    <string name="playback_exoplayer">ExoPlayer (adaptive)</string>
+    <string-array name="playback_engine_options">
+        <item>@string/playback_web</item>
+        <item>@string/playback_mpv</item>
+        <item>@string/playback_exoplayer</item>
+    </string-array>
+    <string name="playback_engine_summary">ExoPlayer adjusts segment quality to connection speed and buffer health, up to 1080p. If adaptive formats are unavailable, it shows fixed quality. mpv keeps its existing stream selection. Changing players stops playback and reloads the page. Shorts always use the web player.</string>
     <string name="enable_adblocking">Enable adblocking</string>
-    <string name="adblocking_summary">Blocks page ads and YouTube video-ad scheduling, with automatic skipping when available. Disabled while mpv is enabled. Your choice is saved; changing it reloads the page. YouTube changes can affect blocking.</string>
+    <string name="adblocking_summary">Blocks page ads and YouTube video-ad scheduling, with automatic skipping when available. Available with the YouTube web player. Your choice is saved; changing it reloads the page. YouTube changes can affect blocking.</string>
     <string name="adblocking_unavailable">Adblocking could not start. Turn it off and on to retry.</string>
     <string name="patched_adblocking">Patched AdBlocking</string>
-    <string name="patched_adblocking_summary">Independent ReVanced-inspired web patches: filter video and feed ads, merchandise, product panels, identified Premium promos, shopping end cards and paid-promotion labels. Safely dismiss supported ad popups. Works with Enable adblocking on or off; requires mpv off. Saved across restarts; changes reload the page. Does not remove creator-sponsored video segments or patch a YouTube APK. YouTube changes can affect blocking.</string>
+    <string name="patched_adblocking_summary">Independent ReVanced-inspired web patches: filter video and feed ads, merchandise, product panels, identified Premium promos, shopping end cards and paid-promotion labels. Safely dismiss supported ad popups. Works with Enable adblocking on or off; requires the YouTube web player. Saved across restarts; changes reload the page. Does not remove creator-sponsored video segments or patch a YouTube APK. YouTube changes can affect blocking.</string>
     <string name="adblocking_late_injection">This WebView cannot install ad patches before the page starts. Update Android System WebView; late filtering may miss ads.</string>
     <string name="debugging">Debugging</string>
     <string name="enable_logging">Enable debug logging</string>

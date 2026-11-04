@@ -1,7 +1,7 @@
 # ssYouTube
 
-An Android app that uses the YouTube website for browsing and an embedded mpv player
-with NewPipeExtractor for video playback. The browsing session stays signed in;
+An Android app that uses the YouTube website for browsing and offers embedded mpv
+or adaptive Media3/ExoPlayer playback with NewPipeExtractor. The browsing session stays signed in;
 playback extraction is separate and anonymous.
 
 ## Features
@@ -36,13 +36,14 @@ playback extraction is separate and anonymous.
   This does not translate videos or change the app UI; changing it does not interrupt a
   video that is already playing.
   **Ad-Blocker Settings** starts collapsed each time Preferences opens. Expand it for
-  **Enable mpv player**, **Enable adblocking**, and **Patched AdBlocking**.
-  **Enable mpv player** is on by default and saved across restarts. Turn it off to use
-  YouTube's web player instead. Switching stops native playback (including the miniplayer
-  and pending extraction) and reloads the current page; turn it back on to use mpv again.
-  **Enable adblocking** is available only with mpv off and starts off. The choice is saved
-  across restarts. Enabling mpv disables adblocking and hides its controls, without
-  forgetting that choice; turning mpv off restores it. Changing adblocking reloads the
+  **Playback engine**, **Enable adblocking**, and **Patched AdBlocking**.
+  **Playback engine** offers **YouTube web player**, **mpv (default)** and
+  **ExoPlayer (adaptive)**, saved across restarts. Existing mpv-on/off choices migrate
+  to mpv/web respectively; ExoPlayer is opt-in. Switching stops native playback (including
+  the miniplayer and pending extraction), releases the old engine, and reloads the page.
+  **Enable adblocking** is available only with the web player and starts off. The choice is
+  saved across restarts. Either native engine disables adblocking and hides its controls,
+  without forgetting that choice; returning to the web player restores it. Changing adblocking reloads the
   current page so disabling it removes that option's filters from the document;
   independently enabled patched filtering remains active.
   This is a lightweight, bundled rule-based engine, not uBlock Origin or a full
@@ -52,13 +53,13 @@ playback extraction is separate and anonymous.
   explicitly marked Shorts ad entries, and clicks available skip buttons in an ad-playing
   player as a fallback. It does not bypass anti-adblock checks or remove creator sponsorships.
   YouTube changes and server-stitched ads can still defeat these filters.
-  **Patched AdBlocking** is a separate, default-off switch, available with mpv off.
+  **Patched AdBlocking** is a separate, default-off switch, available with the web player.
   It works independently of **Enable adblocking** and extends the shared player-data
   filtering to text responses, feed/search ad components, merchandise and product panels,
   identified Premium promotions, shopping end cards, and paid-promotion labels.
   Its reversible UI fallback also dismisses supported ad popups through their close buttons.
   Either switch can be used alone or both can be enabled together. Both choices are saved,
-  temporarily inactive when mpv is on, and changing either reloads the page.
+  temporarily inactive with either native engine, and changing either reloads the page.
   This is a ReVanced-inspired WebView adaptation, not a YouTube APK patcher;
   it does not download or install another app.
   **Hide related videos** and **Hide header** are independent button toggles on the same
@@ -68,7 +69,7 @@ playback extraction is separate and anonymous.
   hidden elements and their spacing.
   **Block Page elements** provides eight independent YouTube filters and an
   **Enable Background Audio** switch, described below.
-  These page customizations remain active with either player and with adblocking off.
+  These page customizations remain active with every player and with adblocking off.
   Back and forward behave like a browser's buttons: repeated history entries for the same
   page (created by the YouTube single page app) are skipped so every press changes page
   (`NavigationHistory`).
@@ -108,29 +109,32 @@ playback extraction is separate and anonymous.
   Both actions show success/failure inline and disable repeat submissions while busy.
   On a network failure, check the server's job list before retrying: the request may
   have arrived even when its response did not.
-- **Native video playback** – with **Enable mpv player** on, watch links, live-video links, embedded-video links,
-  and `youtu.be` links open in an embedded libmpv player, using the same `loadfile` network-URL
-  operation as mpv-android's **Open URL**. No external player app is launched or required.
+- **Native video playback** – with **mpv** or **ExoPlayer** selected, watch links, live-video links,
+  embedded-video links and `youtu.be` links open in the selected embedded player.
+  mpv uses the same `loadfile` network-URL operation as mpv-android's **Open URL**.
+  No external player app is launched or required.
   NewPipeExtractor resolves the media directly, off the UI thread, without a third-party
   extraction proxy. A YouTube watch/share URL is a webpage, not a media stream: mpv-android's
-  Open URL does not replace this extraction step. Media3 supplies the existing controls,
-  not the playback engine; ExoPlayer is no longer used. The native player provides
+  Open URL does not replace this extraction step. Media3 supplies shared controls for
+  both engines and also performs decoding/network playback when ExoPlayer is selected.
+  The native player provides
   play/pause, seeking, fullscreen, a miniplayer, and explicit retry after extraction/playback
   failures. Timestamp links are supported. **Enable Background Audio** is on by default:
   switching apps or turning the screen off keeps audio playing. Turning it off restores
   pausing when leaving the activity. Closing
   the player cancels pending extraction, and destroying the activity releases its resources.
   The same native player is used across fullscreen and miniplayer transitions.
-  Stream selection is automatic, supporting progressive video, separate video/audio tracks,
-  and available HLS/DASH manifests; there is no manual quality selector.
-  Separate audio is appended with mpv's `change-list audio-files append` command after
+  mpv's stream selection remains unchanged, supporting progressive video, separate video/audio
+  tracks and available HLS/DASH manifests; it does not automatically change quality with bandwidth.
+  Neither engine has a manual quality selector.
+  In mpv, separate audio is appended with `change-list audio-files append` after
   initialization and before `loadfile`; CLI-only list suffixes are not libmpv option names.
   Each selected video gets its own mpv handle; fullscreen/miniplayer transitions retain
   that handle and only change its surface size. Closing or replacing a video destroys its
   handle, and callbacks from that handle cannot update the replacement.
   Startup reads only playback fields after NewPipe's page fetch, not the full `StreamInfo`
   metadata/related-item aggregation. Live playback tries HLS, then DASH, before building
-  direct-stream lists; on-demand playback only reads manifests if direct streams are unavailable.
+  direct-stream lists; mpv on-demand playback only reads manifests if direct streams are unavailable.
   If a matching separate audio track is needed, an equally compatible, equal-resolution
   video-only stream avoids downloading unused muxed audio without reducing frame rate.
   Resolution and language preferences are unchanged. mpv starts without forced initial
@@ -140,20 +144,36 @@ playback extraction is separate and anonymous.
   This shorter refill can cause more frequent stalls on marginal connections; it does not
   increase network throughput or skip format probing, TLS verification, or required extraction
   requests. End-to-end startup time still depends on YouTube, the connection and the device.
+- **Adaptive ExoPlayer** – select **Preferences → Ad-Blocker Settings → Playback engine →
+  ExoPlayer (adaptive)** for segment-based quality changes up to 1080p. It prefers available
+  HLS/DASH manifests. For on-demand videos without a manifest, it builds an in-memory static
+  DASH manifest from NewPipe's video-only formats, real initialization/index byte ranges,
+  codec/bitrate metadata and the preferred separate audio track. ExoPlayer reads the indexes
+  and requests media segments; it does not replace whole video URLs when changing quality.
+  Incompatible codec families stay in separate adaptation sets.
+  A conservative initial bandwidth estimate starts with a smaller representation when available.
+  Media3 then uses measured throughput and buffered duration to increase/decrease quality,
+  retaining its normal hysteresis to avoid repeated switching. Startup needs 750 ms of buffer,
+  rebuffering needs 2.5 seconds, and forward buffering targets 15–50 seconds within a 64 MiB
+  allocation target. This does not guarantee stall-free playback on an insufficient connection.
+  When no usable adaptive ladder is available, a playable fixed stream remains available;
+  the toolbar says **ExoPlayer (fixed quality)** when selected tracks cannot adapt.
+  Both native engines share language preferences, timestamps, retry, gestures, fullscreen,
+  miniplayer, background audio and watch-history handling. Live manifests keep live-edge startup.
 - **Shorts in the WebView** – direct `/shorts` pages stay on YouTube's web player, including
   incoming Shorts links and single-page navigation. Entering Shorts closes any native
   playback so the two players do not play together.
 - **Browsing WebView** – the site remains available for search, channels, comments,
   and account interactions. Turn off **Block YouTube distracting elements** to show
-  comments, video info and sign-in/menu controls. With mpv enabled, outside Shorts, web media
+  comments, video info and sign-in/menu controls. With either native engine, outside Shorts, web media
   playback and previews are disabled,
   including after single-page navigation. Web player containers, placeholders, and their
   reserved height are collapsed in mobile and desktop layouts outside Shorts, leaving the
   native player as the only video area on those pages. Only validated
   YouTube main-frame navigation can select native playback; sign-in pages do not receive
-  the playback bridge. With mpv enabled, adblocking is entirely inactive, including on
+  the playback bridge. With either native engine, adblocking is entirely inactive, including on
   Shorts, so feed ads and shopping promotions may appear; **Block Page elements** is
-  independent and still applies. With mpv disabled, optional
+  independent and still applies. With the web player selected, optional
   adblocking filters WebView requests (and service-worker requests where supported) and
   applies cosmetic styles and video-ad filtering only on supported HTTPS YouTube pages.
   Google sign-in pages, main-frame navigation, native extraction and media transport
@@ -164,18 +184,22 @@ playback extraction is separate and anonymous.
   extraction. Signed-in cookies are never passed to the extractor: private, purchased,
   members-only, or age-restricted content may not play even when accessible in the website.
   Website playlist autoplay and web-player-specific controls are not provided by the native player.
-  There is no automatic fallback to YouTube's web player for native playback; disable
-  **Enable mpv player** in Preferences to switch manually. Shorts and mpv-disabled playback use
+  There is no automatic fallback to YouTube's web player for native playback; select
+  **YouTube web player** in Preferences to switch manually. Shorts and web playback use
   the website's playback behavior; optional adblocking does not guarantee ad-free playback.
   Creator-embedded sponsorships
   are part of the video and are not removed.
   Extracted URLs are restricted to HTTPS YouTube/Googlevideo hosts before opening.
-  libmpv/FFmpeg handles media redirects and manifest requests, rather than the former Java
+  For mpv, libmpv/FFmpeg handles media redirects and manifest requests, rather than the former Java
   media transport: its protocol allowlist excludes directly opened local files and cleartext
   HTTP URLs, but native redirects do not apply the extractor's per-redirect HTTPS/host
   policy or response-size limits.
   TLS verification uses the library's bundled CA certificates. Browser cookies, user
   configuration/scripts, external URL extractors and mpv URL-bearing logs are disabled.
+  ExoPlayer uses an isolated, cookie-free OkHttp client with normal platform TLS verification.
+  Manifests, media segments, index/initialization ranges, encryption keys and each redirect
+  are checked against the HTTPS YouTube/Googlevideo allowlist before connecting.
+  Credentials are removed, redirects are bounded, and signed media URLs/manifests stay in memory.
 - **Native watch history** – while playing, native position, duration, and observed watched
   ranges are reported to YouTube approximately every 10 seconds, with a final best-effort
   update on pause, close, or video change. Seeking, buffering, and paused time are not counted as watched
@@ -241,6 +265,10 @@ app/src/main/java/com/skystream/ssyoutube/
   NativePlayerView.java     Controls, lifecycle and extraction coordination
   MpvPlayer.java              Embedded libmpv and Media3 controls/timeline adapter
   MpvPlaybackRequest.java     Validated network-URL commands and restricted mpv options
+  PlaybackEngine.java         Saved web/mpv/ExoPlayer choice and legacy preference migration
+  ExoPlayback.java            Adaptive Media3 engine and DASH/HLS/progressive media sources
+  AdaptiveDashManifest.java   In-memory DASH quality ladders using real YouTube byte-range indexes
+  NativeMediaHttp.java        Anonymous, allowlisted ExoPlayer transport including redirects
   NativeStreamExtractor.java  NewPipeExtractor media selection
   ExtractorDownloader.java    Bounded HTTPS extraction requests without browser cookies
   PlaybackRequest.java        Validated video links and timestamps (pure Java, unit tested)
@@ -305,7 +333,7 @@ not expose every redirect, cached response or media request to interception.
 
 ### Patched AdBlocking
 
-Turn off **Enable mpv player**, then turn on **Patched AdBlocking** inside
+Select **YouTube web player**, then turn on **Patched AdBlocking** inside
 **Ad-Blocker Settings**. **Enable adblocking** is independent: either switch works
 on its own, and both can be enabled together. Turning one off leaves the other active
 without changing its saved choice. Turn both off to disable all adblocking.
@@ -378,7 +406,7 @@ consumption and parsing failures remain browser-owned. Text rewriting is limited
 5,000,000 characters, preserves anti-XSSI prefixes and returns unchanged text when no ad
 field was removed. Component traversal is bounded, cycle-safe and skips oversized arrays;
 unrecognized formats are not guessed. Hooks apply only to supported HTTPS YouTube
-top-level documents; changing either switch or enabling mpv stops the old hooks and
+top-level documents; changing either switch or selecting a native engine stops the old hooks and
 reloads all frames with the remaining enabled filters. Pending response processing
 from an old configuration is inactive.
 If document-start injection is unavailable, the app warns that late filtering may miss
@@ -449,8 +477,8 @@ or its player-response scriptlets. YouTube quick search is not included.
 
 ### Background audio
 
-**Enable Background Audio** is saved independently of mpv and adblocking. It supports the
-native mpv player and YouTube's web player (including direct Shorts). While playback is
+**Enable Background Audio** is saved independently of the playback engine and adblocking. It supports
+mpv, ExoPlayer and YouTube's web player (including direct Shorts). While playback is
 active or loading, an Android foreground media service supplies a media notification and
 a CPU wake lock; the notification/media controls can pause audio or reopen the existing
 page without reloading it. A bounded, 30-second idle grace period bridges autoplay/page
@@ -487,6 +515,9 @@ Maven Central at build time, not downloaded as executable code at runtime. This 
 preserves API 21 support without changing the app's SDK requirements; it increases APK size.
 Kotlin coroutines are explicitly included because the wrapper uses them internally.
 When updating the library, update the versioned CA cache filename in `MpvPlayer` too.
+ExoPlayer, DASH/HLS support, its OkHttp data source and the shared controls use the same
+Media3 version. Robolectric tests exercise the real Media3 manifest parser, source factories,
+player configuration and adaptive selection against controlled bandwidth/buffer inputs.
 
 ```bash
 ./gradlew assembleDebug   # build the APK
@@ -519,11 +550,11 @@ three-/five-second button deadlines.
 On a device, verify both new sections in light/dark themes and small/landscape layouts,
 expand/collapse Block Page elements and Ad-Blocker Settings, reopen Preferences, and check
 every choice after an app restart and a site-mode change. Confirm page-element blocking remains active with
-mpv on and adblocking off; disable distracting elements when checking comments and login.
-With mpv off, compare basic-only, patched-only, both-on and both-off combinations on watch
+either native engine and adblocking off; disable distracting elements when checking comments and login.
+With the web player, compare basic-only, patched-only, both-on and both-off combinations on watch
 pages, playlists, Shorts, home/search continuations and live streams. Verify signed-in controls, captions, seeking
 and watch history still work, switch implementations during playback, and confirm the
-saved choices return after temporarily enabling mpv. Disabling either adblocking switch
+saved choices return after temporarily selecting either native engine. Disabling either adblocking switch
 must leave the other switch enabled and working.
 Check native and web audio with the screen locked and another app foregrounded, notification
 pause/reopen, headphone removal and audio-focus loss, pending extraction, autoplay, ended/
@@ -534,9 +565,13 @@ multitouch, cancellation, recreation and the button's automatic return.
 Device verification should cover muxed/adaptive audio and video, live HLS/DASH, timestamp
 links, seek/replay, rapid video changes, pause/resume, audio-focus/headphone interruptions,
 fullscreen/miniplayer resizing, activity recreation, network failure/retry and close while
-loading. Verify the mpv toggle persists after restart/recreation, stops a playing or loading
-miniplayer when disabled, restores web playback on mobile/desktop and after navigation,
-and resumes native routing when re-enabled. Native rendering/decoding and ABI compatibility
+loading. Verify all three engine choices persist after restart/recreation, preserve the
+legacy mpv-on/off choice on upgrade, stop a playing/loading miniplayer when switched,
+restore web playback on mobile/desktop and resume native routing when selected.
+For ExoPlayer, throttle bandwidth low → high → low on a multi-quality DASH/HLS video and verify
+resolution changes without timeline resets or overlapping audio. Check the indexed VOD path
+as well as remote manifests and the visibly labelled fixed-quality fallback. Check audio language,
+both live-edge startup and explicit timestamp/retry positions. Native rendering/decoding and ABI compatibility
 cannot be verified by JVM tests alone.
 
 For loading-time comparisons, use the same video, device and network before/after the change.
@@ -545,15 +580,15 @@ also check stall frequency on a throttled connection, not just how quickly the s
 Playback extraction fixtures assert the exact field-read order and live short circuit without
 network requests; they do not establish an end-to-end speedup on a device.
 
-With mpv off, verify the adblocking toggle persists after restart and works on mobile,
-desktop, Shorts, reloads, and single-page navigation. Toggle mpv on while adblocking is
+With the web player, verify the adblocking toggle persists after restart and works on mobile,
+desktop, Shorts, reloads, and single-page navigation. Select either native engine while adblocking is
 enabled: its entire settings row must disappear and filtering must stop, including on
-Shorts. Toggle mpv off again and verify the saved choice is restored. Also check sign-in,
+Shorts. Return to the web player and verify the saved choice is restored. Also check sign-in,
 normal playback, comments, thumbnails, watch history and the app logo with filtering on
 and off; disabling filtering must restore the unmodified page after the reload.
 With adblocking on, also verify pre-roll and mid-roll videos, a second video reached through
-SPA navigation, playlist autoplay and Shorts. Confirm video-ad filtering stops when mpv is
-enabled and that normal seeking, playback speed, captions and live streams remain intact.
+SPA navigation, playlist autoplay and Shorts. Confirm video-ad filtering stops with either native
+engine and that normal seeking, playback speed, captions and live streams remain intact.
 
 For Music Server, device-check browser authorization, cancellation/retry, return after
 activity/process recreation, persistence after restart, and expired/revoked logins.
@@ -568,8 +603,9 @@ files, never remote ciphertext, and exposes no padding-error oracle.
 
 ### Third-party licensing
 
-Controls use [AndroidX Media3](https://github.com/androidx/media) (Apache-2.0).
-Playback uses [mpv-android-lib](https://github.com/abdallahmehiz/mpv-android) (MIT wrapper,
+Controls and adaptive ExoPlayer playback use [AndroidX Media3](https://github.com/androidx/media)
+and [OkHttp](https://github.com/square/okhttp) (Apache-2.0).
+mpv playback uses [mpv-android-lib](https://github.com/abdallahmehiz/mpv-android) (MIT wrapper,
 derived from [mpv-android](https://github.com/mpv-android/mpv-android)), its GPL-enabled
 libmpv/FFmpeg native stack, and
 [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) (GPL-3.0-or-later).

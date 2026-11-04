@@ -27,7 +27,9 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.Timeline;
+import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.TimeBar;
 
@@ -63,7 +65,9 @@ final class NativePlayerView extends FrameLayout {
                 thread.setDaemon(true);
                 return thread;
             });
-    private final MpvPlayer player;
+    private Player player;
+    private PlaybackEngine playbackEngine;
+    private final Player.Listener playbackListener;
     private final PlayerView playerView;
     private final Listener listener;
     private final NativePlayerGestures gestures;
@@ -86,7 +90,7 @@ final class NativePlayerView extends FrameLayout {
     private boolean foreground;
     private String preferredLanguage = Preferences.DEFAULT_LANGUAGE;
 
-    NativePlayerView(Context context, Listener listener) {
+    NativePlayerView(Context context, PlaybackEngine engine, Listener listener) {
         super(context);
         this.listener = listener;
         ViewConfiguration configuration = ViewConfiguration.get(context);
@@ -95,9 +99,7 @@ final class NativePlayerView extends FrameLayout {
                 ViewConfiguration.getDoubleTapTimeout(), ViewConfiguration.getLongPressTimeout());
         setBackgroundColor(Color.BLACK);
         extractor.allowCoreThreadTimeOut(true);
-        player = new MpvPlayer(context);
         playerView = new SurfacePlayerView(context);
-        playerView.setPlayer(player);
         playerView.setUseController(true);
         playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS);
         playerView.setShowNextButton(false);
@@ -163,7 +165,7 @@ final class NativePlayerView extends FrameLayout {
         addView(toolbar, new LayoutParams(
                 LayoutParams.MATCH_PARENT, dp(48), Gravity.TOP));
 
-        player.addListener(new Player.Listener() {
+        playbackListener = new Player.Listener() {
             @Override
             public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
                 if (!changingPlayer && !released && !state.lifecyclePaused && hasVideo()) {
@@ -197,6 +199,17 @@ final class NativePlayerView extends FrameLayout {
             }
 
             @Override
+            public void onTracksChanged(Tracks tracks) {
+                if (playbackEngine == PlaybackEngine.EXOPLAYER && !tracks.isEmpty()) {
+                    boolean adaptive = tracks.getGroups().stream().anyMatch(group ->
+                            group.getType() == C.TRACK_TYPE_VIDEO && group.isSelected()
+                                    && group.isAdaptiveSupported());
+                    heading.setText(adaptive ? R.string.native_player_exoplayer_title
+                            : R.string.native_player_fixed_quality);
+                }
+            }
+
+            @Override
             public void onPlayerError(PlaybackException error) {
                 MediaItem item = player.getCurrentMediaItem();
                 if (!released && !changingPlayer && hasVideo()
@@ -205,7 +218,27 @@ final class NativePlayerView extends FrameLayout {
                     showError(error);
                 }
             }
-        });
+        };
+        setPlaybackEngine(engine);
+    }
+
+    void setPlaybackEngine(PlaybackEngine engine) {
+        if (released || playbackEngine == engine) {
+            return;
+        }
+        if (player != null) {
+            stop();
+            playerView.setPlayer(null);
+            player.removeListener(playbackListener);
+            player.release();
+        }
+        playbackEngine = engine;
+        player = engine == PlaybackEngine.EXOPLAYER
+                ? ExoPlayback.create(getContext()) : new MpvPlayer(getContext());
+        player.addListener(playbackListener);
+        playerView.setPlayer(player);
+        heading.setText(engine == PlaybackEngine.EXOPLAYER
+                ? R.string.native_player_exoplayer_title : R.string.native_player_title);
     }
 
     void setPreferredLanguage(String language) {
@@ -382,6 +415,7 @@ final class NativePlayerView extends FrameLayout {
         final long requestGeneration = ++generation;
         final String id = state.videoId;
         final String language = preferredLanguage;
+        final PlaybackEngine engine = playbackEngine;
         final ExtractorDownloader.Cancellation requestCancellation =
                 new ExtractorDownloader.Cancellation();
         cancellation = requestCancellation;
@@ -389,10 +423,12 @@ final class NativePlayerView extends FrameLayout {
             pending = extractor.submit(() -> {
                 try {
                     NativeStreamExtractor.Result result =
-                            NativeStreamExtractor.extract(id, language, requestCancellation,
+                            NativeStreamExtractor.extract(id, language,
+                                    engine == PlaybackEngine.EXOPLAYER, requestCancellation,
                                     warning -> Logger.get(getContext()).log(
                                             "W", "Native stream candidate unavailable", warning));
-                    String certificates = MpvPlayer.prepareCertificates(getContext());
+                    String certificates = engine == PlaybackEngine.MPV
+                            ? MpvPlayer.prepareCertificates(getContext()) : null;
                     requestCancellation.check();
                     main.post(() -> {
                         if (!isCurrent(requestGeneration, id)) {
@@ -403,10 +439,15 @@ final class NativePlayerView extends FrameLayout {
                         try {
                             changingPlayer = true;
                             try {
-                                player.setStream(result, id,
-                                        state.useLiveDefaultPosition(result.live)
-                                                ? C.TIME_UNSET : state.positionMs, certificates,
-                                        language);
+                                long startMs = state.useLiveDefaultPosition(result.live)
+                                        ? C.TIME_UNSET : state.positionMs;
+                                if (player instanceof MpvPlayer) {
+                                    ((MpvPlayer) player).setStream(result, id, startMs,
+                                            certificates, language);
+                                } else {
+                                    ExoPlayback.setStream((ExoPlayer) player, result, id,
+                                            startMs, language);
+                                }
                                 player.setPlayWhenReady(state.shouldPlay());
                                 state.prepared = true;
                                 player.prepare();
@@ -507,7 +548,11 @@ final class NativePlayerView extends FrameLayout {
         changingPlayer = true;
         try {
             player.stop();
-            player.clearStream();
+            if (player instanceof MpvPlayer) {
+                ((MpvPlayer) player).clearStream();
+            } else {
+                player.clearMediaItems();
+            }
         } finally {
             changingPlayer = false;
         }

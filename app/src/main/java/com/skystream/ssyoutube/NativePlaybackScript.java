@@ -87,8 +87,8 @@ final class NativePlaybackScript {
                     + "setInterval(update,1000);update();"
                     + "})()";
 
-    static String forPreference(boolean mpvEnabled) {
-        return mpvEnabled ? SCRIPT + ";" + NativeWatchHistoryScript.SCRIPT : "";
+    static String forPreference(boolean nativePlayback) {
+        return nativePlayback ? SCRIPT + ";" + NativeWatchHistoryScript.SCRIPT : "";
     }
 
     private NativePlaybackScript() { }
