@@ -631,7 +631,7 @@ public class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         desktopMode = prefs.getBoolean(KEY_DESKTOP_MODE, false);
         playbackEngine = PlaybackEngine.fromPreference(prefs.getString(KEY_PLAYBACK_ENGINE, null),
-                prefs.getBoolean(KEY_MPV_ENABLED, true));
+                prefs.contains(KEY_MPV_ENABLED) ? prefs.getBoolean(KEY_MPV_ENABLED, true) : null);
         adBlockingEnabled = prefs.getBoolean(KEY_ADBLOCKING_ENABLED, false);
         patchedAdBlockingEnabled = prefs.getBoolean(KEY_PATCHED_ADBLOCKING_ENABLED,
                 Preferences.DEFAULT_PATCHED_ADBLOCKING);

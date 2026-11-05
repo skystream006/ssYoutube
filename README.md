@@ -37,9 +37,10 @@ playback extraction is separate and anonymous.
   video that is already playing.
   **Ad-Blocker Settings** starts collapsed each time Preferences opens. Expand it for
   **Playback engine**, **Enable adblocking**, and **Patched AdBlocking**.
-  **Playback engine** offers **YouTube web player**, **mpv (default)** and
-  **ExoPlayer (adaptive)**, saved across restarts. Existing mpv-on/off choices migrate
-  to mpv/web respectively; ExoPlayer is opt-in. Switching stops native playback (including
+  **Playback engine** offers **YouTube web player**, **mpv** and
+  **ExoPlayer (adaptive, default)**, saved across restarts. Without a saved choice,
+  ExoPlayer is selected. Existing engine choices are preserved, and explicitly saved
+  legacy mpv-on/off choices migrate to mpv/web respectively. Switching stops native playback (including
   the miniplayer and pending extraction), releases the old engine, and reloads the page.
   **Enable adblocking** is available only with the web player and starts off. The choice is
   saved across restarts. Either native engine disables adblocking and hides its controls,
@@ -144,8 +145,9 @@ playback extraction is separate and anonymous.
   This shorter refill can cause more frequent stalls on marginal connections; it does not
   increase network throughput or skip format probing, TLS verification, or required extraction
   requests. End-to-end startup time still depends on YouTube, the connection and the device.
-- **Adaptive ExoPlayer** – select **Preferences → Ad-Blocker Settings → Playback engine →
-  ExoPlayer (adaptive)** for segment-based quality changes up to 1080p. It prefers available
+- **Adaptive ExoPlayer** – the default engine provides segment-based quality changes up to
+  1080p. Select it in **Preferences → Ad-Blocker Settings → Playback engine →
+  ExoPlayer (adaptive, default)**. It prefers available
   HLS/DASH manifests. For on-demand videos without a manifest, it builds an in-memory static
   DASH manifest from NewPipe's video-only formats, real initialization/index byte ranges,
   codec/bitrate metadata and the preferred separate audio track. ExoPlayer reads the indexes
@@ -200,12 +202,19 @@ playback extraction is separate and anonymous.
   Manifests, media segments, index/initialization ranges, encryption keys and each redirect
   are checked against the HTTPS YouTube/Googlevideo allowlist before connecting.
   Credentials are removed, redirects are bounded, and signed media URLs/manifests stay in memory.
-- **Native watch history** – while playing, native position, duration, and observed watched
+- **Native watch history** – ExoPlayer and mpv automatically send watched videos and their
+  playback timestamps to the account signed in through the browsing WebView.
+  While playing, native position, duration, and observed watched
   ranges are reported to YouTube approximately every 10 seconds, with a final best-effort
-  update on pause, close, or video change. Seeking, buffering, and paused time are not counted as watched
+  update on pause, close, or video change. A final timestamp is sent even if the last watched
+  range was already reported; seeking while paused updates the resume position without claiming
+  the skipped section was watched. Seeking, buffering, and paused time are not counted as watched
   ranges. Requests use the matching video's page-provided playback/watchtime URLs and the
   WebView's signed-in session; account cookies and tracking tokens never enter the extractor
   or native media transport and are not logged or persisted by this feature.
+  Reports wait up to 30 seconds for matching page metadata, including fresh responses after
+  single-page navigation. Failed requests retry up to three attempts within that window,
+  retaining watched ranges and the newest timestamp; failures emit content-free diagnostics.
   Same-page miniplayer browsing can continue reporting only with a previously validated
   video context and unchanged account context. Reloads, missing/stale page metadata, account
   changes, network failures, and YouTube's history settings can prevent synchronization.
@@ -444,10 +453,10 @@ settings, plus a separate end-video filter and background audio, with these defa
 
 | Option | Default | Hidden page elements |
 | --- | --- | --- |
-| Block YouTube Shorts | On | Shorts shelves, cards, navigation entries and tabs |
+| Block YouTube Shorts | Off | Shorts shelves, cards, navigation entries and tabs |
 | Block YouTube Playables | On | Playables shelves, game cards and navigation entries |
 | Block YouTube recommended content | Off | Up next, end-screen recommendation grids and the empty-feed search nudge; not the home feed or playlist controls |
-| Block YouTube distracting elements | On | Sign-in/menu controls, comment sections/previews and video information |
+| Block YouTube distracting elements | Off | Sign-in/menu controls, comment sections/previews and video information |
 | Block YouTube thumbnails | Off | Video/Shorts thumbnails and feed previews; not channel avatars or the playing video |
 | Block YouTube auto-dubbed videos | On | Video cards with an auto-dubbed badge |
 | Block YouTube members-only videos | On | Video cards with members-only badges |
@@ -532,6 +541,12 @@ Fixtures cover both implementations, initial/SPA player responses, playlists, li
 Shorts, browse/search continuations, JSON/XHR/Response behavior, text-size limits, anti-XSSI,
 origin checks, mode changes, hook removal, and guarded skipping. They do not substitute
 for testing against YouTube's changing live site.
+
+`NativeWatchHistoryScriptTest` exports the shipped history bridge and runs it with Node 18+
+through `./gradlew :app:testDebugUnitTest --tests '*NativeWatchHistory*Test'`. These executable
+fixtures cover video/timestamp requests, late and stale metadata, single-page navigation,
+account changes, final reports and bounded retries. The executable test skips if Node is
+missing; the Java state tests also cover pause/seek timestamps without fabricated watch time.
 
 Page-element fixtures use Node 18+ and Chrome/Chromium (no npm dependencies):
 `node --test app/src/test/js/youtube_page_elements.test.cjs`. Set `CHROME_BIN` if the browser

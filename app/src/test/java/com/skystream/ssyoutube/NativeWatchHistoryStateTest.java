@@ -122,4 +122,56 @@ public class NativeWatchHistoryStateTest {
         assertFalse(outgoing.playing);
         assertNull(state.sample("12345678901", 0, 90000, true, 1, 1600, false));
     }
+
+    @Test
+    public void pauseAfterAReportStillSendsTheFinalTimestampWithoutExtraWatchTime() {
+        NativeWatchHistoryState state = new NativeWatchHistoryState();
+        state.sample(ID, 0, 90000, true, 1, 0, false);
+        assertNotNull(state.sample(ID, 1000, 90000, true, 1, 1000, true));
+        state.onContinuityToken(1);
+        NativeWatchHistoryState.Report paused =
+                state.sample(ID, 1500, 90000, false, 1, 1500, false);
+        assertEquals(1500, paused.positionMs);
+        assertEquals("1.500", paused.starts);
+        assertEquals(paused.starts, paused.ends);
+        assertFalse(paused.playing);
+        assertNull(state.sample(ID, 1500, 90000, false, 1, 2500, false));
+    }
+
+    @Test
+    public void pausedSeekAndCloseUpdateResumePositionButNeverClaimTheSkippedRange() {
+        NativeWatchHistoryState state = new NativeWatchHistoryState();
+        state.sample(ID, 0, 90000, true, 1, 0, false);
+        state.sample(ID, 1000, 90000, true, 1, 1000, true);
+        state.sample(ID, 1000, 90000, false, 1, 2000, false);
+        state.onContinuityToken(1);
+        NativeWatchHistoryState.Report seek =
+                state.sample(ID, 60000, 90000, false, 1, 3000, false);
+        assertEquals("60.000", seek.starts);
+        assertEquals(seek.starts, seek.ends);
+        assertEquals(60000, seek.positionMs);
+        assertNull(state.sample(ID, 60000, 90000, false, 1, 4000, false));
+        NativeWatchHistoryState.Report closed =
+                state.sample(ID, 60000, 90000, false, 1, 4100, true);
+        assertNotNull(closed);
+        assertFalse(closed.playing);
+        state.reset();
+        assertNull(state.sample(ID, 60000, 90000, false, 1, 4200, true));
+    }
+
+    @Test
+    public void neverReportsAPausedSeekBeforeAnyObservedPlayback() {
+        NativeWatchHistoryState state = new NativeWatchHistoryState();
+        assertNull(state.sample(ID, 0, 90000, false, 1, 0, false));
+        assertNull(state.sample(ID, 60000, 90000, false, 1, 1000, true));
+    }
+
+    @Test
+    public void unresolvedRetryNeverOverwritesTheLastResumeTimestampWithZero() {
+        NativeWatchHistoryState state = new NativeWatchHistoryState();
+        state.sample(ID, 30000, 90000, true, 1, 0, false);
+        assertNotNull(state.sample(ID, 31000, 90000, true, 1, 1000, true));
+        assertNull(state.sample(ID, -1, 90000, false, 1, 2000, true));
+        assertNull(state.sample(ID, 0, 90000, false, 1, 3000, true));
+    }
 }

@@ -134,14 +134,14 @@
     <string name="collapse_adblocker_settings">Collapse Ad-Blocker Settings</string>
     <string name="playback_engine">Playback engine</string>
     <string name="playback_web">YouTube web player</string>
-    <string name="playback_mpv">mpv (default)</string>
-    <string name="playback_exoplayer">ExoPlayer (adaptive)</string>
+    <string name="playback_mpv">mpv</string>
+    <string name="playback_exoplayer">ExoPlayer (adaptive, default)</string>
     <string-array name="playback_engine_options">
         <item>@string/playback_web</item>
         <item>@string/playback_mpv</item>
         <item>@string/playback_exoplayer</item>
     </string-array>
-    <string name="playback_engine_summary">ExoPlayer adjusts segment quality to connection speed and buffer health, up to 1080p. If adaptive formats are unavailable, it shows fixed quality. mpv keeps its existing stream selection. Changing players stops playback and reloads the page. Shorts always use the web player.</string>
+    <string name="playback_engine_summary">ExoPlayer adjusts segment quality to connection speed and buffer health, up to 1080p. If adaptive formats are unavailable, it shows fixed quality. mpv keeps its existing stream selection. Both native players try to save watched videos and playback position to your signed-in YouTube history when page data is available. YouTube’s history settings still apply. Changing players stops playback and reloads the page. Shorts always use the web player.</string>
     <string name="enable_adblocking">Enable adblocking</string>
     <string name="adblocking_summary">Blocks page ads and YouTube video-ad scheduling, with automatic skipping when available. Available with the YouTube web player. Your choice is saved; changing it reloads the page. YouTube changes can affect blocking.</string>
     <string name="adblocking_unavailable">Adblocking could not start. Turn it off and on to retry.</string>

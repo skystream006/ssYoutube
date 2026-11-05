@@ -279,7 +279,7 @@ final class NativePlayerView extends FrameLayout {
     }
 
     long getPositionMsForHistory() {
-        return player.getCurrentPosition();
+        return !released && hasResolvedVideo() ? player.getCurrentPosition() : -1;
     }
 
     long getDurationMsForHistory() {

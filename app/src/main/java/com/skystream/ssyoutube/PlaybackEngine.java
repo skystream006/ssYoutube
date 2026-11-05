@@ -13,12 +13,12 @@ enum PlaybackEngine {
         return this != WEB;
     }
 
-    static PlaybackEngine fromPreference(String value, boolean legacyMpvEnabled) {
+    static PlaybackEngine fromPreference(String value, Boolean legacyMpvEnabled) {
         for (PlaybackEngine engine : values()) {
             if (engine.preference.equals(value)) {
                 return engine;
             }
         }
-        return legacyMpvEnabled ? MPV : WEB;
+        return legacyMpvEnabled == null ? EXOPLAYER : (legacyMpvEnabled ? MPV : WEB);
     }
 }

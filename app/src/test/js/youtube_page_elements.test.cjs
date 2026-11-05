@@ -20,7 +20,7 @@ async function browserFixtures(source, adSource, backgroundSource) {
     const keys = ['shorts', 'playables', 'recommended', 'distracting', 'thumbnails',
         'autodubbed', 'members_only', 'end_video'];
     const off = Object.fromEntries(keys.map(key => [key, false]));
-    const defaults = {...off, shorts: true, playables: true, distracting: true,
+    const defaults = {...off, playables: true,
         autodubbed: true, members_only: true, end_video: true};
     const original = {
         fetch: window.fetch, parse: JSON.parse, json: Response.prototype.json,
@@ -73,12 +73,13 @@ async function browserFixtures(source, adSource, backgroundSource) {
         <video id="player"></video>
         <a id="search" href="/results?search_query=music">Search</a>`;
 
-    await run('requested defaults hide six categories but keep recommendations and thumbnails', () => {
+    await run('defaults keep Shorts, comments, recommendations and thumbnails visible', () => {
         fixture(content, defaults);
-        for (const id of ['short', 'playable', 'comments', 'info', 'dub', 'member', 'endOverlay']) {
+        for (const id of ['playable', 'dub', 'member', 'endOverlay']) {
             check(!visible(id), `${id} must be hidden by default`);
         }
-        for (const id of ['related', 'end', 'thumbnail', 'home', 'avatar', 'player', 'search']) {
+        for (const id of ['short', 'comments', 'info', 'related', 'end', 'thumbnail',
+            'home', 'avatar', 'player', 'search']) {
             check(visible(id), `${id} must remain visible`);
         }
     });
@@ -241,22 +242,23 @@ async function browserFixtures(source, adSource, backgroundSource) {
     });
     await run('only supported HTTPS main documents receive filtering', () => {
         fixture(content);
+        const enabled = {...defaults, shorts: true, distracting: true};
         for (const url of ['https://accounts.google.com/', 'https://youtube.com.evil.example/',
             'http://m.youtube.com/', 'https://www.youtube.com:444/', 'https://studio.youtube.com/']) {
             location.href = url;
-            update(defaults);
+            update(enabled);
             check(visible('short') && visible('comments'), `Reject ${url}`);
         }
         for (const host of ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com']) {
             location.href = `https://${host}/`;
-            update(defaults);
+            update(enabled);
             check(!visible('short'), `Accept ${host}`);
             update(off);
         }
         const frame = document.createElement('iframe');
         document.body.appendChild(frame);
         frame.contentWindow.Function('location', 'options', `return (${source})(options);`)
-            (location, defaults);
+            (location, enabled);
         check(!frame.contentWindow.__ssyoutubePageElements, 'Do not filter embedded frames');
         frame.remove();
     });
@@ -267,7 +269,7 @@ async function browserFixtures(source, adSource, backgroundSource) {
         check(history.pushState === original.pushState, 'History API remains untouched');
     });
     await run('video adblocking and native-player styles remain independent of page filters', () => {
-        fixture(content, defaults);
+        fixture(content, {...defaults, shorts: true});
         const nativeStyle = document.createElement('style');
         nativeStyle.id = 'ssyoutube-native-player';
         nativeStyle.textContent = 'video{display:none!important;}';

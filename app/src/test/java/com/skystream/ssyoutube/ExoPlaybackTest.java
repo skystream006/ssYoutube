@@ -155,7 +155,10 @@ public class ExoPlaybackTest {
                     @Override public void onToggleFullscreen() { }
                 });
         try {
+            assertEquals(-1, view.getPositionMsForHistory());
             view.play(ID, 42_000);
+            assertEquals("Unprepared playback must not report placeholder zero",
+                    -1, view.getPositionMsForHistory());
             view.setFullscreen(true);
             view.setMinimized(true);
             Bundle saved = new Bundle();
@@ -168,10 +171,12 @@ public class ExoPlaybackTest {
             view.setPlaybackEngine(PlaybackEngine.EXOPLAYER);
             view.restoreState(saved);
             assertEquals(ID, view.getVideoId());
+            assertEquals(-1, view.getPositionMsForHistory());
             view.stop();
             assertFalse(view.hasVideo());
         } finally {
             view.release();
+            assertEquals(-1, view.getPositionMsForHistory());
             view.release();
         }
     }
