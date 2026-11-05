@@ -7,7 +7,7 @@ import java.util.Set;
 /** Independent, reversible page customization; never enables network adblocking. */
 final class PageElementBlockingScript {
     enum Option {
-        SHORTS("shorts", true),
+        SHORTS("shorts", false),
         PLAYABLES("playables", true),
         RECOMMENDED("recommended", false),
         DISTRACTING("distracting", false),

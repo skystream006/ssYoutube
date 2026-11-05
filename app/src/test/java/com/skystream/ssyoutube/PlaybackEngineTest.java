@@ -14,7 +14,9 @@ import javax.xml.parsers.DocumentBuilderFactory;
 
 public class PlaybackEngineTest {
     @Test
-    public void legacyChoicesAndDefaultArePreserved() {
+    public void newInstallsDefaultToExoPlayerAndLegacyChoicesArePreserved() {
+        assertEquals(PlaybackEngine.EXOPLAYER, PlaybackEngine.fromPreference(null, null));
+        assertEquals(PlaybackEngine.EXOPLAYER, PlaybackEngine.fromPreference("invalid", null));
         assertEquals(PlaybackEngine.MPV, PlaybackEngine.fromPreference(null, true));
         assertEquals(PlaybackEngine.WEB, PlaybackEngine.fromPreference(null, false));
         assertEquals(PlaybackEngine.MPV, PlaybackEngine.fromPreference("invalid", true));
@@ -23,7 +25,7 @@ public class PlaybackEngineTest {
     @Test
     public void savedEngineOverridesLegacyFlagAndBothNativePlayersDisableWebAds() {
         for (PlaybackEngine engine : PlaybackEngine.values()) {
-            for (boolean oldMpv : new boolean[]{true, false}) {
+            for (Boolean oldMpv : new Boolean[]{null, true, false}) {
                 assertEquals(engine, PlaybackEngine.fromPreference(engine.preference, oldMpv));
             }
             assertEquals(engine == PlaybackEngine.WEB,
@@ -33,6 +35,14 @@ public class PlaybackEngineTest {
             assertEquals(engine.isNative(), !NativePlaybackScript.forPreference(
                     engine.isNative()).isEmpty());
         }
+    }
+
+    @Test
+    public void activityDistinguishesAnUnsetLegacyPreferenceFromASavedChoice() throws Exception {
+        String activity = new String(Files.readAllBytes(Paths.get(
+                "src/main/java/com/skystream/ssyoutube/MainActivity.java")), StandardCharsets.UTF_8);
+        assertTrue(activity.contains(
+                "prefs.contains(KEY_MPV_ENABLED) ? prefs.getBoolean(KEY_MPV_ENABLED, true) : null"));
     }
 
     @Test

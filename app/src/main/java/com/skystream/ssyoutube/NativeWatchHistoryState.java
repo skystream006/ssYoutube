@@ -37,6 +37,9 @@ final class NativeWatchHistoryState {
     private float previousSpeed;
     private boolean wasPlaying;
     private long lastReportTime;
+    private boolean hasReported;
+    private long reportedPosition;
+    private boolean reportedPlaying;
     private long continuityToken;
     private final List<long[]> ranges = new ArrayList<>();
 
@@ -69,10 +72,15 @@ final class NativeWatchHistoryState {
         previousSpeed = Float.isNaN(speed) || Float.isInfinite(speed) || speed <= 0 ? 1 : speed;
         wasPlaying = playing;
         if (!playing || flush || now - lastReportTime >= REPORT_MS) {
-            lastReportTime = now;
             if (ranges.isEmpty()) {
-                return null;
+                if (!hasReported || (!flush && (playing
+                        || (position == reportedPosition && playing == reportedPlaying)))) {
+                    return null;
+                }
+                // A final position/paused seek updates resume time without inventing watch time.
+                ranges.add(new long[] {position, position});
             }
+            lastReportTime = now;
             StringBuilder starts = new StringBuilder();
             StringBuilder ends = new StringBuilder();
             for (long[] range : ranges) {
@@ -84,6 +92,9 @@ final class NativeWatchHistoryState {
                 ends.append(seconds(range[1]));
             }
             ranges.clear();
+            hasReported = true;
+            reportedPosition = position;
+            reportedPlaying = playing;
             return new Report(id, session, starts.toString(), ends.toString(),
                     position, Math.max(0, duration), playing);
         }
@@ -93,6 +104,7 @@ final class NativeWatchHistoryState {
     void reset() {
         videoId = null;
         wasPlaying = false;
+        hasReported = false;
         ranges.clear();
     }
 

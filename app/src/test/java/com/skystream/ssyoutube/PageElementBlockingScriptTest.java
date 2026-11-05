@@ -16,7 +16,7 @@ import org.junit.Test;
 
 public class PageElementBlockingScriptTest {
     @Test
-    public void onlyThumbnailsRecommendationsAndDistractingStartOff() {
+    public void shortsThumbnailsRecommendationsAndDistractingStartOff() {
         EnumSet<PageElementBlockingScript.Option> defaults =
                 EnumSet.noneOf(PageElementBlockingScript.Option.class);
         for (PageElementBlockingScript.Option option : PageElementBlockingScript.Option.values()) {
@@ -25,12 +25,11 @@ public class PageElementBlockingScriptTest {
             }
         }
         assertEquals(8, PageElementBlockingScript.Option.values().length);
-        assertEquals(EnumSet.of(PageElementBlockingScript.Option.SHORTS,
-                PageElementBlockingScript.Option.PLAYABLES,
+        assertEquals(EnumSet.of(PageElementBlockingScript.Option.PLAYABLES,
                 PageElementBlockingScript.Option.AUTODUBBED,
                 PageElementBlockingScript.Option.MEMBERS_ONLY,
                 PageElementBlockingScript.Option.END_VIDEO), defaults);
-        assertEquals("(function(options){})({\"shorts\":true,\"playables\":true,"
+        assertEquals("(function(options){})({\"shorts\":false,\"playables\":true,"
                         + "\"recommended\":false,\"distracting\":false,\"thumbnails\":false,"
                         + "\"autodubbed\":true,\"members_only\":true,\"end_video\":true});",
                 PageElementBlockingScript.create("function(options){}", defaults));

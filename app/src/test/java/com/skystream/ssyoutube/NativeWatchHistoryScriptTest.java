@@ -2,6 +2,12 @@ package com.skystream.ssyoutube;
 
 import static org.junit.Assert.*;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
+import org.junit.Assume;
 import org.junit.Test;
 
 public class NativeWatchHistoryScriptTest {
@@ -21,7 +27,8 @@ public class NativeWatchHistoryScriptTest {
         assertFalse(script.contains("document.cookie"));
         assertFalse(script.contains("postMessage"));
         assertFalse(script.contains("localStorage"));
-        assertFalse(script.contains("console."));
+        assertTrue(script.contains("console.warn('ssYouTube: native history request failed')"));
+        assertFalse(script.contains("console.warn(e"));
     }
 
     @Test
@@ -29,12 +36,13 @@ public class NativeWatchHistoryScriptTest {
         String script = NativeWatchHistoryScript.SCRIPT;
         assertTrue(script.contains("active.session!==session"));
         assertTrue(script.contains("active.account!==identity"));
-        assertTrue(script.contains("if(!current&&identity===null){active.urls=null;return;}"));
-        assertTrue(script.contains("if(current&&current!==id&&!outgoing){active.urls=null;return;}"));
+        assertTrue(script.contains("if(identity===null){if(active){invalidate();active=null;}return;}"));
+        assertTrue(script.contains("if(current&&current!==id&&!outgoing){"
+                + "active.urls=null;active.pending=null;return;}"));
         assertTrue(script.contains("account()===context.account"));
         assertTrue(script.contains("yt-navigate-start"));
-        assertTrue(script.contains("response===blocked"));
-        assertTrue(script.contains("if(initial){candidates.push(window.ytInitialPlayerResponse)"));
+        assertTrue(script.contains("blocked.has(response)"));
+        assertTrue(script.contains("candidates.push(window.ytInitialPlayerResponse);if(initial){"));
         assertTrue(script.contains("context.sent?Promise.resolve()"));
         assertTrue(script.contains("cpn:nonce()"));
         assertFalse(script.contains("setInterval"));
@@ -43,12 +51,12 @@ public class NativeWatchHistoryScriptTest {
     @Test
     public void retainsBusyReportsAndAllowsOnlyValidatedOutgoingSessionFinals() {
         String script = NativeWatchHistoryScript.SCRIPT;
-        assertTrue(script.contains("context.pending=report;drain(context)"));
+        assertTrue(script.contains("context.pending=merge(context.pending,report);drain(context)"));
         assertTrue(script.contains("context.busy=false;drain(context)"));
-        assertTrue(script.contains("context.pending.starts+','+report.starts"));
-        assertTrue(script.contains("context.pending.starts.length+report.starts.length<2048"));
+        assertTrue(script.contains("newer.starts=older.starts+','+newer.starts"));
+        assertTrue(script.contains("older.starts.length+newer.starts.length<2048"));
         assertTrue(script.contains(
-                "outgoing=(finish||(report&&!report.playing))&&active.urls&&identity!==null"));
+                "outgoing=(finish||(report&&!report.playing))&&active.urls"));
         assertTrue(script.contains("active===context||context.finishing"));
         assertTrue(script.contains("if(!valid(context)){context.pending=null;return;}"));
     }
@@ -67,5 +75,33 @@ public class NativeWatchHistoryScriptTest {
         assertTrue(script.contains("window.__ssyoutubeWatchHistory('abcdefghijk',1,"));
         assertTrue(NativeWatchHistoryScript.update("abcdefghijk", 1, null, true)
                 .contains("'abcdefghijk',1,null,true"));
+    }
+
+    @Test
+    public void shippedHistoryScriptPassesExecutableFixtures() throws Exception {
+        Path script = Files.createTempFile("ssyoutube-history", ".js");
+        Path output = Files.createTempFile("ssyoutube-history-tests", ".log");
+        Process process = null;
+        try {
+            Files.write(script, NativeWatchHistoryScript.SCRIPT.getBytes(StandardCharsets.UTF_8));
+            ProcessBuilder builder = new ProcessBuilder("node", "--test",
+                    "src/test/js/native_watch_history.test.cjs")
+                    .redirectErrorStream(true).redirectOutput(output.toFile());
+            builder.environment().put("SSYOUTUBE_HISTORY_SCRIPT", script.toString());
+            try {
+                process = builder.start();
+            } catch (IOException error) {
+                Assume.assumeNoException("Node.js is needed for native-history fixtures", error);
+            }
+            assertTrue("Native-history fixtures timed out", process.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(new String(Files.readAllBytes(output), StandardCharsets.UTF_8),
+                    0, process.exitValue());
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            Files.deleteIfExists(script);
+            Files.deleteIfExists(output);
+        }
     }
 }
